@@ -1,0 +1,30 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - banner [ref=f1e4]:
+        - generic [ref=f1e5]: Lakou Domino
+        - button "← Back to lobby" [ref=f1e7] [cursor=pointer]
+      - main [ref=f1e16]:
+        - generic [ref=f1e88]:
+          - heading "Sign in to Lakou Domino" [level=1] [ref=f1e89]
+          - paragraph [ref=f1e90]: Save your crowns, add friends and see who’s online.
+          - generic [ref=f1e91]:
+            - generic [ref=f1e92]: Username or email
+            - textbox "Username or email" [ref=f1e93]:
+              - /placeholder: e.g. venloud
+          - generic [ref=f1e94]:
+            - generic [ref=f1e95]: Password
+            - textbox "Password" [ref=f1e96]:
+              - /placeholder: ••••••••
+          - button "Log in" [ref=f1e97] [cursor=pointer]
+          - button "Keep playing as a guest" [ref=f1e98] [cursor=pointer]
+    - note [ref=f1e99]: Demo sign-in only. No account is created or verified.
+    - region "Notifications (F8)":
+      - list
+  - generic [ref=f1e100]:
+    - generic [ref=f1e101]:
+      - text: This is a temporary development preview, and these links are not for public use.
+      - link "Publish your app" [ref=f1e102] [cursor=pointer]:
+        - /url: https://docs.replit.com/category/replit-deployments?ref=replit-dev-banner
+      - text: for secure sharing or use an invite link.
+    - button "Close banner" [ref=f1e103] [cursor=pointer]

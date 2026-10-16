@@ -1,0 +1,12 @@
+{
+  "name": "lakou-engine",
+  "version": "1.0.0",
+  "description": "Lakou Domino game engine: rules, scoring, tally board, table layout, bots",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "tsx --test test/engine.test.ts",
+    "typecheck": "tsc -p ."
+  },
+  "license": "UNLICENSED"
+}

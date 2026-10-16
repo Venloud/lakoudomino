@@ -1,0 +1,8 @@
+- [Native TypeScript tests](typescript-tests.md) — use Node's runner for explicit `.ts` imports; use existing `tsx` when authoritative sources are extensionless.
+- [Vite preview module cache](vite-preview-cache.md) — restart the artifact workflow after adding or renaming TSX modules if HMR keeps resolving an obsolete extension.
+- [WebGL preview fallback](webgl-preview.md) — headless previews may lack a WebGL context; guard Canvas mounting and keep a functional fallback for non-WebGL clients.
+- [Browser visual QA](browser-visual-qa.md) — preview capture can verify this app when Playwright browsers are unavailable; keep the fallback UI fully functional.
+- [Reference-state visual QA](reference-state-qa.md) — parity work must validate lobby, auth, waiting, desktop table, and mobile table separately.
+- [Domino layout collision fallback](domino-layout-collision-fallback.md) — dense spinner branches need bounded detours and a final free-slot search before recentering.
+- [Seat-offer lifecycle](seat-offer-lifecycle.md) — dispatch offers returned by game-end transitions directly; periodic checks only maintain existing offers.
+- [Headless browser runtime](playwright-runtime.md) — keep CLI sessions in one shell call, use browser APIs in run-code, and use the artifact proxy path for API/WS tests.

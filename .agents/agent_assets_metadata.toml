@@ -1,0 +1,422 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "l1zTrcNCZKVDWx2f1RuNT"
+uri = "file://screenshots/lakou-points-hand-finished-desktop.jpg"
+type = "image"
+title = "Lakou Domino — finished Points hand"
+description = "Desktop screenshot of completed room 8KXW after Bot 3 won the Points hand."
+logical_id = "0e184a58-97b9-4957-889b-00f62530df89"
+content_hash = "sha256:90edc8754d86f9da7b5fd05aab424c855eef0a6942745f830cc7b9243b416caf"
+size = 44853
+mtime_ms = 1790185277519
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/0e184a58-97b9-4957-889b-00f62530df89/ca8c4910-7e09-43e9-9aad-dd36ca61a140"
+storage_version_token = "1790185335806325"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "sAD92W0ShURxbRQ8t_ygH"
+uri = "file://screenshots/points-midhand-vs-figma-desktop.png"
+type = "image"
+title = "Points mid-hand vs Figma — desktop"
+description = "1440×900 current app screenshot beside Figma frame 1-2."
+logical_id = "e84b47d7-b839-4427-a5ca-843cb2502516"
+content_hash = "sha256:f42e255e9225ff34e2818b378aa20a4ff3e3dad08e0ae4f5583381a2ce7860fb"
+size = 1177338
+mtime_ms = 1790451734157
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/e84b47d7-b839-4427-a5ca-843cb2502516/dec6b610-0fdb-4583-9ff5-763c1e405119"
+storage_version_token = "1790451751406445"
+content_type = "image/png"
+
+[[outputs]]
+id = "eshQKTPQT0VU7DwTGVb0g"
+uri = "file://screenshots/points-midhand-vs-figma-phone.png"
+type = "image"
+title = "Points mid-hand vs Figma — phone"
+description = "390×844 current app screenshot beside Figma frame 19-2."
+logical_id = "4812e6d0-bc01-4412-9ee5-cb6c6f720104"
+content_hash = "sha256:c8ea588dd0e98204825f5864d7b9ae8a4f58a54f5a670aa81d47a0fc7452f25e"
+size = 344816
+mtime_ms = 1790451734793
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/4812e6d0-bc01-4412-9ee5-cb6c6f720104/b1044c1e-24ef-4120-95cf-fce6204de526"
+storage_version_token = "1790451751922654"
+content_type = "image/png"
+
+[[outputs]]
+id = "l5TcsYMJg5P9wZJigeDGs"
+uri = "file://screenshots/lakou-domino-desktop-comparison.jpg"
+type = "image"
+title = "Lakou Domino — Desktop comparison"
+description = "Figma frame 1-2 beside the 1440×900 app preview. The current view is a spectator capture without the host reconnect token."
+logical_id = "ad44f14c-4c1d-4ebf-ab19-d0560a57717d"
+content_hash = "sha256:5dda3230cb8ec09d03ab342f5fe996c6038e70bde94671a5e6cfbb4f27f41177"
+size = 194340
+mtime_ms = 1790463534862
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/ad44f14c-4c1d-4ebf-ab19-d0560a57717d/c93e8a8b-07be-410d-95bc-de75c1c1dba8"
+storage_version_token = "1790463624662016"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "RBUg4M9uy1y8unAw5TMWX"
+uri = "file://screenshots/lakou-domino-phone-comparison.jpg"
+type = "image"
+title = "Lakou Domino — Phone comparison"
+description = "Figma frame 19-2 beside the 390×844 app preview. The current view is a spectator capture without the host reconnect token."
+logical_id = "9d80f2f7-ba54-4fff-94e1-3b6434b7175d"
+content_hash = "sha256:95a6a3cbf5990ba2d1a059b45ff04544c6494acf0ecaef450071ad556ce072d9"
+size = 133816
+mtime_ms = 1790463534954
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/9d80f2f7-ba54-4fff-94e1-3b6434b7175d/bdd2f927-2a8e-43e4-baec-536db0d1493c"
+storage_version_token = "1790463625241889"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "7-e62Pe1JPcniwa6WJfwz"
+uri = "file://output/playwright/points-mid-hand-desktop.png"
+type = "image"
+title = "Points game — mid-hand (desktop)"
+description = "Live five-box Points table with the host and three bots; captured at 1440×960."
+logical_id = "ce6a2fbe-4d3a-464d-a692-94e484a08d76"
+content_hash = "sha256:1055f30630449eb32864fe154137a29c35cac75b2200fadc6ee3a8a7470cadcd"
+size = 125744
+mtime_ms = 1790471005598
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/ce6a2fbe-4d3a-464d-a692-94e484a08d76/078734b9-59fb-43c8-a166-211c9006d186"
+storage_version_token = "1790471204547057"
+content_type = "image/png"
+
+[[outputs]]
+id = "w3h5ap3MXu7-FyEPStGwU"
+uri = "file://output/playwright/points-mid-hand-phone.png"
+type = "image"
+title = "Points game — mid-hand (phone)"
+description = "The same live hand at a 402×874 phone viewport."
+logical_id = "7c33c951-147d-4dcc-9731-b5f469915fcd"
+content_hash = "sha256:8bf542de3e83e915fff85368bd2b31c560ff2d0a5f05468fecb5541778017dc2"
+size = 52294
+mtime_ms = 1790471005902
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/7c33c951-147d-4dcc-9731-b5f469915fcd/0e6b7013-a242-42a1-9944-5587845eb4a9"
+storage_version_token = "1790471205203004"
+content_type = "image/png"
+
+[[outputs]]
+id = "m93yqcUEl9H7p56dpCPj7"
+uri = "file://output/playwright/points-standings-desktop.png"
+type = "image"
+title = "Points game — hand standings (desktop)"
+description = "First-hand results and running totals at a 1440×960 desktop viewport."
+logical_id = "bddeae69-f720-4c3d-87fe-143aec4d3020"
+content_hash = "sha256:3a6c6717a206b12c29491290b88e8ee1e1e1a6e7d280c0029a6c19852653d838"
+size = 130313
+mtime_ms = 1790471093119
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/bddeae69-f720-4c3d-87fe-143aec4d3020/f46be068-aed6-4aa3-b15f-07a1c4d62056"
+storage_version_token = "1790471205784258"
+content_type = "image/png"
+
+[[outputs]]
+id = "U9Q1ToM4p_XXRrBcFme-q"
+uri = "file://output/playwright/points-standings-phone.png"
+type = "image"
+title = "Points game — hand standings (phone)"
+description = "First-hand results and running totals at a 402×874 phone viewport."
+logical_id = "805004a9-a3b0-42e4-9ec6-99c59f1fde61"
+content_hash = "sha256:626a9391dacc392594321e3b1826448cdde7e3ff2f1a34260e8a4a568f6981d4"
+size = 56554
+mtime_ms = 1790471123434
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/805004a9-a3b0-42e4-9ec6-99c59f1fde61/4623891d-9dea-44ed-b366-d8130232fceb"
+storage_version_token = "1790471206462825"
+content_type = "image/png"
+
+[[outputs]]
+id = "kQxAXI96i7iQf0I-SgX8D"
+uri = "file://output/playwright/guest-lobby-1440.png"
+type = "image"
+title = "Guest lobby — desktop, 1440px"
+description = "Full-page screenshot of the guest lobby at 1440px width."
+logical_id = "ca53e6fe-fe09-4bcf-a363-fff06cc7cddb"
+content_hash = "sha256:0b261efe1d6f710d9ee8d41fb55045c989f55cc7eab9c44495133d6a6a0fe7e1"
+size = 134110
+mtime_ms = 1790490395974
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/ca53e6fe-fe09-4bcf-a363-fff06cc7cddb/6350da0b-6a4d-4d05-b0bd-dff313693f75"
+storage_version_token = "1790490580335883"
+content_type = "image/png"
+
+[[outputs]]
+id = "W2UEWGuQOlVVTJyq2sNHk"
+uri = "file://output/playwright/guest-lobby-390.png"
+type = "image"
+title = "Guest lobby — mobile, 390px"
+description = "Full-page screenshot of the guest lobby at 390px width."
+logical_id = "17959fcc-235a-44a8-8600-f5dc045e9f09"
+content_hash = "sha256:393b18c7f6c05a644bf1a1eaa293e714e43a17fc96c3fc29b11feb2284d2bdd8"
+size = 96309
+mtime_ms = 1790490397770
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/17959fcc-235a-44a8-8600-f5dc045e9f09/3d8aa27c-8a22-4a62-be0c-9d0823efe020"
+storage_version_token = "1790490580978743"
+content_type = "image/png"
+
+[[outputs]]
+id = "KIIwash9dLbOkKSxe_JTW"
+uri = "file://output/playwright/sign-in-1440.png"
+type = "image"
+title = "Sign-in — desktop, 1440px"
+description = "Full-page screenshot of the demo sign-in screen at 1440px width."
+logical_id = "24f9b719-8507-4b31-84c9-4f89d44cd7c1"
+content_hash = "sha256:64b436bd665d2183747b754829671859952883167b071f633920be75a8debf9c"
+size = 89127
+mtime_ms = 1790490400630
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/24f9b719-8507-4b31-84c9-4f89d44cd7c1/d341b131-f5b7-4c06-be71-4db885ba58b6"
+storage_version_token = "1790490581513713"
+content_type = "image/png"
+
+[[outputs]]
+id = "e1WjoC12fmY4-PuZsAWXC"
+uri = "file://output/playwright/sign-in-390.png"
+type = "image"
+title = "Sign-in — mobile, 390px"
+description = "Full-page screenshot of the demo sign-in screen at 390px width."
+logical_id = "dbefbb4d-121b-4702-9c49-08e099a14885"
+content_hash = "sha256:9f6fc238679dacc78263f9a172b03a77b9b20960d712116defc406f1399600aa"
+size = 59335
+mtime_ms = 1790490402194
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/dbefbb4d-121b-4702-9c49-08e099a14885/c2dd3ede-9671-4dbc-a2b3-8abaebd54d22"
+storage_version_token = "1790490582066743"
+content_type = "image/png"
+
+[[outputs]]
+id = "v4mppSU4jLxxS-9DgWA_z"
+uri = "file://output/playwright/signed-in-lobby-1440.png"
+type = "image"
+title = "Signed-in lobby — desktop, 1440px"
+description = "Full-page screenshot of the browser-local signed-in lobby at 1440px width."
+logical_id = "72d58398-ede1-443f-8e16-be3e2795bc2c"
+content_hash = "sha256:a0fb9270a431382620e5dedf6bc132bef99a6ba14fe4e33abc82410a881f768e"
+size = 129880
+mtime_ms = 1790490410426
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/72d58398-ede1-443f-8e16-be3e2795bc2c/3235e247-708d-4158-a974-f57989c9164e"
+storage_version_token = "1790490582562706"
+content_type = "image/png"
+
+[[outputs]]
+id = "BCiDhMa_SIG0cDVq8mHmF"
+uri = "file://output/playwright/signed-in-lobby-390.png"
+type = "image"
+title = "Signed-in lobby — mobile, 390px"
+description = "Full-page screenshot of the browser-local signed-in lobby at 390px width."
+logical_id = "f06b939e-80f4-4c02-bc46-bc790321267f"
+content_hash = "sha256:38b93f6ab833e663c5fc1762c787f13e71b484183eb822904c23bd1faf5a7687"
+size = 96597
+mtime_ms = 1790490412086
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/f06b939e-80f4-4c02-bc46-bc790321267f/e4ea1472-5750-4727-8705-5560cd6a6ec8"
+storage_version_token = "1790490583087124"
+content_type = "image/png"
+
+[[outputs]]
+id = "Ln-PeJNSlF_-XIX5uWI4Z"
+uri = "file://output/playwright/waiting-room-1440.png"
+type = "image"
+title = "Waiting room — desktop, 1440px"
+description = "Full-page screenshot of the live waiting room at 1440px width."
+logical_id = "fbe02be9-5608-42af-a265-2d2be120edf8"
+content_hash = "sha256:7b309dcf43ce0bb18fa6da78b49feae2c190a7858c73e70cc71fa03e5c962cee"
+size = 118082
+mtime_ms = 1790490418301
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/fbe02be9-5608-42af-a265-2d2be120edf8/941b718a-1a0f-48bc-878e-ee9d835adc85"
+storage_version_token = "1790490583658888"
+content_type = "image/png"
+
+[[outputs]]
+id = "4MLT71oVoDXcxbSv5oSuC"
+uri = "file://output/playwright/waiting-room-390.png"
+type = "image"
+title = "Waiting room — mobile, 390px"
+description = "Full-page screenshot of the live waiting room at 390px width."
+logical_id = "c42dc67f-215b-4518-8365-f487a21b1a4d"
+content_hash = "sha256:8bf740cf06a5ff837ab4ee2356d7fed4cc7714543e73764c90b02bee7236d9be"
+size = 86037
+mtime_ms = 1790490419997
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/c42dc67f-215b-4518-8365-f487a21b1a4d/5dbcfa1f-2ea9-4e38-ae0e-09f6c8804d91"
+storage_version_token = "1790490584184131"
+content_type = "image/png"
+
+[[outputs]]
+id = "unxhiDey7IN_yNv-lY_hk"
+uri = "file://output/playwright/desktop-reference-comparison.png"
+type = "image"
+title = "Desktop comparison — app and Figma"
+description = "Side-by-side comparison of the four integrated desktop screens and supplied Figma frames."
+logical_id = "ca4f6591-ccfa-4d4c-a16b-af1dfd1ea1b4"
+content_hash = "sha256:f9aecc80e9d91a169f862ed27ccd13dff4bb7b85d0dbff2f5bb16bad1c2426e7"
+size = 4160844
+mtime_ms = 1790490573538
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/ca4f6591-ccfa-4d4c-a16b-af1dfd1ea1b4/3cc704ef-6ddf-40bc-9032-4f5740926984"
+storage_version_token = "1790490584711923"
+content_type = "image/png"
+
+[[outputs]]
+id = "QcUEvq6oLj5BWVGGav43_"
+uri = "file://output/playwright/mobile-screens-overview.png"
+type = "image"
+title = "Mobile overview — all four screens"
+description = "Overview of the four full-page 390px screenshots."
+logical_id = "f79f8c09-203a-4e77-aa9c-746f6d1fca95"
+content_hash = "sha256:788af2864e16e58e84d78ce503b5c989b3e23be8d81055473e023f9f000d25fc"
+size = 557482
+mtime_ms = 1790490573542
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/f79f8c09-203a-4e77-aa9c-746f6d1fca95/93a7d90d-aff2-4d33-b5ad-9f0dba109923"
+storage_version_token = "1790490585205141"
+content_type = "image/png"
+
+[[outputs]]
+id = "dvGrpZSGduKbJjha-5n3R"
+uri = "file://screenshots/lakou-guest-lobby.jpg"
+type = "image"
+title = "Lakou Domino — guest lobby"
+description = "Guest view of the live lobby and open-table controls."
+logical_id = "6d1d97f1-b226-4e6d-85ba-78ca79fec4b0"
+content_hash = "sha256:dd87204d5d82b3a28fe3694190cabe457ad27607020a61bad4a4815ff286dce9"
+size = 54797
+mtime_ms = 1790492634825
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/6d1d97f1-b226-4e6d-85ba-78ca79fec4b0/e1197a5d-4ec1-4190-bdf8-5152d7e1bb0d"
+storage_version_token = "1790493421128527"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "6QKMwQqbpsfi-k5HK78S6"
+uri = "file://screenshots/lakou-sign-up.jpg"
+type = "image"
+title = "Lakou Domino — sign-up"
+description = "Account creation screen."
+logical_id = "d7f59bd3-5593-483a-ae46-5a9eb43e913e"
+content_hash = "sha256:871cd24e4c0bb633d2a2d867fc7f6fdaac188b68d06e80a02dc69ce3a2cfb64c"
+size = 36348
+mtime_ms = 1790492661449
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/d7f59bd3-5593-483a-ae46-5a9eb43e913e/cdb4f802-314d-423c-a884-b9c0927a3c17"
+storage_version_token = "1790493421652294"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "d-7-99SXIAQ8kJxU0bVj5"
+uri = "file://output/playwright/lakou-signed-in-lobby.png"
+type = "image"
+title = "Lakou Domino — signed-in lobby"
+description = "Signed-in lobby with a real friend online and leaderboard rows."
+logical_id = "a850f139-0b9b-431f-bf82-df9ad28e5185"
+content_hash = "sha256:8fc8a6916c4d907c9bd480ead8ee962df4da948998d62dadc6666bcfb322ef9f"
+size = 154657
+mtime_ms = 1790493082369
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/a850f139-0b9b-431f-bf82-df9ad28e5185/dc1f13ba-b810-4545-b4ca-0b6b83227c75"
+storage_version_token = "1790493422201823"
+content_type = "image/png"
+
+[[outputs]]
+id = "ljoq5OJFRWG01KpF5Aa8w"
+uri = "file://output/playwright/lakou-two-player-waiting-room.png"
+type = "image"
+title = "Lakou Domino — two-player waiting room"
+description = "Regular table waiting room with two occupied seats."
+logical_id = "501a2733-953e-456d-ae39-c53dd7feb2a5"
+content_hash = "sha256:a2740a116d5db3080d2baa91529ce766e1fcf2e71441499090645ad38b3fca05"
+size = 143463
+mtime_ms = 1790493309485
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/501a2733-953e-456d-ae39-c53dd7feb2a5/6fc7ce0d-fbee-437d-adfa-a173737fd037"
+storage_version_token = "1790493422927555"
+content_type = "image/png"
+
+[[outputs]]
+id = "CQfKPwwyRUN45btutJIOz"
+uri = "file://output/playwright/parity-desktop.png"
+type = "image"
+title = "Desktop comparison — app and harness"
+description = "Seed 11 room state at 1440×900. The Replit preview banner is cropped from the app side to align the layouts."
+logical_id = "3e006069-c293-4449-b939-52c8cce13b8f"
+content_hash = "sha256:3808f7887c82be8234dbe8deb7d3bdc9ffd0db8a985d1ed70e72594c512422c2"
+size = 401585
+mtime_ms = 1790536593979
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/3e006069-c293-4449-b939-52c8cce13b8f/83a660dd-0292-4fa0-b792-ef9c41fdbb31"
+storage_version_token = "1790536652102835"
+content_type = "image/png"
+
+[[outputs]]
+id = "tEb3WMqmpFjwop5IdXVT1"
+uri = "file://output/playwright/parity-mobile.png"
+type = "image"
+title = "Mobile comparison — app and harness"
+description = "Seed 11 room state at 390×844. The Replit preview banner is cropped from the app side to align the layouts."
+logical_id = "b518c578-31e6-41cd-8c6d-29a688f20f6f"
+content_hash = "sha256:937125b613a806206d46e52e7fe55e38a2d4d05a739b03dbc4c03e07f0bfcb37"
+size = 144659
+mtime_ms = 1790536594587
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/b518c578-31e6-41cd-8c6d-29a688f20f6f/0604915f-caf5-4ad1-bd14-311b7b2a7cba"
+storage_version_token = "1790536652730448"
+content_type = "image/png"
+
+[[outputs]]
+id = "A0qK_5mGFzB5FdfPiuFo4"
+uri = "file://output/playwright/live-modes-desktop-comparison.png"
+type = "image"
+title = "Live Domino comparison — desktop"
+description = "Points and Regular bot tables side by side. The Points view shows the active 15-second turn countdown."
+logical_id = "7341e871-c7ad-46d0-8ffa-86283ece1896"
+content_hash = "sha256:8fb0ee04edc6f828977470f63faed34130deb6927b3e0d3c2bfd0ec981ed8de0"
+size = 1170396
+mtime_ms = 1790539179611
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/7341e871-c7ad-46d0-8ffa-86283ece1896/9da464ef-f464-4095-bf71-b4608ddea2a4"
+storage_version_token = "1790539302618106"
+content_type = "image/png"
+
+[[outputs]]
+id = "fS4SQT7obTenyjRbgkMtN"
+uri = "file://output/playwright/live-modes-mobile-comparison.png"
+type = "image"
+title = "Live Domino comparison — mobile"
+description = "Points and Regular bot tables side by side at mobile width. The Points view shows the active shortened turn countdown."
+logical_id = "5970cd8d-8031-4b6e-9cf5-3987fa6c8c3f"
+content_hash = "sha256:c1c80110f819015f26c3a123e635b7859d96a6ddf3383a8c096851e2d6ddbbb6"
+size = 646097
+mtime_ms = 1790539180099
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/5970cd8d-8031-4b6e-9cf5-3987fa6c8c3f/dcd2f2a9-a574-4f86-8878-a7de07115fbb"
+storage_version_token = "1790539303170176"
+content_type = "image/png"
+
+[[outputs]]
+id = "57MMzMbNiRpR17GIfJcOO"
+uri = "file://output/playwright/live-points-timed-desktop.png"
+type = "image"
+title = "Points table with 15-second timer"
+description = "Desktop gameplay screenshot with the active 15-second countdown and a chat message whose sender matches the viewer."
+logical_id = "8379c101-84dc-4e04-857e-ebae0a975ce2"
+content_hash = "sha256:4998891e1e09518d9355b4dc29d87783312493d413c2d8690ca15527afbc91c4"
+size = 140174
+mtime_ms = 1790539065298
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/8379c101-84dc-4e04-857e-ebae0a975ce2/a8aa420f-44e5-4566-acc4-dce458d44599"
+storage_version_token = "1790539303677710"
+content_type = "image/png"
+
+[[outputs]]
+id = "yezj1Ai2-B3jMC1pMwqh3"
+uri = "file://output/playwright/lakou-afk-short-timer.png"
+type = "image"
+title = "Shorter timer after two AFK timeouts"
+description = "Live three-bot game screenshot: the player timer has dropped from 15 seconds to 8 seconds after two timeouts."
+logical_id = "6580debb-9ce3-42d6-bc78-25468689daf5"
+content_hash = "sha256:59e8210e770569b29447b2bf3c869bfab57edaf3291b84603dd35b512a924d87"
+size = 179723
+mtime_ms = 1790567752231
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/6580debb-9ce3-42d6-bc78-25468689daf5/994d1777-7095-4a3e-9ce1-3053877ed77f"
+storage_version_token = "1790567778594014"
+content_type = "image/png"
+
+[[outputs]]
+id = "xOzxq4yQXb3HUjJiDYqwJ"
+uri = "file://output/playwright/lakou-afk-17s.png"
+type = "image"
+title = "AFK timer after two timeouts"
+description = "Live three-bot game screenshot using the default 30-second timer; after two missed turns, the player's clock shows 17 seconds."
+logical_id = "b45abe38-cfd8-44ba-b598-f46f6489b907"
+content_hash = "sha256:8f138160ab2412782447ad6b355b5171b33f895f006901894a58e8b09593c8ea"
+size = 179318
+mtime_ms = 1790567932471
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/b45abe38-cfd8-44ba-b598-f46f6489b907/da8b5571-2738-49ff-b073-208e58d37920"
+storage_version_token = "1790567944160374"
+content_type = "image/png"

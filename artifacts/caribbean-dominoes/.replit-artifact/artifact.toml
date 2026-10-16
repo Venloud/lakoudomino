@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Lakou Domino"
+description = "Lakou Domino is a live Caribbean dominoes table for friends and family, with shared room links, regular and points modes, realtime play, and table chat."
+version = "1.0.0"
+id = "artifacts/caribbean-dominoes"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/", "/ws" ]
+localPort = 21133
+
+[services.development]
+run = "pnpm --filter @workspace/caribbean-dominoes run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/caribbean-dominoes", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/caribbean-dominoes/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21133"
+BASE_PATH = "/"

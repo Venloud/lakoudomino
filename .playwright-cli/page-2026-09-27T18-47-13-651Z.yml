@@ -1,0 +1,134 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]: Lakou Domino
+    - generic [ref=e6]:
+      - generic [ref=e7]: Points · 10-box row · Table XU62
+      - button "Leave table" [ref=e8] [cursor=pointer]
+  - generic [ref=e17]:
+    - main [ref=e18]:
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]: "N"
+          - generic [ref=e23]: Nadège
+          - generic [ref=e24]: 35 pts
+        - generic [ref=e25]: 5 tiles
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - generic [ref=e31]: J
+          - generic [ref=e32]: Jean
+          - generic [ref=e33]: 0 pts
+        - generic [ref=e34]: 5 tiles
+      - generic [ref=e38]:
+        - generic [ref=e156]: Bot 3
+        - generic: "+15"
+      - generic [ref=e169]:
+        - generic [ref=e170]:
+          - generic [ref=e171]: B
+          - generic [ref=e172]: Bot 3
+          - generic [ref=e173]: 15 pts
+        - generic [ref=e174]: 4 tiles
+      - generic [ref=e177]:
+        - generic [ref=e178]:
+          - generic [ref=e179]: Venloud
+          - generic [ref=e180]: Your turn · 19s
+          - generic [ref=e181]: Tap a tile to play
+        - generic [ref=e182]:
+          - generic [ref=e183]:
+            - button "Tile 5-5" [ref=e184] [cursor=pointer]
+            - button "Tile 0-5" [ref=e200] [cursor=pointer]
+            - button "Tile 1-1" [disabled] [ref=e211]
+            - button "Tile 4-5" [ref=e219] [cursor=pointer]
+            - button "Tile 0-0" [disabled] [ref=e234]
+          - generic [ref=e240]: 19s
+    - complementary [ref=e244]:
+      - generic [ref=e245]:
+        - generic [ref=e254]:
+          - paragraph [ref=e255]: PLAYERS
+          - generic [ref=e256]:
+            - generic [ref=e257]:
+              - button "V Venloud your turn · 0:19 30 ▴" [expanded] [ref=e258] [cursor=pointer]:
+                - generic [ref=e259]:
+                  - generic [ref=e260]: V
+                  - generic [ref=e261]: Venloud
+                  - generic [ref=e262]: your turn · 0:19
+                - generic [ref=e263]:
+                  - generic [ref=e264]: "30"
+                  - generic [ref=e265]: ▴
+              - generic [ref=e266]: 5 tiles · 6% of row
+              - generic [ref=e269]:
+                - 'generic "Box 1: 30 pts · 20 to fill" [ref=e270]'
+                - 'generic "Box 2: empty" [ref=e278]'
+                - 'generic "Box 3: empty" [ref=e280]'
+                - 'generic "Box 4: empty" [ref=e282]'
+                - 'generic "Box 5: empty" [ref=e284]'
+                - 'generic "Box 6: empty" [ref=e286]'
+                - 'generic "Box 7: empty" [ref=e288]'
+                - 'generic "Box 8: empty" [ref=e290]'
+                - 'generic "Box 9: empty" [ref=e292]'
+                - 'generic "Box 10: empty" [ref=e294]'
+            - generic [ref=e296]:
+              - button "J Jean 0 ▾" [ref=e297] [cursor=pointer]:
+                - generic [ref=e298]:
+                  - generic [ref=e299]: J
+                  - generic [ref=e300]: Jean
+                - generic [ref=e301]:
+                  - generic [ref=e302]: "0"
+                  - generic [ref=e303]: ▾
+              - generic [ref=e304]: 5 tiles · 0% of row
+            - generic [ref=e306]:
+              - button "N Nadège 35 ▾" [ref=e307] [cursor=pointer]:
+                - generic [ref=e308]:
+                  - generic [ref=e309]: "N"
+                  - generic [ref=e310]: Nadège
+                - generic [ref=e311]:
+                  - generic [ref=e312]: "35"
+                  - generic [ref=e313]: ▾
+              - generic [ref=e314]: 5 tiles · 7% of row
+            - generic [ref=e317]:
+              - button "B Bot 3 15 ▾" [ref=e318] [cursor=pointer]:
+                - generic [ref=e319]:
+                  - generic [ref=e320]: B
+                  - generic [ref=e321]: Bot 3
+                - generic [ref=e322]:
+                  - generic [ref=e323]: "15"
+                  - generic [ref=e324]: ▾
+              - generic [ref=e325]: 4 tiles · 3% of row
+        - generic [ref=e328]:
+          - paragraph [ref=e329]: TABLE CHAT
+          - generic [ref=e330]:
+            - generic [ref=e331]:
+              - generic [ref=e333]:
+                - generic [ref=e334]: Nadège
+                - generic [ref=e335]: that 5-5 was cold
+              - generic [ref=e337]:
+                - generic [ref=e338]: Jean
+                - generic [ref=e339]: PASS! lol
+              - generic [ref=e341]:
+                - generic [ref=e342]: Bot 3
+                - generic [ref=e343]: Nice one.
+              - generic [ref=e344]: watch this 4-1
+            - generic [ref=e347]:
+              - button "Pass!" [ref=e348] [cursor=pointer]
+              - button "Domino!" [ref=e349] [cursor=pointer]
+              - button "Nice one" [ref=e350] [cursor=pointer]
+              - button "Hurry up" [ref=e351] [cursor=pointer]
+            - generic [ref=e352]:
+              - textbox "Message the table…" [ref=e353]
+              - button "Send" [ref=e354] [cursor=pointer]
+      - generic [ref=e355]:
+        - generic [ref=e356]:
+          - generic [ref=e357]: Waitlist
+          - generic [ref=e358]: 3 waiting
+        - generic [ref=e359]:
+          - generic [ref=e360]: "1"
+          - generic [ref=e361]: M
+          - generic [ref=e362]: Marc
+          - generic [ref=e363]: Next up
+        - generic [ref=e364]:
+          - generic [ref=e365]: "2"
+          - generic [ref=e366]: K
+          - generic [ref=e367]: Kenny
+        - generic [ref=e368]:
+          - generic [ref=e369]: "3"
+          - generic [ref=e370]: T
+          - generic [ref=e371]: Tasha

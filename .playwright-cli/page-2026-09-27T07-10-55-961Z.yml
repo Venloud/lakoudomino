@@ -1,0 +1,19 @@
+- generic [ref=e2]:
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - paragraph [ref=e5]: LAKOU DOMINO
+      - heading "Bring your people to the table." [level=1] [ref=e6]
+      - paragraph [ref=e7]: Create an account to keep your crowns, find friends and see who is ready for a game.
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - text: Username
+          - textbox "Username" [ref=e10]
+        - generic [ref=e11]:
+          - text: Password
+          - textbox "Password" [ref=e12]
+        - button "Create account" [ref=e13] [cursor=pointer]
+      - generic [ref=e14]:
+        - generic [ref=e15]: Already playing?
+        - button "Sign in" [ref=e16] [cursor=pointer]
+  - region "Notifications (F8)":
+    - list

@@ -1,0 +1,102 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - banner [ref=e4]:
+        - generic [ref=e5]: Lakou Domino
+        - generic [ref=e6]:
+          - button "Sign in" [ref=e7] [cursor=pointer]
+          - button "Sign up" [ref=e8] [cursor=pointer]
+      - paragraph [ref=e17]: 0 players online · 0 tables playing
+      - main [ref=e19]:
+        - complementary [ref=e20]:
+          - generic [ref=e21]:
+            - paragraph [ref=e23]: LEADERBOARD
+            - list [ref=e24]:
+              - listitem [ref=e25]: No crowns yet. Win a Points game to get on the board.
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - heading "Live lobby" [level=1] [ref=e28]
+            - generic [ref=e29]: Connected
+          - generic [ref=e31]:
+            - generic [ref=e32]:
+              - paragraph [ref=e33]: OPEN TABLES
+              - generic [ref=e34]:
+                - generic [aria-hidden] [ref=e35]:
+                  - generic [ref=e36]: Host
+                  - generic [ref=e37]: Mode
+                  - generic [ref=e38]: Seats
+                - generic [ref=e39]:
+                  - generic [ref=e40]: Venloud
+                  - generic [ref=e41]: Points
+                  - generic [ref=e42]: 1/4
+                  - button "Join" [ref=e43] [cursor=pointer]
+                - generic [ref=e44]:
+                  - generic [ref=e45]: Venloud
+                  - generic [ref=e46]: Points
+                  - generic [ref=e47]: 1/4
+                  - button "Join" [ref=e48] [cursor=pointer]
+                - generic [ref=e49]:
+                  - generic [ref=e50]: Venloud
+                  - generic [ref=e51]: Points
+                  - generic [ref=e52]: 1/4
+                  - button "Join" [ref=e53] [cursor=pointer]
+                - generic [ref=e54]:
+                  - generic [ref=e55]: PreviewHost
+                  - generic [ref=e56]: Points
+                  - generic [ref=e57]: 1/4
+                  - button "Join" [ref=e58] [cursor=pointer]
+              - generic [ref=e59]:
+                - textbox "Table code" [ref=e60]:
+                  - /placeholder: Enter table code
+                - button "Join" [disabled] [ref=e61]
+            - generic [ref=e62]:
+              - paragraph [ref=e63]: OPEN A TABLE
+              - generic [ref=e64]:
+                - generic [ref=e65]: Your name
+                - textbox "Your name" [ref=e66]:
+                  - /placeholder: e.g. Jean
+              - generic [ref=e67]:
+                - generic [ref=e68]: Mode
+                - radiogroup "Mode" [ref=e69]:
+                  - radio "Regular" [ref=e70] [cursor=pointer]
+                  - radio "Points" [checked] [ref=e71] [cursor=pointer]
+              - generic [ref=e72]:
+                - generic [ref=e73]: Row length (Points only)
+                - generic [ref=e74]:
+                  - button "Fewer boxes" [ref=e75] [cursor=pointer]: −
+                  - generic [ref=e76]: 10 boxes
+                  - button "More boxes" [ref=e77] [cursor=pointer]: +
+              - generic [ref=e78]:
+                - generic [ref=e79]: Turn timer
+                - generic [ref=e80]:
+                  - combobox "Turn timer" [ref=e81] [cursor=pointer]:
+                    - option "15 seconds"
+                    - option "30 seconds" [selected]
+                    - option "45 seconds"
+                    - option "60 seconds"
+                  - generic [aria-hidden]: ▾
+              - generic [ref=e82] [cursor=pointer]:
+                - generic [ref=e83]: Private table
+                - checkbox "Private table" [ref=e84]
+              - button "Open table" [ref=e86] [cursor=pointer]
+        - complementary [ref=e87]:
+          - paragraph [ref=e88]: QUICK PLAY
+          - button "Play with friends Invite with a link or code" [ref=e89] [cursor=pointer]:
+            - generic [ref=e107]: Play with friends
+            - generic [ref=e108]: Invite with a link or code
+          - button "Practice vs bots Easy or Hard, start instantly" [ref=e109] [cursor=pointer]:
+            - generic [ref=e124]: Practice vs bots
+            - generic [ref=e125]: Easy or Hard, start instantly
+          - button "How to play Regular and Points rules" [ref=e126] [cursor=pointer]:
+            - generic [ref=e135]: How to play
+            - generic [ref=e136]: Regular and Points rules
+      - paragraph [ref=e137]: Regular and Points modes · Up to 4 players · Free to play
+    - region "Notifications (F8)":
+      - list
+  - generic [ref=e138]:
+    - generic [ref=e139]:
+      - text: This is a temporary development preview, and these links are not for public use.
+      - link "Publish your app" [ref=e140] [cursor=pointer]:
+        - /url: https://docs.replit.com/category/replit-deployments?ref=replit-dev-banner
+      - text: for secure sharing or use an invite link.
+    - button "Close banner" [ref=e141] [cursor=pointer]

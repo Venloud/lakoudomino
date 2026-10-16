@@ -1,0 +1,771 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: rooms
+    description: Guest room and lobby operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /rooms:
+    post:
+      operationId: createRoom
+      tags: [rooms]
+      summary: Create a dominoes room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomCreateInput"
+      responses:
+        "201":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+  /lobby:
+    get:
+      operationId: getLobby
+      tags: [rooms]
+      summary: Get open public waiting tables
+      responses:
+        "200":
+          description: Lobby state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lobby"
+  /rooms/{code}:
+    get:
+      operationId: getRoom
+      tags: [rooms]
+      summary: Get the current lobby state
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      responses:
+        "200":
+          description: Room state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+        "404":
+          description: Room not found
+    post:
+      operationId: joinRoom
+      tags: [rooms]
+      summary: Join a room as a guest
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomJoinInput"
+      responses:
+        "200":
+          description: Updated room state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+        "409":
+          description: Room is full or the name is already taken
+  /rooms/{code}/bots:
+    post:
+      operationId: fillRoomBots
+      tags: [rooms]
+      summary: Fill empty seats with bots
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HostActionInput"
+      responses:
+        "200":
+          description: Updated room state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Room"
+  /rooms/{code}/start:
+    post:
+      operationId: startRoom
+      tags: [rooms]
+      summary: Start a full room
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HostActionInput"
+      responses:
+        "200":
+          description: Started game snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSnapshot"
+        "409":
+          description: Room is not ready
+  /rooms/{code}/game:
+    get:
+      operationId: getGame
+      tags: [rooms]
+      summary: Get the current game snapshot
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      responses:
+        "200":
+          description: Game snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSnapshot"
+  /rooms/{code}/waitlist:
+    post:
+      operationId: joinWaitlist
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WaitlistInput" }
+      responses:
+        "200":
+          description: Waitlist position
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WaitlistPosition" }
+    delete:
+      operationId: leaveWaitlist
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostActionInput" }
+      responses:
+        "200": { description: Removed }
+    patch:
+      operationId: setWaitlistNotify
+      tags: [rooms]
+      summary: Change waitlist game-over notifications
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WaitlistNotifyInput"
+      responses:
+        "200": { description: Updated }
+  /rooms/{code}/waitlist/accept:
+    post:
+      operationId: acceptSeatOffer
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostActionInput" }
+      responses:
+        "200":
+          description: Updated room
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Room" }
+  /rooms/{code}/waitlist/decline:
+    post:
+      operationId: declineSeatOffer
+      tags: [rooms]
+      parameters: [{ $ref: "#/components/parameters/RoomCode" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostActionInput" }
+      responses:
+        "200": { description: Offer declined }
+  /rooms/{code}/leave:
+    post:
+      operationId: leaveSeat
+      tags: [rooms]
+      parameters: [{ $ref: "#/components/parameters/RoomCode" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HostActionInput" }
+      responses:
+        "200": { description: Seat released }
+  /rooms/{code}/next-hand:
+    post:
+      operationId: nextHand
+      tags: [rooms]
+      summary: Start the next Points hand as the previous winner
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NextHandInput"
+      responses:
+        "200":
+          description: Next hand snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSnapshot"
+        "409":
+          description: The room is not ready for another hand
+  /auth/me:
+    get:
+      operationId: getAuthMe
+      tags: [auth]
+      responses:
+        "200": { description: Current account, content: { application/json: { schema: { $ref: "#/components/schemas/AuthMe" } } } }
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AuthCredentials" } } } }
+      responses: { "201": { description: Account created, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } } }
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AuthCredentials" } } } }
+      responses: { "200": { description: Signed in, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } } }
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      responses: { "204": { description: Signed out } }
+  /friends:
+    get:
+      operationId: listFriends
+      tags: [friends]
+      responses: { "200": { description: Friends, content: { application/json: { schema: { $ref: "#/components/schemas/FriendsResponse" } } } } }
+  /friends/requests:
+    post:
+      operationId: createFriendRequest
+      tags: [friends]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/FriendRequestInput" } } } }
+      responses: { "201": { description: Request created, content: { application/json: { schema: { $ref: "#/components/schemas/Friendship" } } } } }
+  /friends/requests/{id}/accept:
+    post:
+      operationId: acceptFriendRequest
+      tags: [friends]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses: { "200": { description: Updated friendship, content: { application/json: { schema: { $ref: "#/components/schemas/Friendship" } } } } }
+  /friends/requests/{id}/decline:
+    post:
+      operationId: declineFriendRequest
+      tags: [friends]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses: { "200": { description: Updated friendship, content: { application/json: { schema: { $ref: "#/components/schemas/Friendship" } } } } }
+  /friends/invites:
+    post:
+      operationId: createFriendInvite
+      tags: [friends]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/FriendInviteInput" } } } }
+      responses: { "201": { description: Invite sent, content: { application/json: { schema: { $ref: "#/components/schemas/FriendInvite" } } } } }
+  /friends/invites/{id}/accept:
+    post:
+      operationId: acceptFriendInvite
+      tags: [friends]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Invite accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FriendInviteAcceptResponse" }
+  /friends/invites/{id}/dismiss:
+    post:
+      operationId: dismissFriendInvite
+      tags: [friends]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses: { "200": { description: Updated invite } }
+components:
+  parameters:
+    RoomCode:
+      name: code
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Z0-9]{4,8}$"
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    RoomMode:
+      type: string
+      enum: [regular, points]
+    SeatStatus:
+      type: string
+      enum: [open, waiting, bot]
+    RoomSeat:
+      type: object
+      required: [seat, status, name, tileCount]
+      properties:
+        seat:
+          type: integer
+          minimum: 0
+          maximum: 3
+        status:
+          $ref: "#/components/schemas/SeatStatus"
+        name:
+          type: ["string", "null"]
+        tileCount:
+          type: integer
+          minimum: 0
+    Room:
+      type: object
+      required: [code, hostName, reconnectToken, mode, rowLength, rowBoxes, status, seats, turnSeconds, isPrivate]
+      properties:
+        code:
+          type: string
+        hostName:
+          type: string
+        reconnectToken:
+          type: ["string", "null"]
+        mode:
+          $ref: "#/components/schemas/RoomMode"
+        rowLength:
+          type: integer
+          minimum: 1
+          maximum: 20
+        rowBoxes:
+          type: integer
+          minimum: 5
+          maximum: 20
+        playerCount:
+          type: integer
+          enum: [2, 3, 4]
+        twoPlayerVariant:
+          type: string
+          enum: [draw, split]
+        status:
+          type: string
+          enum: [waiting, playing, finished]
+        turnSeconds:
+          type: integer
+          minimum: 5
+          maximum: 300
+        isPrivate:
+          type: boolean
+        seats:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoomSeat"
+    RoomCreateInput:
+      type: object
+      required: [displayName, mode]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
+        mode:
+          $ref: "#/components/schemas/RoomMode"
+        rowLength:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 10
+        rowBoxes:
+          type: integer
+          minimum: 5
+          maximum: 20
+          default: 10
+        playerCount:
+          type: integer
+          enum: [2, 3, 4]
+          default: 4
+        twoPlayerVariant:
+          type: string
+          enum: [draw, split]
+          default: draw
+        turnSeconds:
+          type: integer
+          minimum: 5
+          maximum: 300
+          default: 30
+        isPrivate:
+          type: boolean
+          default: false
+    RoomJoinInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
+    NextHandInput:
+      type: object
+      required: [reconnectToken]
+      properties:
+        reconnectToken:
+          type: string
+    HostActionInput:
+      type: object
+      required: [reconnectToken]
+      properties:
+        reconnectToken:
+          type: string
+    WaitlistInput:
+      allOf:
+        - $ref: "#/components/schemas/HostActionInput"
+      properties:
+        notify:
+          type: boolean
+        name:
+          type: string
+          minLength: 1
+          maxLength: 24
+    WaitlistNotifyInput:
+      allOf:
+        - $ref: "#/components/schemas/HostActionInput"
+        - type: object
+          required: [notify]
+          properties:
+            notify:
+              type: boolean
+    WaitlistPosition:
+      type: object
+      required: [position]
+      properties:
+        position: { type: integer }
+    Lobby:
+      type: object
+      required: [tables, onlinePlayers, tablesPlaying, connected, leaderboard]
+      properties:
+        tables:
+          type: array
+          items:
+            $ref: "#/components/schemas/Room"
+        onlinePlayers:
+          type: integer
+        tablesPlaying:
+          type: integer
+        connected:
+          type: boolean
+        leaderboard:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderboardRow"
+    GamePlayer:
+      type: object
+      required: [seat, name, tileCount, score]
+      properties:
+        seat:
+          type: integer
+        name:
+          type: string
+        tileCount:
+          type: integer
+        score:
+          type: integer
+    DominoTile:
+      type: object
+      required: [id, left, right]
+      properties:
+        id:
+          type: string
+        left:
+          type: integer
+        right:
+          type: integer
+    GameSnapshot:
+      type: object
+      required:
+        [
+          code,
+          mode,
+          hand,
+          players,
+          turnSeat,
+          board,
+          branchTiles,
+          openEnds,
+          yourSeat,
+          lastAction,
+          handNumber,
+          handPoints,
+          winnerSeat,
+          gameFinished,
+        ]
+      properties:
+        code:
+          type: string
+        mode:
+          $ref: "#/components/schemas/RoomMode"
+        hand:
+          type: array
+          items:
+            $ref: "#/components/schemas/DominoTile"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/GamePlayer"
+        turnSeat:
+          type: integer
+        board:
+          type: array
+          items:
+            $ref: "#/components/schemas/DominoTile"
+        branchTiles:
+          type: array
+          items:
+            type: object
+            required: [end, tile]
+            properties:
+              end:
+                type: string
+                enum: [left, right, top, bottom]
+              tile:
+                $ref: "#/components/schemas/DominoTile"
+        openEnds:
+          type: array
+          items:
+            type: object
+            required: [id, value]
+            properties:
+              id:
+                type: string
+                enum: [left, right, top, bottom]
+              value:
+                type: integer
+              isDouble:
+                type: boolean
+        yourSeat:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 3
+        lastAction:
+          type: ["string", "null"]
+        handNumber:
+          type: integer
+        handPoints:
+          type: array
+          items:
+            type: integer
+        winnerSeat:
+          type: ["integer", "null"]
+        gameFinished:
+          type: boolean
+        engine:
+          $ref: "#/components/schemas/EngineView"
+        view:
+          type: object
+          additionalProperties: true
+        events:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        eventsKey:
+          type: integer
+          minimum: 0
+        turnDeadline:
+          type: ["integer", "null"]
+        waitlist:
+          type: array
+          items:
+            $ref: "#/components/schemas/WaitlistEntry"
+        names:
+          type: array
+          items:
+            type: string
+    WaitlistEntry:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+    EngineView:
+      type: object
+      required: [mode, playerCount, rowBoxes, target, seat, myHand, handCounts, boneyardCount, board, turn, handNumber, scores, scoreLog, endsTotal, legal, handOver, matchOver, ranking, placings, revealedHands]
+      properties:
+        mode: { $ref: "#/components/schemas/RoomMode" }
+        playerCount: { type: integer }
+        rowBoxes: { type: integer }
+        target: { type: integer }
+        seat: { type: ["integer", "null"] }
+        myHand: { type: array, items: { $ref: "#/components/schemas/DominoTile" } }
+        handCounts: { type: array, items: { type: integer } }
+        boneyardCount: { type: integer }
+        board: { type: object }
+        turn: { type: integer }
+        handNumber: { type: integer }
+        scores: { type: array, items: { type: integer } }
+        scoreLog: { type: array, items: { type: array, items: { type: object } } }
+        endsTotal: { type: integer }
+        legal: { type: array, items: { type: object } }
+        handOver: { type: boolean }
+        matchOver: { type: boolean }
+        ranking: { type: ["array", "null"], items: { type: integer } }
+        placings: { type: ["array", "null"], items: { type: integer } }
+        revealedHands: { type: ["array", "null"], items: { type: array, items: { $ref: "#/components/schemas/DominoTile" } } }
+    User:
+      type: object
+      required: [id, username, crownPoints, games, wins, gold, silver, bronze]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        crownPoints: { type: integer }
+        games: { type: integer }
+        wins: { type: integer }
+        gold: { type: integer }
+        silver: { type: integer }
+        bronze: { type: integer }
+    AuthCredentials:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 16, pattern: "^[A-Za-z0-9_]+$" }
+        password: { type: string, minLength: 8, maxLength: 72 }
+    AuthResponse:
+      type: object
+      required: [user]
+      properties: { user: { $ref: "#/components/schemas/User" } }
+    AuthMe:
+      type: object
+      required: [user]
+      properties: { user: { oneOf: [{ $ref: "#/components/schemas/User" }, { type: "null" }] } }
+    Friendship:
+      type: object
+      required: [id, userLow, userHigh, requesterId, status]
+      properties:
+        id: { type: string, format: uuid }
+        userLow: { type: string, format: uuid }
+        userHigh: { type: string, format: uuid }
+        requesterId: { type: string, format: uuid }
+        status: { type: string, enum: [pending, accepted, declined] }
+    FriendRequestView:
+      type: object
+      required: [id, requesterId, username, status]
+      properties:
+        id: { type: string, format: uuid }
+        requesterId: { type: string, format: uuid }
+        username: { type: string }
+        status: { type: string, enum: [pending] }
+    Presence:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [lobby, game, online] }
+        detail: { type: string }
+        roomCode: { type: string }
+    Friend:
+      type: object
+      required: [id, username, status]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        status:
+          oneOf:
+            - { $ref: "#/components/schemas/Presence" }
+            - { type: "null" }
+    FriendInvite:
+      type: object
+      required: [id, inviterId, inviteeId, roomCode, status]
+      properties:
+        id: { type: string, format: uuid }
+        inviterId: { type: string, format: uuid }
+        inviteeId: { type: string, format: uuid }
+        roomCode: { type: string }
+        status: { type: string }
+    FriendInviteNotification:
+      type: object
+      required: [id, inviterId, inviterName, roomCode, status]
+      properties:
+        id: { type: string, format: uuid }
+        inviterId: { type: string, format: uuid }
+        inviterName: { type: string }
+        roomCode: { type: string }
+        status: { type: string, enum: [pending] }
+    FriendInviteAcceptResponse:
+      type: object
+      required: [roomCode]
+      properties:
+        roomCode: { type: string, pattern: "^[A-Z0-9]{4,8}$" }
+    LeaderboardRow:
+      type: object
+      required: [id, name, points, gold, silver, bronze, isMe]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        points: { type: integer }
+        gold: { type: integer }
+        silver: { type: integer }
+        bronze: { type: integer }
+        isMe: { type: boolean }
+    FriendsResponse:
+      type: object
+      required: [friends, requests, invites]
+      properties:
+        friends: { type: array, items: { $ref: "#/components/schemas/Friend" } }
+        requests: { type: array, items: { $ref: "#/components/schemas/FriendRequestView" } }
+        invites: { type: array, items: { $ref: "#/components/schemas/FriendInviteNotification" } }
+    FriendRequestInput:
+      type: object
+      required: [username]
+      properties: { username: { type: string, minLength: 3, maxLength: 16, pattern: "^[A-Za-z0-9_]+$" } }
+    FriendInviteInput:
+      type: object
+      required: [friendId, roomCode]
+      properties:
+        friendId: { type: string, format: uuid }
+        roomCode: { type: string, pattern: "^[A-Z0-9]{4,8}$" }
+

@@ -1,0 +1,63 @@
+- generic [ref=e2]:
+  - generic [ref=e148]:
+    - banner [ref=e149]:
+      - generic [ref=e150]: Lakou Domino
+      - button "Account menu" [ref=e152] [cursor=pointer]:
+        - generic [ref=e153]: M
+        - generic [ref=e154]: Mireille
+    - main [ref=e163]:
+      - generic [ref=e164]:
+        - generic [ref=e165]:
+          - paragraph [ref=e166]: WAITING ROOM
+          - heading "Mireille's table" [level=1] [ref=e167]
+          - generic [ref=e168]: 1 of 4 seats filled · waiting for players
+        - generic [ref=e170]:
+          - generic [ref=e171]:
+            - paragraph [ref=e172]: TABLE CODE
+            - generic [ref=e173]: BQSA
+            - generic [ref=e174]: http://127.0.0.1/room/BQSA
+          - generic [ref=e175]:
+            - button "Copy invite link" [ref=e176] [cursor=pointer]
+            - button "Copy code" [ref=e177] [cursor=pointer]
+        - generic [ref=e178]:
+          - generic [ref=e179]: Regular
+          - generic [ref=e180]: 30s turns
+          - generic [ref=e181]: Public
+        - generic [ref=e182]:
+          - generic [ref=e183]:
+            - generic [ref=e184]: M
+            - generic [ref=e185]: Mireille
+            - generic [ref=e186]: Host
+          - button "+ Open seat Invite" [ref=e187] [cursor=pointer]:
+            - generic [ref=e188]: +
+            - generic [ref=e189]: Open seat
+            - generic [ref=e190]: Invite
+          - button "+ Open seat Invite" [ref=e191] [cursor=pointer]:
+            - generic [ref=e192]: +
+            - generic [ref=e193]: Open seat
+            - generic [ref=e194]: Invite
+          - button "+ Open seat Invite" [ref=e195] [cursor=pointer]:
+            - generic [ref=e196]: +
+            - generic [ref=e197]: Open seat
+            - generic [ref=e198]: Invite
+        - generic [ref=e199]:
+          - button "Leave table" [ref=e200] [cursor=pointer]
+          - generic [ref=e201]:
+            - button "Fill empty seats with bots" [ref=e202] [cursor=pointer]
+            - button "Start game" [disabled] [ref=e203]
+        - paragraph [ref=e204]: Start unlocks when all 4 seats are filled.
+      - complementary [ref=e205]:
+        - generic [ref=e206]:
+          - paragraph [ref=e207]: TABLE CHAT
+          - generic [ref=e208]:
+            - paragraph [ref=e210]: Say hello to the table.
+            - generic [ref=e211]:
+              - textbox "Message the table…" [ref=e212]
+              - button "Send" [ref=e213] [cursor=pointer]
+        - generic [ref=e214]:
+          - generic [ref=e215]:
+            - generic [ref=e216]: Waitlist
+            - generic [ref=e217]: 0 waiting
+          - paragraph [ref=e218]: Nobody in line. Join to play after this game.
+  - region "Notifications (F8)":
+    - list

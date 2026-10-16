@@ -1,0 +1,93 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]: Lakou Domino
+      - generic [ref=e6]:
+        - button "Sign in" [ref=e7] [cursor=pointer]
+        - button "Sign up" [ref=e8] [cursor=pointer]
+    - paragraph [ref=e17]: 2 players online · 0 tables playing
+    - main [ref=e19]:
+      - complementary [ref=e20]:
+        - generic [ref=e21]:
+          - paragraph [ref=e23]: LEADERBOARD
+          - list [ref=e24]:
+            - listitem [ref=e25]:
+              - generic [ref=e26]: "1"
+              - generic [ref=e27]:
+                - generic [ref=e28]: nadine
+                - generic [ref=e29]:
+                  - generic [ref=e30]: "0"
+                  - generic [ref=e33]: "0"
+                  - generic [ref=e36]: "0"
+              - generic [ref=e39]: "0"
+            - listitem [ref=e40]:
+              - generic [ref=e41]: "2"
+              - generic [ref=e42]:
+                - generic [ref=e43]: mireille
+                - generic [ref=e44]:
+                  - generic [ref=e45]: "0"
+                  - generic [ref=e48]: "0"
+                  - generic [ref=e51]: "0"
+              - generic [ref=e54]: "0"
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - heading "Live lobby" [level=1] [ref=e57]
+          - generic [ref=e58]: Connected
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - paragraph [ref=e62]: OPEN TABLES
+            - generic [ref=e63]:
+              - generic [aria-hidden] [ref=e64]:
+                - generic [ref=e65]: Host
+                - generic [ref=e66]: Mode
+                - generic [ref=e67]: Seats
+              - paragraph [ref=e68]: No open tables right now. Open one and share the code.
+            - generic [ref=e69]:
+              - textbox "Table code" [ref=e70]:
+                - /placeholder: Enter table code
+              - button "Join" [disabled] [ref=e71]
+          - generic [ref=e72]:
+            - paragraph [ref=e73]: OPEN A TABLE
+            - generic [ref=e74]:
+              - generic [ref=e75]: Your name
+              - textbox "Your name" [ref=e76]:
+                - /placeholder: e.g. Jean
+                - text: Mireille
+            - generic [ref=e77]:
+              - generic [ref=e78]: Mode
+              - radiogroup "Mode" [ref=e79]:
+                - radio "Regular" [checked] [active] [ref=e80] [cursor=pointer]
+                - radio "Points" [ref=e81] [cursor=pointer]
+            - generic [ref=e82]:
+              - generic [ref=e83]: Row length (Points only)
+              - generic [ref=e84]:
+                - button "Fewer boxes" [disabled] [ref=e85]: −
+                - generic [ref=e86]: 10 boxes
+                - button "More boxes" [disabled] [ref=e87]: +
+            - generic [ref=e88]:
+              - generic [ref=e89]: Turn timer
+              - generic [ref=e90]:
+                - combobox "Turn timer" [ref=e91] [cursor=pointer]:
+                  - option "15 seconds"
+                  - option "30 seconds" [selected]
+                  - option "45 seconds"
+                  - option "60 seconds"
+                - generic [aria-hidden]: ▾
+            - generic [ref=e92] [cursor=pointer]:
+              - generic [ref=e93]: Private table
+              - checkbox "Private table" [ref=e94]
+            - button "Open table" [ref=e96] [cursor=pointer]
+      - complementary [ref=e97]:
+        - paragraph [ref=e98]: QUICK PLAY
+        - button "Play with friends Invite with a link or code" [ref=e99] [cursor=pointer]:
+          - generic [ref=e117]: Play with friends
+          - generic [ref=e118]: Invite with a link or code
+        - button "Practice vs bots Easy or Hard, start instantly" [ref=e119] [cursor=pointer]:
+          - generic [ref=e134]: Practice vs bots
+          - generic [ref=e135]: Easy or Hard, start instantly
+        - button "How to play Regular and Points rules" [ref=e136] [cursor=pointer]:
+          - generic [ref=e145]: How to play
+          - generic [ref=e146]: Regular and Points rules
+    - paragraph [ref=e147]: Regular and Points modes · Up to 4 players · Free to play
+  - region "Notifications (F8)":
+    - list

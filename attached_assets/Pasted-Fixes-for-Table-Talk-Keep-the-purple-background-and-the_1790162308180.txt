@@ -1,0 +1,22 @@
+Fixes for Table Talk. Keep the purple background and the orange/pink sunset glow, those work. Everything below is a change.
+
+LANDING PAGE
+- Remove the hero section completely: the "Golden hour is game time" label, the "Pull up a chair. Play a hand." headline, the paragraph, "Made for four friends", and the dominoes card on the right.
+- Remove the palm tree drawings everywhere. I will upload real image files later.
+- The landing page is just: the Table Talk name in plain bold text (no logo icon for now), then the "Open a table" and "Join a table" panels, centered.
+- Make "Join the table" a full-width button, same size as "Open the table".
+- Change the placeholder names to "e.g. Jean" and "e.g. Nadège".
+
+ROW LENGTH
+- Only show Row length when Points is selected. Hide it for Regular.
+- Minimum 5 boxes, default 10, no low maximum (allow up to 50).
+
+ROOMS
+- Rooms must not disappear. The room XU62 showed "That table may have closed" during/after a game. Keep rooms alive until the host closes them or everyone has left for 30+ minutes, and survive a server restart if possible (store room state, not just memory).
+- When a hand or game ends, show a results screen with the ranking and a "Deal again" button for the host, instead of the room breaking.
+
+THE TABLE
+- Seating like a real table: my seat at the bottom (my hand), and the other three players at the left, top and right of the table. Remove the row of player boxes under the table.
+- The table is a top-down wooden table filling most of the screen. Remove the teal/orange split. Beach theme = the same wooden table, but the area around it is sand instead of the yard.
+- Tile layout: tiles connect end to end in a chain, laid lengthwise, matching halves touching. Doubles are placed crosswise (perpendicular to the chain). In Points mode, the spinner double sits crosswise in the middle, with chains growing left and right, and then up and down once both sides are played. Bend the chain around when it reaches the table edge.
+- Remove the big "At the table" heading. The table should be the first thing you see.

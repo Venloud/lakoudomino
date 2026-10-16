@@ -1,0 +1,84 @@
+- generic [ref=f1e2]:
+  - generic [ref=f1e100]:
+    - banner [ref=f1e101]:
+      - generic [ref=f1e102]: Lakou Domino
+      - button "Account menu" [ref=f1e104] [cursor=pointer]:
+        - generic [ref=f1e105]: V
+        - generic [ref=f1e106]: Venloud
+        - generic [ref=f1e107]: ▾
+    - paragraph [ref=f1e116]: 0 players online · 0 tables playing
+    - main [ref=f1e118]:
+      - complementary [ref=f1e119]:
+        - generic [ref=f1e120]:
+          - generic [ref=f1e121]:
+            - generic [ref=f1e122]: V
+            - generic [ref=f1e123]:
+              - generic [ref=f1e124]: Venloud
+              - generic [ref=f1e125]: 0 crown points
+          - generic [ref=f1e126]:
+            - generic [ref=f1e127]: 0 gold
+            - generic [ref=f1e130]: 0 silver
+            - generic [ref=f1e133]: 0 bronze
+          - generic [ref=f1e136]: 0 games played · 0 wins
+        - button "Play with friends" [ref=f1e137] [cursor=pointer]
+        - button "Practice vs bots" [ref=f1e138] [cursor=pointer]
+        - generic [ref=f1e139]:
+          - paragraph [ref=f1e141]: LEADERBOARD
+          - list [ref=f1e142]:
+            - listitem [ref=f1e143]: No crowns yet. Win a Points game to get on the board.
+      - generic [ref=f1e144]:
+        - generic [ref=f1e145]:
+          - heading "Live lobby" [level=1] [ref=f1e146]
+          - generic [ref=f1e147]: Reconnecting…
+        - generic [ref=f1e149]:
+          - generic [ref=f1e150]:
+            - paragraph [ref=f1e151]: OPEN TABLES
+            - generic [ref=f1e152]:
+              - generic [aria-hidden] [ref=f1e153]:
+                - generic [ref=f1e154]: Host
+                - generic [ref=f1e155]: Mode
+                - generic [ref=f1e156]: Seats
+              - paragraph [ref=f1e157]: No open tables right now. Open one and share the code.
+            - generic [ref=f1e158]:
+              - textbox "Table code" [ref=f1e159]:
+                - /placeholder: Enter table code
+              - button "Join" [disabled] [ref=f1e160]
+          - generic [ref=f1e161]:
+            - paragraph [ref=f1e162]: OPEN A TABLE
+            - generic [ref=f1e163]:
+              - generic [ref=f1e164]: Mode
+              - radiogroup "Mode" [ref=f1e165]:
+                - radio "Regular" [ref=f1e166] [cursor=pointer]
+                - radio "Points" [checked] [ref=f1e167] [cursor=pointer]
+            - generic [ref=f1e168]:
+              - generic [ref=f1e169]: Row length (Points only)
+              - generic [ref=f1e170]:
+                - button "Fewer boxes" [ref=f1e171] [cursor=pointer]: −
+                - generic [ref=f1e172]: 10 boxes
+                - button "More boxes" [ref=f1e173] [cursor=pointer]: +
+            - generic [ref=f1e174]:
+              - generic [ref=f1e175]: Turn timer
+              - generic [ref=f1e176]:
+                - combobox "Turn timer" [ref=f1e177] [cursor=pointer]:
+                  - option "15 seconds"
+                  - option "30 seconds" [selected]
+                  - option "45 seconds"
+                  - option "60 seconds"
+                - generic [aria-hidden]: ▾
+            - generic [ref=f1e178] [cursor=pointer]:
+              - generic [ref=f1e179]: Private table
+              - checkbox "Private table" [ref=f1e180]
+            - button "Open table" [ref=f1e182] [cursor=pointer]
+      - complementary [ref=f1e183]:
+        - generic [ref=f1e184]:
+          - generic [ref=f1e185]: Friends
+          - generic [ref=f1e186]: 0 online
+        - generic [ref=f1e187]:
+          - textbox "Add by username" [ref=f1e188]
+          - button "Add" [ref=f1e189] [cursor=pointer]
+        - generic [ref=f1e190]:
+          - paragraph [ref=f1e191]: ONLINE · 0
+          - generic [ref=f1e192]: Nobody online right now.
+    - paragraph [ref=f1e193]: Regular and Points modes · Up to 4 players · Free to play
+  - region "Notifications (F8)":
+    - list

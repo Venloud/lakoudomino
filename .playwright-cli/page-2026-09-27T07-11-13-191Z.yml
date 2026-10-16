@@ -1,0 +1,92 @@
+- generic [ref=e2]:
+  - generic [ref=e17]:
+    - banner [ref=e18]:
+      - generic [ref=e19]: Lakou Domino
+      - button "Account menu" [ref=e21] [cursor=pointer]:
+        - generic [ref=e22]: M
+        - generic [ref=e23]: mireille
+        - generic [ref=e24]: ▾
+    - paragraph [ref=e33]: 3 players online · 0 tables playing
+    - main [ref=e35]:
+      - complementary [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - generic [ref=e39]: M
+            - generic [ref=e40]:
+              - generic [ref=e41]: mireille
+              - generic [ref=e42]: 0 crown points
+          - generic [ref=e43]:
+            - generic [ref=e44]: 0 gold
+            - generic [ref=e47]: 0 silver
+            - generic [ref=e50]: 0 bronze
+          - generic [ref=e53]: 0 games played · 0 wins
+          - button "Edit profile" [ref=e55] [cursor=pointer]
+        - button "Play with friends" [ref=e56] [cursor=pointer]
+        - button "Practice vs bots" [ref=e57] [cursor=pointer]
+        - generic [ref=e58]:
+          - paragraph [ref=e60]: LEADERBOARD
+          - list [ref=e61]:
+            - listitem [ref=e62]:
+              - generic [ref=e63]: "1"
+              - generic [ref=e64]: mireille (you)
+              - generic [ref=e66]: "0"
+            - listitem [ref=e117]:
+              - generic [ref=e118]: "2"
+              - generic [ref=e119]: nadine
+              - generic [ref=e121]: "0"
+      - generic [ref=e67]:
+        - generic [ref=e68]:
+          - heading "Live lobby" [level=1] [ref=e69]
+          - generic [ref=e70]: Connected
+        - generic [ref=e72]:
+          - generic [ref=e73]:
+            - paragraph [ref=e74]: OPEN TABLES
+            - generic [ref=e75]:
+              - generic [aria-hidden] [ref=e76]:
+                - generic [ref=e77]: Host
+                - generic [ref=e78]: Mode
+                - generic [ref=e79]: Seats
+              - paragraph [ref=e80]: No open tables right now. Open one and share the code.
+            - generic [ref=e81]:
+              - textbox "Table code" [ref=e82]:
+                - /placeholder: Enter table code
+              - button "Join" [disabled] [ref=e83]
+          - generic [ref=e84]:
+            - paragraph [ref=e85]: OPEN A TABLE
+            - generic [ref=e86]:
+              - generic [ref=e87]: Mode
+              - radiogroup "Mode" [ref=e88]:
+                - radio "Regular" [ref=e89] [cursor=pointer]
+                - radio "Points" [checked] [ref=e90] [cursor=pointer]
+            - generic [ref=e91]:
+              - generic [ref=e92]: Row length (Points only)
+              - generic [ref=e93]:
+                - button "Fewer boxes" [ref=e94] [cursor=pointer]: −
+                - generic [ref=e95]: 10 boxes
+                - button "More boxes" [ref=e96] [cursor=pointer]: +
+            - generic [ref=e97]:
+              - generic [ref=e98]: Turn timer
+              - generic [ref=e99]:
+                - combobox "Turn timer" [ref=e100] [cursor=pointer]:
+                  - option "15 seconds"
+                  - option "30 seconds" [selected]
+                  - option "45 seconds"
+                  - option "60 seconds"
+                - generic [aria-hidden]: ▾
+            - generic [ref=e101] [cursor=pointer]:
+              - generic [ref=e102]: Private table
+              - checkbox "Private table" [ref=e103]
+            - button "Open table" [ref=e105] [cursor=pointer]
+      - complementary [ref=e106]:
+        - generic [ref=e107]:
+          - generic [ref=e108]: Friends
+          - generic [ref=e109]: 0 online
+        - generic [ref=e110]:
+          - textbox "Add by username" [ref=e111]
+          - button "Add" [active] [ref=e112] [cursor=pointer]
+        - generic [ref=e113]:
+          - paragraph [ref=e114]: ONLINE · 0
+          - generic [ref=e115]: Nobody online right now.
+    - paragraph [ref=e116]: Regular and Points modes · Up to 4 players · Free to play
+  - region "Notifications (F8)":
+    - list

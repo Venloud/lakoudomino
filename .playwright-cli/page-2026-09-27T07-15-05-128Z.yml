@@ -1,0 +1,59 @@
+- generic [ref=e2]:
+  - generic [ref=e152]:
+    - banner [ref=e153]:
+      - generic [ref=e154]: Lakou Domino
+      - button "Account menu" [ref=e156] [cursor=pointer]:
+        - generic [ref=e157]: G
+        - generic [ref=e158]: Guest
+    - main [ref=e167]:
+      - generic [ref=e168]:
+        - generic [ref=e169]:
+          - paragraph [ref=e170]: WAITING ROOM
+          - heading "Mireille's table" [level=1] [ref=e171]
+          - generic [ref=e172]: 2 of 4 seats filled · waiting for players
+        - generic [ref=e174]:
+          - generic [ref=e175]:
+            - paragraph [ref=e176]: TABLE CODE
+            - generic [ref=e177]: BQSA
+            - generic [ref=e178]: http://127.0.0.1/room/BQSA
+          - generic [ref=e179]:
+            - button "Copy invite link" [ref=e180] [cursor=pointer]
+            - button "Copy code" [ref=e181] [cursor=pointer]
+        - generic [ref=e182]:
+          - generic [ref=e183]: Regular
+          - generic [ref=e184]: 30s turns
+          - generic [ref=e185]: Public
+        - generic [ref=e186]:
+          - generic [ref=e187]:
+            - generic [ref=e188]: M
+            - generic [ref=e189]: Mireille
+            - generic [ref=e190]: Host
+          - generic [ref=e191]:
+            - generic [ref=e192]: G
+            - generic [ref=e193]: Guest
+            - generic [ref=e194]: Joined
+          - button "+ Open seat Invite" [ref=e195] [cursor=pointer]:
+            - generic [ref=e196]: +
+            - generic [ref=e197]: Open seat
+            - generic [ref=e198]: Invite
+          - button "+ Open seat Invite" [ref=e199] [cursor=pointer]:
+            - generic [ref=e200]: +
+            - generic [ref=e201]: Open seat
+            - generic [ref=e202]: Invite
+        - button "Leave table" [ref=e204] [cursor=pointer]
+        - paragraph [ref=e205]: The host starts the game when every seat is filled.
+      - complementary [ref=e206]:
+        - generic [ref=e207]:
+          - paragraph [ref=e208]: TABLE CHAT
+          - generic [ref=e209]:
+            - paragraph [ref=e211]: Say hello to the table.
+            - generic [ref=e212]:
+              - textbox "Message the table…" [ref=e213]
+              - button "Send" [ref=e214] [cursor=pointer]
+        - generic [ref=e215]:
+          - generic [ref=e216]:
+            - generic [ref=e217]: Waitlist
+            - generic [ref=e218]: 0 waiting
+          - paragraph [ref=e219]: Nobody in line. Join to play after this game.
+  - region "Notifications (F8)":
+    - list

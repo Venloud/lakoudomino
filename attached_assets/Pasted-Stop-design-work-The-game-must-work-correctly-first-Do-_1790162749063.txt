@@ -1,0 +1,23 @@
+Stop design work. The game must work correctly first. Do these in order, and write automated tests for every rule in Part 1 and run them before moving on.
+
+PART 1 — GAME ENGINE (must be correct)
+1. TILES DON'T MATCH. On the table I see a 3-3 followed by a blank-6 and then a 3-4, which don't connect. Every play must be validated on the server: the tile must match the open end it's played on. When drawing, flip each tile so the matching halves touch. Test that every pair of adjacent tiles on the table shares the same number.
+2. SCORING DOES NOTHING. After a full Points hand, every player still showed 0 pts. After every play, add up all open ends (a double at an end counts both halves). If the total is a multiple of 5 and more than 0, the player who just played scores it.
+3. BONUSES: 50 to the player whose play made the next player pass; 50 for each player who passed when the turn comes all the way back (three passes = three 50s); 50 for going out first; 50 to the lowest pip count when the game locks.
+4. SPINNER: the first double played is the spinner. Once both of its sides have a tile, its top and bottom open as well, for up to 4 ends. The end values shown must match the tiles actually on the table.
+5. END OF HAND: when someone goes out or the game locks, stop play and show a results panel (who went out, points this hand, totals). In Points mode, the host taps "Next hand"; the previous winner starts. The game ends when someone fills their whole row. The room must never break here.
+
+PART 2 — TABLE AND HAND
+- The table is a SQUARE (1:1), centered, as large as fits the screen.
+- Tile layout: regular tiles lie lengthwise, connecting end to end. Only doubles sit crosswise (upright across the chain). Chains turn the corner at the table edge; no scroll bars. The spinner branches go left, right, up and down.
+- Seats: me at the bottom, the other three at the left, top and right sides of the table. Remove the row of player boxes.
+- My hand: docked at the bottom center of the screen, always visible, tiles in a neat row. Tapping a tile lifts it up slightly.
+- Placing a tile: when I tap a tile in my hand, show a glowing outline of that tile at every open end where it can legally go. I tap the outline where I want it, and it's played. No "left or right" pop-up. Tapping the selected tile again cancels.
+- Scoreboard (Points mode): must always be reachable. On desktop, a panel beside the table showing each player's tally row. Under each player's name at the table, show a small progress bar of how much of their row is filled, so the race is visible at a glance. On phones, a "Scoreboard" button opens it.
+- It must work on phones: tiles and outlines big enough to tap, hand fits the screen width.
+
+PART 3 — CLEANUP
+- Remove the palm tree drawings, the logo icon (plain "Table Talk" text for now), and the big "At the table" heading.
+- Remove the ambient music and crowd sound entirely, and the Ambient toggle.
+- Keep the purple background with the small square pattern and the sunset glow.
+- Keep the table as plain wood for now. Real table art will come later as uploaded images.
