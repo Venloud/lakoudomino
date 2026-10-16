@@ -313,6 +313,11 @@
 .lk-pchip b { font-size: 13px; font-weight: 600; }
 
 .lk-online { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 18px 0 0; font-size: 13px; color: var(--lk-sub); white-space: pre; }
+.lk-flag-bar { width: min(1160px, calc(100% - 32px)); margin: 14px auto 0; overflow: hidden; }
+.lk-flag-track { display: flex; width: max-content; animation: lk-flag-scroll 38s linear infinite; will-change: transform; }
+.lk-flag-set { display: flex; flex: none; align-items: center; gap: 12px; padding: 4px 12px 4px 0; }
+.lk-regional-flag { flex: 0 0 auto; font-size: 20px; line-height: 1; }
+@keyframes lk-flag-scroll { to { transform: translateX(-50%); } }
 .lk-footer { margin: auto 0 0; padding-top: 48px; text-align: center; font-size: 12px; color: var(--lk-sub); white-space: pre; }
 
 /* Home layout: 260 | 670 | 190 (guest) or 260 | 670 | 240 (signed in), 25 apart, centred */

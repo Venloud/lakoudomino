@@ -7,6 +7,14 @@ import { Footer, OnlineLine, Page, ProfileChip, colorFor } from './Shell';
 
 export type LobbyMode = 'regular' | 'points';
 
+const regionalFlags = [
+  '🇦🇮', '🇦🇬', '🇦🇼', '🇧🇸', '🇧🇧', '🇧🇿', '🇧🇲', '🇧🇶', '🇻🇬', '🇰🇾',
+  '🇨🇺', '🇨🇼', '🇩🇲', '🇩🇴', '🇬🇩', '🇬🇵', '🇬🇾', '🇭🇹', '🇯🇲', '🇲🇶',
+  '🇲🇸', '🇵🇷', '🇧🇱', '🇰🇳', '🇱🇨', '🇲🇫', '🇵🇲', '🇻🇨', '🇸🇽', '🇸🇷',
+  '🇹🇹', '🇹🇨', '🇻🇮', '🇻🇪', '🇨🇴', '🇵🇦', '🇨🇷', '🇳🇮', '🇭🇳', '🇬🇹',
+  '🇲🇽',
+];
+
 export interface LeaderRow { id: string; name: string; points: number; gold: number; silver: number; bronze: number; isMe?: boolean }
 export interface OpenTableRow { code: string; name: string; mode: LobbyMode; seats: number; maxSeats: number; rowBoxes?: number; turnSeconds?: number }
 export interface OpenTableOptions { name: string; mode: LobbyMode; rowBoxes: number; turnSeconds: number; private: boolean }
@@ -73,6 +81,7 @@ export function LobbyScreen(p: LobbyScreenProps) {
   return (
     <Page right={right} onHome={p.onHome}>
       <OnlineLine players={p.onlinePlayers} tables={p.tablesPlaying} />
+      <RegionalFlagTicker />
       <main className={`lk-home${signedIn ? ' lk-home-in' : ''}`}>
         {signedIn ? (
           <aside className="lk-col lk-col-left">
@@ -110,6 +119,23 @@ export function LobbyScreen(p: LobbyScreenProps) {
       <Footer />
       {p.queue && <PlayNowQueue {...p.queue} />}
     </Page>
+  );
+}
+
+function RegionalFlagTicker() {
+  const flagSet = (copy: string) => (
+    <div className="lk-flag-set" key={copy} aria-hidden="true">
+      {regionalFlags.map((flag, index) => <span className="lk-regional-flag" key={`${flag}-${index}`}>{flag}</span>)}
+    </div>
+  );
+
+  return (
+    <div className="lk-flag-bar" role="img" aria-label="Caribbean and nearby regional flags">
+      <div className="lk-flag-track">
+        {flagSet('first')}
+        {flagSet('second')}
+      </div>
+    </div>
   );
 }
 
