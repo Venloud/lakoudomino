@@ -1,0 +1,7 @@
+/* V2: moving Caribbean flag ribbon, replacing only the original flag stripe. */
+.lk-flags-viewport{width:100%;overflow:hidden;background:transparent;position:relative}
+.lk-flags-track{display:flex;width:max-content;animation:lk-flags-marquee 34s linear infinite}
+.lk-flags-set{display:flex;flex:none;align-items:center;gap:12px;padding:6px 12px 6px 0}
+.lk-flags-set span{display:inline-flex;align-items:center;justify-content:center;font-size:20px;line-height:1;flex:none;font-family:Apple Color Emoji,Segoe UI Emoji,Noto Color Emoji,sans-serif}
+@keyframes lk-flags-marquee{to{transform:translateX(-50%)}}
+@media(prefers-reduced-motion:reduce){.lk-flags-track{animation:none}.lk-flags-viewport{overflow-x:auto}}
