@@ -1,6 +1,28 @@
 // Shared page chrome for the non-game screens: glows, top bar, flag stripe, profile chip.
 import React from 'react';
-import { Avatar, FlagStripe } from './Parts';
+import { Avatar } from './Parts';
+import './flag-ribbon.css';
+
+const CARIBBEAN_FLAGS = [
+  '🇦🇮','🇦🇬','🇦🇼','🇧🇸','🇧🇧','🇧🇿','🇧🇲','🇧🇶','🇻🇬','🇰🇾',
+  '🇨🇺','🇨🇼','🇩🇲','🇩🇴','🇬🇩','🇬🇵','🇬🇾','🇭🇹','🇯🇲','🇲🇶',
+  '🇲🇸','🇵🇷','🇧🇱','🇰🇳','🇱🇨','🇲🇫','🇵🇲','🇻🇨','🇸🇽','🇸🇷',
+  '🇹🇹','🇹🇨','🇻🇮','🇻🇪','🇨🇴','🇵🇦','🇨🇷','🇳🇮','🇭🇳','🇬🇹','🇲🇽',
+];
+
+function CaribbeanFlagRibbon() {
+  return (
+    <div className="lk-flags-viewport" aria-label="Flags of the Caribbean and Caribbean coastal region">
+      <div className="lk-flags-track">
+        {[0, 1].map((copy) => (
+          <div key={copy} className="lk-flags-set" aria-hidden={copy === 1}>
+            {CARIBBEAN_FLAGS.map((flag, i) => <span key={i}>{flag}</span>)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Stable colour index (0–3) for someone without a seat, so their avatar colour never changes. */
 export function colorFor(name: string) {
@@ -30,7 +52,7 @@ export function Page({ right, children, className = '', onHome }: { right?: Reac
         {onHome ? <button className="lk-brand lk-brand-btn" onClick={onHome}>Lakou Domino</button> : <span className="lk-brand">Lakou Domino</span>}
         <span className="lk-topbar-right lk-topbar-actions">{right}</span>
       </header>
-      <FlagStripe height={5} />
+      <CaribbeanFlagRibbon />
       {children}
     </div>
   );
