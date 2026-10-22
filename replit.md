@@ -34,7 +34,7 @@ Caribbean Dominoes is a mobile-first guest room game for four friends to play re
 - Room state is persisted in PostgreSQL and rehydrated before the API begins accepting traffic; live WebSocket connections remain process-local and reconnect by their persisted seat name.
 - API contracts are OpenAPI-first; generated React Query hooks are the frontend integration boundary.
 - The UI is intentionally restrained: tactile table-game styling with no decorative motion that competes with play.
-- During the owner-selected Tiki Taka / Vandam Route workflow, Replit is publisher-only: approved GitHub pull requests are the source of application changes, and Replit must not make or commit code edits. Outside Tiki Taka, the owner may explicitly instruct Replit Agent to code selected changes on a separate branch and PR. Never automatically commit, push directly to `main`, overwrite concurrent Claude/Codex work or force-push. See `Venloud/claudevandam/route/PHASE4_DECISION.md` for the current owner override.
+- During the owner-selected Tiki Taka / Vandam Route workflow, code changes come from reviewed GitHub pull requests and Replit Agent must not independently modify or commit code. **Owner decision 2026-10-22:** publishing was removed from the active Tiki Taka roadmap, so Replit is not a Tiki Taka publication stage. The owner can separately use Replit for hosting/testing or explicitly request Replit Agent code edits outside Tiki Taka, on a dedicated branch and PR. Never auto-commit, push directly to `main`, overwrite concurrent Claude/Codex work or force-push. For provenance see `Venloud/claudevandam` PR #6 and the archived `route/PHASE4_DECISION.md`.
 
 ## Product
 
