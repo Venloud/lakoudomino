@@ -30,7 +30,7 @@ export function SignInScreen({ onLogin, onGoogle, onApple, onForgot, onSignUp, o
           <Domino first={5} second={1} orientation="h" unit={18} />
         </div>
         <form className="lk-panel lk-auth-card" onSubmit={(e) => { e.preventDefault(); if (user.trim() && pass) onLogin(user.trim(), pass); }}>
-          <h1 className="lk-auth-title">Sign in to Lakou Domino</h1>
+          <h1 className="lk-auth-title">Sign in to 509 Yard</h1>
           <p className="lk-auth-sub">Save your crowns, add friends and see who’s online.</p>
           {onGoogle && <button type="button" className="lk-sso lk-sso-google" onClick={onGoogle}><b className="lk-g-mark">G</b>Continue with Google</button>}
           {onApple && <button type="button" className="lk-sso lk-sso-apple" onClick={onApple}>Continue with Apple</button>}

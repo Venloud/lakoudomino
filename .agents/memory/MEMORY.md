@@ -8,3 +8,4 @@
 - [Headless browser runtime](playwright-runtime.md) — keep CLI sessions in one shell call, use browser APIs in run-code, and use the artifact proxy path for API/WS tests.
 - [GitHub connector upload pacing](github-connector-upload-throttling.md) — large blob uploads through the GitHub connector need paced, low-concurrency requests.
 - [Protected GitHub main](github-main-protection.md) — main requires PRs; sync changes on a branch and preserve remote commits.
+- [509 Yard social-club direction](509-yard-social-club.md) — use a consistent Caribbean club look across lobby, auth, rules, waiting room, and table.

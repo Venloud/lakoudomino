@@ -11,12 +11,11 @@ export function colorFor(name: string) {
 
 export interface ProfileChipProps { name: string; flag?: string; color?: number; onClick?: () => void; caret?: boolean }
 
-export function ProfileChip({ name, flag, color, onClick, caret = true }: ProfileChipProps) {
+export function ProfileChip({ name, color, onClick, caret = true }: ProfileChipProps) {
   return (
     <button className="lk-pchip" onClick={onClick} aria-label="Account menu">
       <Avatar seat={color ?? 0} name={name} size={24} />
       <b>{name}</b>
-      {flag && <span className="lk-flag">{flag}</span>}
       {caret && <span className="lk-caret">▾</span>}
     </button>
   );

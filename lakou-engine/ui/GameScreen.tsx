@@ -295,7 +295,7 @@ export function LakouGame(props: LakouGameProps) {
         ) : (
           <span className="lk-topbar-right">
             {props.tableCode && <span className="lk-code-pill">{props.tableCode}</span>}
-            <button className="lk-settings-trigger lk-settings-icon" onClick={() => setSettingsOpen(true)} aria-label="Game settings">⚙</button>
+            <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>
           </span>
         )}
       </header>
