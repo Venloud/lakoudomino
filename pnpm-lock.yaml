@@ -624,7 +624,11 @@ importers:
         specifier: 'catalog:'
         version: 3.25.76
 
-  lakou-engine: {}
+  lakou-engine:
+    devDependencies:
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.13
 
   lib/api-client-react:
     dependencies:

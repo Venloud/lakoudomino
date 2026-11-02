@@ -4,6 +4,8 @@ import {
   type Action, type GameEvent, type PlayerView, type Tile,
 } from '../src/index';
 import { Table, type Ghost, type RevealRow } from './Table';
+import { DEFAULT_DOMINO_STYLE, DominoStyleContext, type DominoStyle } from './Domino';
+import { loadDominoStyle, saveDominoStyle } from './domino-style';
 import { Avatar, ChatBox, FlagStripe, Hand, PlayerCard, SeatCard, TurnTimer, useCountdown, type ChatMessage } from './Parts';
 import { Banner, EndOfHand, MatchOver, SeatOffer, WaitlistPanel, type StandingRow, type WaitlistEntryView } from './Overlays';
 
@@ -95,8 +97,24 @@ export function LakouGame(props: LakouGameProps) {
   const [pop, setPop] = useState<{ text: string; key: number; big?: boolean } | null>(null);
   const [banner, setBanner] = useState<{ text: string; seat: number | null; key: number; sub?: string; big?: boolean } | null>(null);
   const [handOverAt, setHandOverAt] = useState<number | null>(null);
+  const playerName = names[me ?? 0] ?? 'guest';
+  const [dominoStyle, setDominoStyle] = useState<DominoStyle>(() =>
+    typeof window === 'undefined' ? DEFAULT_DOMINO_STYLE : loadDominoStyle(playerName, window.localStorage));
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [, force] = useState(0);
   const counter = useRef(0);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') setDominoStyle(loadDominoStyle(playerName, window.localStorage));
+  }, [playerName]);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [settingsOpen]);
 
   // Engine events → "Pass!" flags, score pops, glowing pips, banners.
   useEffect(() => {
@@ -228,6 +246,10 @@ export function LakouGame(props: LakouGameProps) {
       ? (selectedSame ? 'Tap a glowing spot, or double-tap the tile' : 'Tap a glowing spot')
       : 'Tap a tile to play';
   const turnLine = myTurn ? `Your turn${msLeft != null ? ` · ${Math.ceil(msLeft / 1000)}s` : ''}` : me === null ? '' : view.handOver ? 'Hand over' : 'Waiting';
+  const changeDominoStyle = (style: DominoStyle) => {
+    setDominoStyle(style);
+    if (typeof window !== 'undefined') saveDominoStyle(playerName, style, window.localStorage);
+  };
 
   const turnSeat = !view.handOver && !view.matchOver ? view.turn : null;
   const handUnit = phone ? 38 : 52;
@@ -259,6 +281,7 @@ export function LakouGame(props: LakouGameProps) {
   );
 
   return (
+    <DominoStyleContext.Provider value={dominoStyle}>
     <div className={`lk-game ${desktop ? 'lk-desktop' : 'lk-compact-layout'}${phone ? ' lk-phone' : ''}`}>
       <div className="lk-glows" aria-hidden="true"><i /><i /><i /></div>
       <header className="lk-topbar">
@@ -266,12 +289,13 @@ export function LakouGame(props: LakouGameProps) {
         {desktop ? (
           <span className="lk-topbar-right">
             <span className="lk-meta">{points ? `Points  ·  ${view.rowBoxes}-box row` : `Regular`}{props.tableCode ? `  ·  Table ${props.tableCode}` : ''}</span>
+            <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>
             <button className="lk-leave" onClick={props.onLeave}>Leave table</button>
           </span>
         ) : (
           <span className="lk-topbar-right">
             {props.tableCode && <span className="lk-code-pill">{props.tableCode}</span>}
-            <button className="lk-more" onClick={props.onLeave} aria-label="Leave table">⋯</button>
+            <button className="lk-settings-trigger lk-settings-icon" onClick={() => setSettingsOpen(true)} aria-label="Game settings">⚙</button>
           </span>
         )}
       </header>
@@ -374,6 +398,32 @@ export function LakouGame(props: LakouGameProps) {
       )}
       {showFinal && <MatchOver rows={finalRows} points={points} onAgain={props.onPlayAgain} onLeave={props.onLeave} meSeat={me} />}
       {props.seatOffer && <SeatOffer {...props.seatOffer} onTake={props.seatOffer.onTake} onStay={props.seatOffer.onStay} />}
+      {settingsOpen && (
+        <div className="lk-settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
+          <section className="lk-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="lk-settings-title">
+            <div className="lk-settings-heading">
+              <div><p className="lk-eyebrow">PERSONALIZE YOUR GAME</p><h2 id="lk-settings-title">Domino style</h2></div>
+              <button className="lk-settings-close" onClick={() => setSettingsOpen(false)} aria-label="Close settings">×</button>
+            </div>
+            <p className="lk-sub">Your choice is saved for your player name and does not change the table appearance.</p>
+            <div className="lk-domino-style-options" role="group" aria-label="Choose domino style">
+              {([
+                ['black-on-white', 'Detailed Black on White'],
+                ['white-on-black', 'Detailed White on Black'],
+              ] as const).map(([style, label]) => (
+                <button key={style} type="button" className={`lk-domino-style-option${dominoStyle === style ? ' lk-selected' : ''}`}
+                  aria-pressed={dominoStyle === style} onClick={() => changeDominoStyle(style)}>
+                  <img src={`/domino-assets/${style}/6-6.png`} alt="" />
+                  <span>{label}</span>
+                  {dominoStyle === style && <b>Selected</b>}
+                </button>
+              ))}
+            </div>
+            {phone && <button className="lk-settings-leave" onClick={props.onLeave}>Leave table</button>}
+          </section>
+        </div>
+      )}
     </div>
+    </DominoStyleContext.Provider>
   );
 }
