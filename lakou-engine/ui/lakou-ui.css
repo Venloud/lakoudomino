@@ -1009,3 +1009,7 @@
 @media (prefers-reduced-motion: reduce) {
   .lk-page *, .lk-game:not(.lk-page) * { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+/* Keep breathing room around the transparent wordmark in the site navigation. */
+.lk-site-brand { padding: 4px 8px; }
+.lk-site-brand img { width: 100%; height: 100%; object-fit: contain; }
