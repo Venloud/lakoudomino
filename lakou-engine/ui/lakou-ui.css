@@ -281,7 +281,83 @@
 .lk-toggle input:checked + i::after { transform: translateX(16px); background: #1A1300; }
 .lk-toggle input:focus-visible + i { outline: 2px solid var(--lk-gold); outline-offset: 2px; }
 
+/* 509 Yard site navigation */
+.lk-site-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: 60px;
+  gap: clamp(10px, 1.4vw, 24px);
+  padding: 0 18px 0 0;
+  background: linear-gradient(105deg, #030806 0%, #073428 40%, #04251d 100%);
+  border-bottom: 1px solid rgba(179, 223, 202, .16);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, .22);
+}
+.lk-site-brand {
+  width: 192px;
+  height: 60px;
+  flex: 0 0 192px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #030806 !important;
+}
+.lk-site-brand img { display: block; width: 174px; height: 58px; object-fit: contain; }
+.lk-site-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex: 1; min-width: 0; }
+.lk-site-nav-links { display: flex; align-items: center; justify-content: center; gap: clamp(2px, .7vw, 12px); flex: 1; min-width: 0; }
+.lk-site-nav-link {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  color: #f8faf9 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  white-space: nowrap;
+}
+.lk-site-nav-link:hover, .lk-site-nav-active { background: rgba(115, 190, 157, .2) !important; }
+.lk-site-nav-active { box-shadow: inset 0 0 0 1px rgba(176, 228, 202, .12); }
+.lk-site-nav-link:focus-visible, .lk-site-tool:focus-visible, .lk-site-brand:focus-visible { outline: 2px solid var(--lk-gold); outline-offset: 2px; }
+.lk-site-icon { width: 17px; height: 17px; flex: none; color: #eaf4ef; }
+.lk-site-tools { display: flex; align-items: center; gap: 12px; flex: none; }
+.lk-site-tool { position: relative; width: 26px; height: 32px; display: grid; place-items: center; color: #f8faf9 !important; }
+.lk-site-tool > i { position: absolute; top: 3px; right: 0; width: 7px; height: 7px; border: 1px solid #073428; border-radius: 50%; background: #ff4d4f; }
+.lk-site-topbar .lk-topbar-actions { gap: 8px; }
+.lk-site-topbar .lk-pchip { border-color: rgba(228, 242, 234, .2) !important; background: rgba(0, 0, 0, .2) !important; }
+.lk-game-brand-logo { width: 156px; height: 50px; display: inline-flex; align-items: center; flex: none; overflow: hidden; }
+.lk-game-brand-logo img { display: block; width: 150px; height: 50px; object-fit: contain; }
+@media (max-width: 980px) {
+  .lk-site-topbar { gap: 8px; }
+  .lk-site-brand { width: 166px; flex-basis: 166px; }
+  .lk-site-brand img { width: 154px; }
+  .lk-site-nav { gap: 8px; }
+  .lk-site-nav-link { gap: 6px; padding: 0 9px !important; font-size: 12px !important; }
+  .lk-site-tools { gap: 6px; }
+  .lk-site-topbar .lk-pchip b, .lk-site-topbar .lk-pchip .lk-flag, .lk-site-topbar .lk-pchip .lk-caret { display: none; }
+}
+@media (max-width: 620px) {
+  .lk-site-topbar { height: 60px; padding-right: 8px; gap: 3px; }
+  .lk-site-brand { width: 126px; height: 60px; flex-basis: 126px; }
+  .lk-site-brand img { width: 120px; height: 56px; }
+  .lk-site-nav { gap: 2px; }
+  .lk-site-nav-links { justify-content: space-around; gap: 0; }
+  .lk-site-nav-link { min-width: 29px; min-height: 36px; padding: 0 5px !important; }
+  .lk-site-nav-link span, .lk-site-tools { display: none; }
+  .lk-site-topbar .lk-topbar-actions .lk-btn-cta { display: none; }
+  .lk-site-topbar .lk-topbar-actions .lk-btn-line { min-width: 0; padding: 6px 8px !important; font-size: 11px !important; }
+  .lk-site-icon { width: 17px; height: 17px; }
+  .lk-site-topbar .lk-topbar-actions { gap: 4px; }
+  .lk-site-topbar .lk-pchip { padding: 2px !important; border: 0 !important; background: transparent !important; }
+  .lk-game-brand-logo { width: 132px; height: 44px; }
+  .lk-game-brand-logo img { width: 128px; height: 44px; }
+}
+
 @media (prefers-reduced-motion: reduce) { .lk-game * { animation: none !important; transition: none !important; } }
+@media (max-width: 620px) { .lk-page [id^="lk-nav-"] { scroll-margin-top: 72px; } }
 @media (max-width: 559px) {
   .lk-modal { padding: 18px 16px 20px; gap: 14px; }
   .lk-modal h2 { font-size: 20px; }

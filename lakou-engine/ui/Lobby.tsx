@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Avatar, useCountdown } from './Parts';
 import { seatColor, seatInk } from './theme';
 import { Domino } from './Domino';
-import { Footer, OnlineLine, Page, ProfileChip, colorFor } from './Shell';
+import { Footer, OnlineLine, Page, ProfileChip, SiteNavigation, colorFor } from './Shell';
 
 export type LobbyMode = 'regular' | 'points';
 
@@ -71,6 +71,11 @@ export interface LobbyScreenProps {
 
 export function LobbyScreen(p: LobbyScreenProps) {
   const signedIn = !!p.profile;
+  const navigateTo = (target: string) => {
+    if (target === 'lk-nav-profile' && !signedIn) { p.onSignIn?.(); return; }
+    const id = target === 'lk-nav-friends' && !signedIn ? 'lk-nav-quick' : target;
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const right = signedIn
     ? <ProfileChip name={p.profile!.name} flag={p.profile!.flag} color={p.profile!.color} onClick={p.onProfileMenu} />
     : <>
@@ -79,7 +84,7 @@ export function LobbyScreen(p: LobbyScreenProps) {
       </>;
 
   return (
-    <Page right={right} onHome={p.onHome}>
+    <Page right={right} onHome={p.onHome} navigation={<SiteNavigation onHome={p.onHome} onNavigate={navigateTo} />}>
       <OnlineLine players={p.onlinePlayers} tables={p.tablesPlaying} />
       <RegionalFlagTicker />
       <main className={`lk-home${signedIn ? ' lk-home-in' : ''}`}>
@@ -88,11 +93,11 @@ export function LobbyScreen(p: LobbyScreenProps) {
             <ProfileCard profile={p.profile!} onEdit={p.onEditProfile} />
             <button className="lk-bigbtn lk-bigbtn-gold" onClick={p.onPlayFriends}>Play with friends</button>
             <button className="lk-bigbtn" onClick={p.onPracticeBots}>Practice vs bots</button>
-            <Leaderboard rows={p.leaderboard} onViewAll={p.onViewLeaderboard} compact />
+            <Leaderboard id="lk-nav-leaderboard" rows={p.leaderboard} onViewAll={p.onViewLeaderboard} compact />
           </aside>
         ) : (
           <aside className="lk-col lk-col-left">
-            <Leaderboard rows={p.leaderboard} onViewAll={p.onViewLeaderboard} onSignIn={p.onSignIn} />
+            <Leaderboard id="lk-nav-leaderboard" rows={p.leaderboard} onViewAll={p.onViewLeaderboard} onSignIn={p.onSignIn} />
           </aside>
         )}
 
@@ -108,7 +113,7 @@ export function LobbyScreen(p: LobbyScreenProps) {
             onInvite={p.onInviteFriend} onWatch={p.onWatchFriend}
           />
         ) : (
-          <aside className="lk-col lk-quick">
+          <aside id="lk-nav-quick" className="lk-col lk-quick">
             <p className="lk-eyebrow">QUICK PLAY</p>
             <QuickCard tile={[6, 6]} title="Play with friends" sub="Invite with a link or code" onClick={p.onPlayFriends} />
             <QuickCard tile={[5, 4]} title="Practice vs bots" sub="Easy or Hard, start instantly" onClick={p.onPracticeBots} />
@@ -146,9 +151,9 @@ function Crowns({ gold, silver, bronze, words, size = 8 }: { gold: number; silve
   return <span className="lk-crowns">{one('lk-dot-gold', gold, 'gold')}{one('lk-dot-silver', silver, 'silver')}{one('lk-dot-bronze', bronze, 'bronze')}</span>;
 }
 
-export function Leaderboard({ rows, onViewAll, compact, onSignIn }: { rows: LeaderRow[]; onViewAll?: () => void; compact?: boolean; onSignIn?: () => void }) {
+export function Leaderboard({ rows, onViewAll, compact, onSignIn, id }: { rows: LeaderRow[]; onViewAll?: () => void; compact?: boolean; onSignIn?: () => void; id?: string }) {
   return (
-    <section className={`lk-panel lk-board${compact ? ' lk-board-compact' : ''}`}>
+    <section id={id} className={`lk-panel lk-board${compact ? ' lk-board-compact' : ''}`}>
       <div className="lk-row-between">
         <p className="lk-eyebrow">LEADERBOARD</p>
         {onViewAll && <button className="lk-link" onClick={onViewAll}>View all</button>}
@@ -187,7 +192,7 @@ function QuickCard({ tile, title, sub, onClick }: { tile: [number, number]; titl
 
 function ProfileCard({ profile, onEdit }: { profile: Profile; onEdit?: () => void }) {
   return (
-    <section className="lk-panel lk-profile">
+    <section id="lk-nav-profile" className="lk-panel lk-profile">
       <div className="lk-inline">
         <Avatar seat={profile.color ?? 0} name={profile.name} size={44} />
         <span className="lk-profile-id">
@@ -227,7 +232,7 @@ function LiveLobby({ connected, tables, onJoin, onOpen, askName, defaultName, on
   const shown = tables.filter((t) => (filter === 'all' || t.mode === filter) && (filter !== 'points' || boxFilter === 'any' || t.rowBoxes === boxFilter));
 
   return (
-    <section className="lk-panel lk-live">
+    <section id="lk-nav-games" className="lk-panel lk-live">
       <div className="lk-live-top">
         <div className="lk-live-head">
           <h1 className="lk-h20">Live lobby</h1>
@@ -371,7 +376,7 @@ function FriendsPanel({ friends, requests, onAdd, onAccept, onDecline, onInvite,
   const offline = friends.filter((f) => f.status === 'offline');
   const invite = onInvite && ((id: string) => { onInvite(id); setInvited((s) => new Set(s).add(id)); });
   return (
-    <aside className="lk-panel lk-friends">
+    <aside id="lk-nav-friends" className="lk-panel lk-friends">
       <div className="lk-row-between"><b className="lk-h16">Friends</b><span className="lk-green lk-small">{online.length} online</span></div>
       <form className="lk-add" onSubmit={(e) => { e.preventDefault(); const u = draft.trim(); if (u) { onAdd?.(u); setDraft(''); } }}>
         <input id="lk-add-friend" className="lk-input" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add by username" maxLength={24} aria-label="Add by username" />
