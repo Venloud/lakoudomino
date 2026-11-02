@@ -687,7 +687,7 @@ body:not(:has(.lk-game)) {
   height: 66px;
   margin: 0 auto 22px;
   object-fit: contain;
-  background: #080c09;
+  background: transparent;
 }
 .account-title {
   color: #173c31;

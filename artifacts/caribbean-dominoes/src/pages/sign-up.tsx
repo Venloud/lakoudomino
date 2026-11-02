@@ -28,7 +28,7 @@ export default function SignUpPage() {
   return (
     <main className="account-shell">
       <section className="account-card">
-        <img className="account-logo" src="/509-yard-logo.png" alt="509 Yard" />
+        <img className="account-logo" src="/509-yard-logo-cutout.png" alt="509 Yard" />
         <p className="account-kicker">509 YARD</p>
         <h1 className="account-title">Bring your people to the table.</h1>
         <p className="account-copy">Create an account to keep your crowns, find friends and see who is ready for a game.</p>

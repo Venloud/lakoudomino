@@ -79,7 +79,7 @@ export function Page({ right, children, className = '', onHome, navigation }: { 
     <div className={`lk-game lk-page ${className}`}>
       <div className="lk-glows" aria-hidden="true"><i /><i /><i /></div>
       <header className="lk-topbar lk-site-topbar">
-        {onHome ? <button className="lk-site-brand" onClick={onHome} aria-label="509 Yard home"><img src="/509-yard-logo.png" alt="509 Yard" /></button> : <a className="lk-site-brand" href="/" aria-label="509 Yard home"><img src="/509-yard-logo.png" alt="509 Yard" /></a>}
+        {onHome ? <button className="lk-site-brand" onClick={onHome} aria-label="509 Yard home"><img src="/509-yard-logo-cutout.png" alt="509 Yard" /></button> : <a className="lk-site-brand" href="/" aria-label="509 Yard home"><img src="/509-yard-logo-cutout.png" alt="509 Yard" /></a>}
         {siteNavigation}
         <span className="lk-topbar-right lk-topbar-actions">{right}</span>
       </header>

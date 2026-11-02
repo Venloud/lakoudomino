@@ -285,7 +285,7 @@ export function LakouGame(props: LakouGameProps) {
     <div className={`lk-game ${desktop ? 'lk-desktop' : 'lk-compact-layout'}${phone ? ' lk-phone' : ''}`}>
       <div className="lk-glows" aria-hidden="true"><i /><i /><i /></div>
       <header className="lk-topbar">
-        {props.onHome ? <button className="lk-brand lk-brand-btn lk-game-brand-logo" onClick={props.onHome} aria-label="509 Yard home"><img src="/509-yard-logo.png" alt="509 Yard" /></button> : <b className="lk-brand lk-game-brand-logo"><img src="/509-yard-logo.png" alt="509 Yard" /></b>}
+        {props.onHome ? <button className="lk-brand lk-brand-btn lk-game-brand-logo" onClick={props.onHome} aria-label="509 Yard home"><img src="/509-yard-logo-cutout.png" alt="509 Yard" /></button> : <b className="lk-brand lk-game-brand-logo"><img src="/509-yard-logo-cutout.png" alt="509 Yard" /></b>}
         {desktop ? (
           <span className="lk-topbar-right">
             <span className="lk-meta">{points ? `Points  ·  ${view.rowBoxes}-box row` : `Regular`}{props.tableCode ? `  ·  Table ${props.tableCode}` : ''}</span>
