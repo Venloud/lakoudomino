@@ -1639,6 +1639,8 @@ body:has(.room-loading-page) { background: #141218; }
 .yard-available-copy strong { font-size: 14px; }
 .yard-available-copy span { margin-top: 4px; color: var(--yard-muted); font-size: 11px; }
 .yard-coming-soon { display: flex; justify-content: center; align-items: center; gap: 9px; min-height: 44px; margin-top: 12px; border: 1px dashed #3a3b40; border-radius: 8px; color: #a3a4a8; font-size: 11px; }
+.yard-games-queue { min-height: 44px; padding: 8px 12px; line-height: 1.45; text-align: center; }
+.yard-games-queue svg { flex: 0 0 auto; }
 .yard-home-status { display: flex; align-items: center; gap: clamp(14px, 3vw, 30px); min-height: 54px; margin-top: 18px; padding: 0 3px; border-top: 1px solid var(--yard-line); color: var(--yard-muted); font-size: 11px; }
 .yard-home-status b { color: var(--yard-text); font-weight: 700; }
 .yard-home-status a { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--yard-accent); font-weight: 700; text-decoration: none; }
