@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
-  Bell, ChevronDown, CircleHelp, Gamepad2, Grid3X3, LogOut, MessageCircle, Plus,
+  Bell, ChevronDown, CircleHelp, Crosshair, Gamepad2, Grid3X3, LogOut, MessageCircle, Plus,
   Trophy, ArrowUpRight,
 } from 'lucide-react';
 import {
@@ -173,7 +173,7 @@ export default function SocialPage({ page }: { page: Destination }) {
               <div className="yard-available-copy"><strong>Lakou Domino</strong><span>Multiplayer dominoes</span></div>
               <Link href="/games/lakou" className="yard-button primary" data-testid="button-open-lobby">Play</Link>
             </div>
-            <div className="yard-coming-soon"><Grid3X3 size={17} /><span>Tic-Tac-Toe is up next</span><Link href="/games/tic-tac-toe" className="yard-panel-link">Preview</Link></div>
+            <div className="yard-coming-soon"><Crosshair size={17} /><span>Mòpyon is up next</span><Link href="/games/mopyon" className="yard-panel-link">Preview</Link></div>
           </Panel>
         </div>
         <div className="yard-home-status">
@@ -186,7 +186,8 @@ export default function SocialPage({ page }: { page: Destination }) {
       </>}
       {page === 'games' && <div className="yard-dashboard-grid">
         <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Lakou Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/lakou" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true" /></section>
-           <div className="yard-panel yard-section-space yard-next-game"><div className="yard-panel-body"><p className="yard-kicker">COMING NEXT</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Tic-Tac-Toe</h2><p className="yard-subtitle" style={{ margin: 0 }}>A quick head-to-head game is next at 509 Yard.</p><Link href="/games/tic-tac-toe" className="yard-button yard-section-space" data-testid="button-preview-tic-tac-toe"><Grid3X3 size={15} /> Try local game</Link><small className="yard-next-game-note">Two players, one screen. Online rooms can come next.</small></div></div>
+            <div className="yard-panel yard-section-space yard-next-game"><div className="yard-panel-body"><p className="yard-kicker">COMING NEXT</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Mòpyon</h2><p className="yard-subtitle" style={{ margin: 0 }}>Five in a row, played on the intersections of a 15 × 15 board.</p><Link href="/games/mopyon" className="yard-button yard-section-space" data-testid="button-preview-mopyon"><Crosshair size={15} /> Try local game</Link><small className="yard-next-game-note">Two players, one screen. Online rooms can come next.</small></div></div>
+            <div className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">LOCAL PREVIEW</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Tic-Tac-Toe</h2><p className="yard-subtitle" style={{ margin: 0 }}>Regular and Yard Mode are ready for pass-and-play.</p><Link href="/games/tic-tac-toe" className="yard-button yard-section-space" data-testid="button-preview-tic-tac-toe"><Grid3X3 size={15} /> Try local game</Link></div></div>
         </div>
         <Panel title="Live activity"><div className="yard-metric"><b>{lobby.data?.onlinePlayers ?? '—'}</b><span>Players in the yard</span></div><p className="yard-subtitle">Open the Lakou lobby to browse live tables or start a match.</p></Panel>
       </div>}
