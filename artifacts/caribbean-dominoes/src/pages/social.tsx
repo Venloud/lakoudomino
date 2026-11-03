@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
@@ -85,7 +85,6 @@ export default function SocialPage({ page }: { page: Destination }) {
   const [username, setUsername] = useState('');
   const [notice, setNotice] = useState('');
   const friendData = friendsQuery.data;
-  const online = useMemo(() => (friendData?.friends ?? []).filter((friend) => friend.status?.status !== undefined), [friendData?.friends]);
   const unreadSocial = (friendData?.requests.length ?? 0) + (friendData?.invites.length ?? 0);
   const leaderRows = lobby.data?.leaderboard ?? [];
   const openGames = lobby.data?.tables ?? [];
@@ -120,8 +119,8 @@ export default function SocialPage({ page }: { page: Destination }) {
     }),
     onError: () => setNotice('That invite is no longer available.'),
   });
-  const title = page === 'home' ? 'Play. Connect. Compete.' : page === 'games' ? 'Games' : page === 'friends' ? 'Friends' : page === 'leaderboard' ? 'Leaderboard' : 'Your profile';
-  const subtitle = page === 'home' ? 'Your games, your friends, your community.' : page === 'games' ? 'One game is on the table. More games are coming soon.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Lakou Domino record and recent results.';
+  const title = page === 'home' ? 'Meet at the table.' : page === 'games' ? 'Games' : page === 'friends' ? 'Friends' : page === 'leaderboard' ? 'Leaderboard' : 'Your profile';
+  const subtitle = page === 'home' ? 'Find your crew, jump into a match, and see who takes the points.' : page === 'games' ? 'One game is on the table. More games are on the way.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Lakou Domino record and recent results.';
   const recentMatches = recent.data?.matches ?? [];
   const friendRows = friendData?.friends ?? [];
   const goGames = () => setLocation('/games/lakou');
@@ -160,34 +159,29 @@ export default function SocialPage({ page }: { page: Destination }) {
     <YardHeader active={page} username={user?.username} notifications={unreadSocial} onLogout={handleLogout} />
     <main className="yard-main">
       {notice && <div className="yard-notice" role="status" data-testid="status-social-notice">{notice}</div>}
-      <div className="yard-heading"><div><p className="yard-kicker">509 YARD / {page.toUpperCase()}</p><h1>{title}</h1><p className="yard-subtitle">{subtitle}</p></div>
-        {page === 'home' ? <div className="yard-intro-actions"><Link className="yard-button primary" href="/games" data-testid="button-explore-games">Explore games <ArrowUpRight size={14} /></Link><Link className="yard-button" href="/friends" data-testid="button-find-friends">Find friends</Link></div> : page === 'games' && <Link className="yard-button primary" href="/games/lakou" data-testid="button-play-lakou"><Gamepad2 size={15} /> Play Lakou Domino</Link>}
+      <div className={`yard-heading${page === 'home' ? ' yard-home-heading' : ''}`}><div>{page !== 'home' && <p className="yard-kicker">509 YARD / {page.toUpperCase()}</p>}<h1>{title}</h1><p className="yard-subtitle">{subtitle}</p></div>
+        {page === 'home' ? <div className="yard-intro-actions"><Link className="yard-button primary" href="/games" data-testid="button-explore-games"><Gamepad2 size={15} /> Browse games</Link><Link className="yard-button" href="/friends" data-testid="button-find-friends">Find your crew</Link></div> : page === 'games' && <Link className="yard-button primary" href="/games/lakou" data-testid="button-play-lakou"><Gamepad2 size={15} /> Play Lakou Domino</Link>}
       </div>
       {page === 'home' && <>
-        <section className="yard-featured-game yard-home-game" data-testid="card-featured-game">
-          <div><p className="yard-kicker">AVAILABLE NOW · 01</p><h2 className="yard-game-title">Lakou Domino</h2><p className="yard-game-copy">Create a table, join an open game, or let matchmaking find your next crew.</p><Link href="/games/lakou" className="yard-button primary" data-testid="button-open-lobby"><Gamepad2 size={14} /> Enter the lobby</Link></div>
-          <div className="yard-domino-mark" aria-hidden="true" />
-        </section>
-        <div className="yard-metrics">
-          <div className="yard-metric"><b data-testid="value-players-online">{lobby.data?.onlinePlayers ?? '—'}</b><span>Players online</span></div>
-          <div className="yard-metric"><b data-testid="value-tables-playing">{lobby.data?.tablesPlaying ?? '—'}</b><span>Tables playing</span></div>
-          <div className="yard-metric"><b data-testid="value-open-tables">{openGames.length}</b><span>Open tables</span></div>
+        <div className="yard-home-grid">
+          <Panel title="Recent matches" action={<Link href="/profile" className="yard-panel-link" data-testid="link-all-matches">Match history</Link>}>
+            {renderHistory()}
+          </Panel>
+          <Panel title="Available games">
+            <div className="yard-available-game" data-testid="card-featured-game">
+              <div className="yard-game-tile" aria-hidden="true"><i /><i /><i /></div>
+              <div className="yard-available-copy"><strong>Lakou Domino</strong><span>Multiplayer dominoes</span></div>
+              <Link href="/games/lakou" className="yard-button primary" data-testid="button-open-lobby">Play</Link>
+            </div>
+            <div className="yard-coming-soon"><Gamepad2 size={17} /><span>Another game is on the way</span></div>
+          </Panel>
         </div>
-        <div className="yard-dashboard-grid yard-section-space">
-          <Panel title="Recent matches" action={<Link href="/profile" className="yard-panel-link" data-testid="link-all-matches">View profile</Link>}>{renderHistory()}</Panel>
-          <div className="yard-side-stack">
-            <Panel title="Friends around" action={<Link href="/friends" className="yard-panel-link" data-testid="link-friends-all">See all</Link>}>
-              {!signedIn ? <div className="yard-empty"><strong>Play with your circle</strong><p>Sign in to see friends online and join them at a table.</p><Link href="/sign-in" className="yard-panel-link">Sign in to continue</Link></div>
-                : friendsQuery.isLoading ? <div className="yard-loading"><i className="yard-skeleton" /><i className="yard-skeleton" /></div>
-                  : online.length ? online.slice(0, 4).map((friend) => <div className="yard-friend-row" key={friend.id} data-testid={`home-friend-${friend.id}`}><span className="yard-avatar">{initials(friend.username)}</span><span style={{ flex: 1 }}><b>{friend.username}</b><small className="yard-presence"><i />{presenceText(friend.status?.status, friend.status?.detail)}</small></span></div>)
-                    : <div className="yard-empty"><strong>No friends online</strong><p>Invite someone to join you for a game.</p><Link href="/friends" className="yard-panel-link">Find friends</Link></div>}
-            </Panel>
-            <Panel title="Standings" action={<Link href="/leaderboard" className="yard-panel-link" data-testid="link-leaderboard-all">Full board</Link>}>
-              {lobby.isLoading ? <div className="yard-loading"><i className="yard-skeleton" /><i className="yard-skeleton" /><i className="yard-skeleton" /></div>
-                : leaderRows.length ? <div className="yard-rows">{leaderRows.slice(0, 4).map((row, index) => <div className="yard-rank-row" key={row.id} data-testid={`home-rank-${row.id}`}><b>{String(index + 1).padStart(2, '0')}</b><span>{row.name}{row.isMe ? ' (you)' : ''}</span><strong>{row.points}</strong></div>)}</div>
-                  : <div className="yard-empty"><strong>No standings yet</strong><p>Points matches put crowns on the board.</p></div>}
-            </Panel>
-          </div>
+        <div className="yard-home-status">
+          <span className="yard-live-indicator"><i /> Yard activity</span>
+          <span><b data-testid="value-players-online">{lobby.data?.onlinePlayers ?? '—'}</b> players online</span>
+          <span><b data-testid="value-tables-playing">{lobby.data?.tablesPlaying ?? '—'}</b> tables playing</span>
+          <span><b data-testid="value-open-tables">{openGames.length}</b> open tables</span>
+          <Link href="/friends" data-testid="link-home-friends">Friends <ArrowUpRight size={13} /></Link>
         </div>
       </>}
       {page === 'games' && <div className="yard-dashboard-grid">
