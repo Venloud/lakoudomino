@@ -340,6 +340,21 @@ export interface AuthMe {
   user: User | null;
 }
 
+export interface RecentMatch {
+  matchId: string;
+  roomCode: string;
+  mode: RoomMode;
+  recordedAt: string;
+  rank: number;
+  medal: string;
+  crownPoints: number;
+  won: boolean;
+}
+
+export interface RecentMatchesResponse {
+  matches: RecentMatch[];
+}
+
 export type FriendshipStatus = typeof FriendshipStatus[keyof typeof FriendshipStatus];
 
 

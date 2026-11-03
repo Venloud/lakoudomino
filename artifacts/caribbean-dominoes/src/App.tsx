@@ -8,6 +8,7 @@ import Home from '@/pages/home';
 import RoomPage from '@/pages/room-lakou';
 import SignInPage from '@/pages/sign-in';
 import SignUpPage from '@/pages/sign-up';
+import SocialPage from '@/pages/social';
 import { HowToPlayScreen } from '../../../lakou-engine/ui';
 import {
   Route,
@@ -20,17 +21,22 @@ const queryClient = new QueryClient();
 
 function Router() {
   const [, setLocation] = useLocation();
-  const toLobby = () => setLocation('/');
+  const toLobby = () => setLocation('/games/lakou');
   const playNow = () => {
     sessionStorage.setItem('lakou-play-now', 'points');
-    setLocation('/');
+    setLocation('/games/lakou');
   };
   return (
     // Keep a shared shell (sidebar, navbar) outside the boundary so it
     // survives a page crash.
     <RoutedErrorBoundary>
       <Switch>
-         <Route path="/" component={Home} />
+         <Route path="/"><SocialPage page="home" /></Route>
+         <Route path="/games"><SocialPage page="games" /></Route>
+         <Route path="/friends"><SocialPage page="friends" /></Route>
+         <Route path="/leaderboard"><SocialPage page="leaderboard" /></Route>
+         <Route path="/profile"><SocialPage page="profile" /></Route>
+         <Route path="/games/lakou" component={Home} />
           <Route path="/sign-in" component={SignInPage} />
           <Route path="/sign-up" component={SignUpPage} />
           <Route path="/how-to-play">

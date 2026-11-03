@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
-import { db, dominoUsers, dominoSessions } from "@workspace/db";
+import { desc, eq } from "drizzle-orm";
+import { db, dominoUsers, dominoSessions, dominoMatches, dominoMatchResults } from "@workspace/db";
 import { createAuthSession, getIdentityFromRequest, hashSessionToken, setAuthCookie, clearAuthCookie } from "../lib/auth-session";
 
 const router = Router();
@@ -21,6 +21,25 @@ router.get("/auth/me", async (req, res): Promise<void> => {
   if (!identity) { res.json({ user: null }); return; }
   const [user] = await db.select().from(dominoUsers).where(eq(dominoUsers.id, identity.userId));
   res.json({ user: user ? publicUser(user) : null });
+});
+router.get("/auth/recent-matches", async (req, res): Promise<void> => {
+  const identity = await getIdentityFromRequest(req);
+  if (!identity) { res.status(401).json({ error: "Authentication required" }); return; }
+  const matches = await db.select({
+    matchId: dominoMatches.matchId,
+    roomCode: dominoMatches.roomCode,
+    mode: dominoMatches.mode,
+    recordedAt: dominoMatches.recordedAt,
+    rank: dominoMatchResults.rank,
+    medal: dominoMatchResults.medal,
+    crownPoints: dominoMatchResults.crownPoints,
+    won: dominoMatchResults.won,
+  }).from(dominoMatchResults)
+    .innerJoin(dominoMatches, eq(dominoMatchResults.matchId, dominoMatches.matchId))
+    .where(eq(dominoMatchResults.userId, identity.userId))
+    .orderBy(desc(dominoMatches.recordedAt))
+    .limit(8);
+  res.json({ matches });
 });
 router.post("/auth/signup", async (req, res): Promise<void> => {
   const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";

@@ -34,6 +34,7 @@ import type {
   HostActionInput,
   Lobby,
   NextHandInput,
+  RecentMatchesResponse,
   Room,
   RoomCreateInput,
   RoomJoinInput,
@@ -1385,6 +1386,83 @@ export function useGetAuthMe<TData = Awaited<ReturnType<typeof getAuthMe>>, TErr
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAuthMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetRecentMatchesUrl = () => {
+
+
+
+
+  return `/api/auth/recent-matches`
+}
+
+/**
+ * @summary Get recently recorded matches for the signed-in user
+ */
+export const getRecentMatches = async ( options?: Parameters<typeof customFetch>[1]): Promise<RecentMatchesResponse> => {
+
+  return customFetch<RecentMatchesResponse>(getGetRecentMatchesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRecentMatchesQueryKey = () => {
+    return [
+    `/api/auth/recent-matches`
+    ] as const;
+    }
+
+
+export const getGetRecentMatchesQueryOptions = <TData = Awaited<ReturnType<typeof getRecentMatches>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRecentMatchesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRecentMatches>>> = ({ signal }) => getRecentMatches({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRecentMatchesQueryResult = NonNullable<Awaited<ReturnType<typeof getRecentMatches>>>
+export type GetRecentMatchesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get recently recorded matches for the signed-in user
+ */
+
+export function useGetRecentMatches<TData = Awaited<ReturnType<typeof getRecentMatches>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRecentMatchesQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

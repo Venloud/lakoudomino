@@ -261,6 +261,18 @@ paths:
       tags: [auth]
       responses:
         "200": { description: Current account, content: { application/json: { schema: { $ref: "#/components/schemas/AuthMe" } } } }
+  /auth/recent-matches:
+    get:
+      operationId: getRecentMatches
+      tags: [auth]
+      summary: Get recently recorded matches for the signed-in user
+      responses:
+        "200":
+          description: Recent matches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecentMatchesResponse" }
+        "401": { description: Authentication required }
   /auth/signup:
     post:
       operationId: signup
@@ -683,6 +695,23 @@ components:
       type: object
       required: [user]
       properties: { user: { oneOf: [{ $ref: "#/components/schemas/User" }, { type: "null" }] } }
+    RecentMatch:
+      type: object
+      required: [matchId, roomCode, mode, recordedAt, rank, medal, crownPoints, won]
+      properties:
+        matchId: { type: string, format: uuid }
+        roomCode: { type: string }
+        mode: { $ref: "#/components/schemas/RoomMode" }
+        recordedAt: { type: string, format: date-time }
+        rank: { type: integer }
+        medal: { type: string }
+        crownPoints: { type: integer }
+        won: { type: boolean }
+    RecentMatchesResponse:
+      type: object
+      required: [matches]
+      properties:
+        matches: { type: array, items: { $ref: "#/components/schemas/RecentMatch" } }
     Friendship:
       type: object
       required: [id, userLow, userHigh, requesterId, status]

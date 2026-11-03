@@ -41,6 +41,7 @@ export interface LobbyScreenProps {
   onViewLeaderboard?: () => void;
   /** Tap on "Lakou Domino" (back to the top of the lobby / refresh). */
   onHome?: () => void;
+  onNavigate?: (target: string) => void;
   // guest
   onSignIn?: () => void;
   onSignUp?: () => void;
@@ -65,8 +66,14 @@ export function LobbyScreen(p: LobbyScreenProps) {
   const signedIn = !!p.profile;
   const navigateTo = (target: string) => {
     if (target === 'lk-nav-profile' && !signedIn) { p.onSignIn?.(); return; }
-    const id = target === 'lk-nav-friends' && !signedIn ? 'lk-nav-quick' : target;
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (p.onNavigate) { p.onNavigate(target); return; }
+    const destinations: Record<string, string> = {
+      'lk-nav-games': '/games',
+      'lk-nav-friends': '/friends',
+      'lk-nav-leaderboard': '/leaderboard',
+      'lk-nav-profile': '/profile',
+    };
+    window.location.assign(destinations[target] ?? '/');
   };
   const right = signedIn
     ? <ProfileChip name={p.profile!.name} flag={p.profile!.flag} color={p.profile!.color} onClick={p.onProfileMenu} />

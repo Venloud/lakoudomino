@@ -243,8 +243,8 @@ export default function Home() {
   };
 
   const goHome = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
     refreshSocial();
+    setLocation('/');
   };
 
   const enterRoom = (code: string, reconnectToken: string, displayName: string, isHost: boolean) => {
@@ -403,6 +403,15 @@ export default function Home() {
         onSignIn={() => setLocation('/sign-in')}
         onSignUp={() => setLocation('/sign-up')}
         onHome={goHome}
+        onNavigate={(target) => {
+          const routes: Record<string, string> = {
+            'lk-nav-games': '/games',
+            'lk-nav-friends': '/friends',
+            'lk-nav-leaderboard': '/leaderboard',
+            'lk-nav-profile': '/profile',
+          };
+          setLocation(routes[target] ?? '/');
+        }}
         onHowToPlay={() => setLocation('/how-to-play')}
         onPlayFriends={() => createTable({ name: defaultName || 'Guest', mode: 'regular', rowBoxes: 10, turnSeconds: 30, private: true })}
         onPracticeBots={() => createTable({ name: defaultName || 'Guest', mode: 'regular', rowBoxes: 10, turnSeconds: 30, private: true }, true)}

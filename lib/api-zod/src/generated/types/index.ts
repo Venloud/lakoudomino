@@ -41,6 +41,8 @@ export * from './lobby';
 export * from './nextHandInput';
 export * from './presence';
 export * from './presenceStatus';
+export * from './recentMatch';
+export * from './recentMatchesResponse';
 export * from './room';
 export * from './roomCreateInput';
 export * from './roomCreateInputPlayerCount';

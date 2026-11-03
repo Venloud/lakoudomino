@@ -752,6 +752,23 @@ export const GetAuthMeResponse = zod.object({
 })
 
 
+/**
+ * @summary Get recently recorded matches for the signed-in user
+ */
+export const GetRecentMatchesResponse = zod.object({
+  "matches": zod.array(zod.object({
+  "matchId": zod.string().uuid(),
+  "roomCode": zod.string(),
+  "mode": zod.enum(['regular', 'points']),
+  "recordedAt": zod.coerce.date(),
+  "rank": zod.number().int(),
+  "medal": zod.string(),
+  "crownPoints": zod.number().int(),
+  "won": zod.boolean()
+}))
+})
+
+
 export const signupBodyUsernameMin = 3;
 export const signupBodyUsernameMax = 16;
 
