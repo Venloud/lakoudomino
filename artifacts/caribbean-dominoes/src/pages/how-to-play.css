@@ -1,0 +1,32 @@
+.yard-guide-main { max-width: 900px; }
+.yard-guide-back { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 22px; color: var(--yard-muted); font-size: 12px; text-decoration: none; }
+.yard-guide-back:hover { color: var(--yard-text); }
+.yard-guide-heading { margin-bottom: 18px; }
+.yard-guide-index { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
+.yard-guide-index a { padding: 7px 10px; border: 1px solid var(--yard-line); border-radius: 999px; color: var(--yard-muted); font-size: 11px; text-decoration: none; }
+.yard-guide-index a:hover, .yard-guide-index a:focus-visible { border-color: var(--yard-accent); color: var(--yard-text); outline: none; }
+.yard-guide-list { display: grid; gap: 10px; }
+.yard-guide-card { overflow: hidden; scroll-margin-top: 20px; }
+.yard-guide-card > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 17px 19px; cursor: pointer; list-style: none; }
+.yard-guide-card > summary::-webkit-details-marker { display: none; }
+.yard-guide-card > summary::after { content: '+'; margin-left: auto; color: var(--yard-muted); font-size: 19px; line-height: 1; }
+.yard-guide-card[open] > summary::after { content: '−'; }
+.yard-guide-title { font-size: 15px; font-weight: 700; }
+.yard-guide-status { display: inline-flex; align-items: center; gap: 5px; color: var(--yard-muted); font: 700 9px 'Space Mono', monospace; text-transform: uppercase; white-space: nowrap; }
+.yard-guide-status.is-available { color: var(--yard-accent); }
+.yard-guide-content { padding: 0 19px 19px; border-top: 1px solid var(--yard-line); color: var(--yard-muted); font-size: 13px; line-height: 1.65; }
+.yard-guide-content > p { margin: 14px 0; }
+.yard-guide-content ol { display: grid; gap: 8px; margin: 0; padding-left: 22px; }
+.yard-guide-content li { padding-left: 3px; }
+.yard-guide-note { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--yard-line); border-radius: 8px; background: rgba(255,255,255,.025); }
+.yard-guide-note svg { flex: none; margin-top: 3px; color: var(--yard-accent); }
+.yard-guide-modes { display: grid; grid-template-columns: 80px 1fr; gap: 7px 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--yard-line); }
+.yard-guide-modes b { color: var(--yard-text); }
+.yard-guide-play { margin-top: 10px; }
+@media (max-width: 560px) {
+  .yard-guide-main { width: calc(100% - 30px); padding-top: 24px; }
+  .yard-guide-card > summary { align-items: flex-start; padding: 14px; }
+  .yard-guide-title { flex: 1; }
+  .yard-guide-status { margin-top: 2px; }
+  .yard-guide-content { padding: 0 14px 15px; }
+}

@@ -9,9 +9,10 @@ import RoomPage from '@/pages/room-lakou';
 import SignInPage from '@/pages/sign-in';
 import SignUpPage from '@/pages/sign-up';
 import SocialPage from '@/pages/social';
+import HowToPlayPage from '@/pages/how-to-play';
 import TicTacToePage from '@/pages/tic-tac-toe';
 import MopyonPage from '@/pages/mopyon';
-import { HowToPlayScreen } from '../../../lakou-engine/ui';
+import BlockDropPage from '@/pages/block-drop';
 import {
   Route,
   Switch,
@@ -22,12 +23,6 @@ import {
 const queryClient = new QueryClient();
 
 function Router() {
-  const [, setLocation] = useLocation();
-  const toLobby = () => setLocation('/games/lakou');
-  const playNow = () => {
-    sessionStorage.setItem('lakou-play-now', 'points');
-    setLocation('/games/lakou');
-  };
   return (
     // Keep a shared shell (sidebar, navbar) outside the boundary so it
     // survives a page crash.
@@ -37,6 +32,7 @@ function Router() {
          <Route path="/games"><SocialPage page="games" /></Route>
          <Route path="/games/tic-tac-toe" component={TicTacToePage} />
          <Route path="/games/mopyon" component={MopyonPage} />
+         <Route path="/games/block-drop" component={BlockDropPage} />
          <Route path="/games/tic-tac-toe/:code" component={TicTacToePage} />
          <Route path="/friends"><SocialPage page="friends" /></Route>
          <Route path="/leaderboard"><SocialPage page="leaderboard" /></Route>
@@ -44,9 +40,7 @@ function Router() {
          <Route path="/games/lakou" component={Home} />
           <Route path="/sign-in" component={SignInPage} />
           <Route path="/sign-up" component={SignUpPage} />
-          <Route path="/how-to-play">
-            <HowToPlayScreen onBack={toLobby} onPlayNow={playNow} />
-          </Route>
+          <Route path="/how-to-play" component={HowToPlayPage} />
          <Route path="/room/:code" component={RoomPage} />
         <Route component={NotFound} />
       </Switch>
