@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
-  Bell, ChevronDown, CircleHelp, Gamepad2, LogOut, MessageCircle, Plus,
+  Bell, ChevronDown, CircleHelp, Gamepad2, Grid3X3, LogOut, MessageCircle, Plus,
   Trophy, ArrowUpRight,
 } from 'lucide-react';
 import {
@@ -28,7 +28,7 @@ const presenceText = (status?: string | null, detail?: string) => {
   return 'Offline';
 };
 
-function YardHeader({ active, username, notifications, onLogout }: { active: Destination; username?: string; notifications: number; onLogout: () => void }) {
+export function YardHeader({ active, username, notifications, onLogout }: { active: Destination; username?: string; notifications: number; onLogout: () => void }) {
   const [menu, setMenu] = useState(false);
   const [, setLocation] = useLocation();
   return <header className="yard-topbar">
@@ -173,7 +173,7 @@ export default function SocialPage({ page }: { page: Destination }) {
               <div className="yard-available-copy"><strong>Lakou Domino</strong><span>Multiplayer dominoes</span></div>
               <Link href="/games/lakou" className="yard-button primary" data-testid="button-open-lobby">Play</Link>
             </div>
-            <div className="yard-coming-soon"><Gamepad2 size={17} /><span>Another game is on the way</span></div>
+            <div className="yard-coming-soon"><Grid3X3 size={17} /><span>Tic-Tac-Toe is up next</span><Link href="/games/tic-tac-toe" className="yard-panel-link">Preview</Link></div>
           </Panel>
         </div>
         <div className="yard-home-status">
@@ -186,7 +186,7 @@ export default function SocialPage({ page }: { page: Destination }) {
       </>}
       {page === 'games' && <div className="yard-dashboard-grid">
         <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Lakou Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/lakou" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true" /></section>
-          <div className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">COMING NEXT</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>More Games Coming Soon</h2><p className="yard-subtitle" style={{ margin: 0 }}>The yard is growing. Lakou Domino is the first game at the table.</p></div></div>
+           <div className="yard-panel yard-section-space yard-next-game"><div className="yard-panel-body"><p className="yard-kicker">COMING NEXT</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Tic-Tac-Toe</h2><p className="yard-subtitle" style={{ margin: 0 }}>A quick head-to-head game is next at 509 Yard.</p><Link href="/games/tic-tac-toe" className="yard-button yard-section-space" data-testid="button-preview-tic-tac-toe"><Grid3X3 size={15} /> Try local game</Link><small className="yard-next-game-note">Two players, one screen. Online rooms can come next.</small></div></div>
         </div>
         <Panel title="Live activity"><div className="yard-metric"><b>{lobby.data?.onlinePlayers ?? '—'}</b><span>Players in the yard</span></div><p className="yard-subtitle">Open the Lakou lobby to browse live tables or start a match.</p></Panel>
       </div>}

@@ -9,6 +9,7 @@ import RoomPage from '@/pages/room-lakou';
 import SignInPage from '@/pages/sign-in';
 import SignUpPage from '@/pages/sign-up';
 import SocialPage from '@/pages/social';
+import TicTacToePage from '@/pages/tic-tac-toe';
 import { HowToPlayScreen } from '../../../lakou-engine/ui';
 import {
   Route,
@@ -33,6 +34,7 @@ function Router() {
       <Switch>
          <Route path="/"><SocialPage page="home" /></Route>
          <Route path="/games"><SocialPage page="games" /></Route>
+         <Route path="/games/tic-tac-toe" component={TicTacToePage} />
          <Route path="/friends"><SocialPage page="friends" /></Route>
          <Route path="/leaderboard"><SocialPage page="leaderboard" /></Route>
          <Route path="/profile"><SocialPage page="profile" /></Route>
