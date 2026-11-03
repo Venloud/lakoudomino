@@ -22,6 +22,7 @@ import {
   StartRoomResponse,
 } from "@workspace/api-zod";
 import type { Seat } from "../lib/room-types";
+import { handleTicTacToeSocket } from "./tic-tac-toe";
 import { getIdentityFromCookieHeader, getIdentityFromRequest } from "../lib/auth-session";
 import { getLeaderboard } from "../lib/leaderboard";
 import {
@@ -1352,7 +1353,9 @@ export function attachRoomWebSocket(server: HttpServer) {
     }
     webSocketServer.handleUpgrade(request, socket, head, (client) => {
       const upgradedUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-      if (upgradedUrl.searchParams.get("lobby") === "1") {
+      if (upgradedUrl.searchParams.has("ticCode")) {
+        void handleTicTacToeSocket(client, request);
+      } else if (upgradedUrl.searchParams.get("lobby") === "1") {
         void handleLobbySocket(client, request);
       } else {
         void handleSocket(client, request);

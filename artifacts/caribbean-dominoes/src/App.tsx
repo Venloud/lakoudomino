@@ -37,6 +37,7 @@ function Router() {
          <Route path="/games"><SocialPage page="games" /></Route>
          <Route path="/games/tic-tac-toe" component={TicTacToePage} />
          <Route path="/games/mopyon" component={MopyonPage} />
+         <Route path="/games/tic-tac-toe/:code" component={TicTacToePage} />
          <Route path="/friends"><SocialPage page="friends" /></Route>
          <Route path="/leaderboard"><SocialPage page="leaderboard" /></Route>
          <Route path="/profile"><SocialPage page="profile" /></Route>

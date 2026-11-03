@@ -38,6 +38,9 @@ import type {
   Room,
   RoomCreateInput,
   RoomJoinInput,
+  TicTacToeRoomAccess,
+  TicTacToeRoomInput,
+  TicTacToeRoomJoinInput,
   WaitlistInput,
   WaitlistNotifyInput,
   WaitlistPosition
@@ -234,6 +237,177 @@ export const useCreateRoom = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateRoomMutationOptions(options));
+    }
+
+export const getCreateTicTacToeRoomUrl = () => {
+
+
+
+
+  return `/api/tic-tac-toe/rooms`
+}
+
+/**
+ * @summary Create an online Tic-Tac-Toe room
+ */
+export const createTicTacToeRoom = async (ticTacToeRoomInput: TicTacToeRoomInput, options?: Parameters<typeof customFetch>[1]): Promise<TicTacToeRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TicTacToeRoomAccess>(getCreateTicTacToeRoomUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(ticTacToeRoomInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTicTacToeRoomMutationKey = () => ['createTicTacToeRoom'] as const;
+
+export const getCreateTicTacToeRoomMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTicTacToeRoom>>, TError,CreateTicTacToeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTicTacToeRoom>>, TError,CreateTicTacToeRoomMutationVariables, TContext> => {
+
+const mutationKey = getCreateTicTacToeRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTicTacToeRoom>>, CreateTicTacToeRoomMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTicTacToeRoom(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTicTacToeRoomMutationResult = NonNullable<Awaited<ReturnType<typeof createTicTacToeRoom>>>
+    export type CreateTicTacToeRoomMutationBody = BodyType<TicTacToeRoomInput>
+    export type CreateTicTacToeRoomMutationError = ErrorType<unknown>
+    export type CreateTicTacToeRoomMutationVariables = {data: BodyType<TicTacToeRoomInput>}
+
+    /**
+ * @summary Create an online Tic-Tac-Toe room
+ */
+export const useCreateTicTacToeRoom = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTicTacToeRoom>>, TError,CreateTicTacToeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTicTacToeRoom>>,
+        TError,
+        CreateTicTacToeRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateTicTacToeRoomMutationOptions(options));
+    }
+
+export const getJoinTicTacToeRoomUrl = (code: string,) => {
+
+
+
+
+  return `/api/tic-tac-toe/rooms/${code}/join`
+}
+
+export const joinTicTacToeRoom = async (code: string,
+    ticTacToeRoomJoinInput: TicTacToeRoomJoinInput, options?: Parameters<typeof customFetch>[1]): Promise<TicTacToeRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TicTacToeRoomAccess>(getJoinTicTacToeRoomUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(ticTacToeRoomJoinInput)
+  }
+);}
+
+
+
+
+
+export const getJoinTicTacToeRoomMutationKey = () => ['joinTicTacToeRoom'] as const;
+
+export const getJoinTicTacToeRoomMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinTicTacToeRoom>>, TError,JoinTicTacToeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof joinTicTacToeRoom>>, TError,JoinTicTacToeRoomMutationVariables, TContext> => {
+
+const mutationKey = getJoinTicTacToeRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof joinTicTacToeRoom>>, JoinTicTacToeRoomMutationVariables> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  joinTicTacToeRoom(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type JoinTicTacToeRoomMutationResult = NonNullable<Awaited<ReturnType<typeof joinTicTacToeRoom>>>
+    export type JoinTicTacToeRoomMutationBody = BodyType<TicTacToeRoomJoinInput>
+    export type JoinTicTacToeRoomMutationError = ErrorType<void>
+    export type JoinTicTacToeRoomMutationVariables = {code: string;data: BodyType<TicTacToeRoomJoinInput>}
+
+    export const useJoinTicTacToeRoom = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinTicTacToeRoom>>, TError,JoinTicTacToeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof joinTicTacToeRoom>>,
+        TError,
+        JoinTicTacToeRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getJoinTicTacToeRoomMutationOptions(options));
     }
 
 export const getGetLobbyUrl = () => {

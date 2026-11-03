@@ -15,6 +15,7 @@ import {
   useGetAuthMe,
   useGetLobby,
   useJoinRoom,
+  useJoinTicTacToeRoom,
   useListFriends,
   useLogout,
 } from '@workspace/api-client-react';
@@ -51,6 +52,7 @@ export default function Home() {
   });
   const createRoom = useCreateRoom();
   const joinRoom = useJoinRoom();
+  const joinTicTacToeRoom = useJoinTicTacToeRoom();
   const logout = useLogout();
   const addFriend = useCreateFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
@@ -341,6 +343,17 @@ export default function Home() {
       onSuccess: (result) => {
         setLiveInvites((current) => current.filter((invite) => invite.id !== id));
         const name = profile?.name || 'Guest';
+        if (result.game === 'tic-tac-toe') {
+          joinTicTacToeRoom.mutate({ code: result.roomCode, data: { displayName: name } }, {
+            onSuccess: (room) => {
+              sessionStorage.setItem(`tic-tac-toe-reconnect-${room.code}`, room.reconnectToken);
+              sessionStorage.setItem(`tic-tac-toe-display-name-${room.code}`, name);
+              setLocation(`/games/tic-tac-toe/${room.code}`);
+            },
+            onError: () => setNotice('The invite was accepted, but the Tic-Tac-Toe room could not be joined.'),
+          });
+          return;
+        }
         joinRoom.mutate({ code: result.roomCode, data: { displayName: name } }, {
           onSuccess: (room) => {
             if (!room.reconnectToken) {
@@ -434,7 +447,7 @@ export default function Home() {
             <div className="social-notice" key={invite.id} data-testid={`invite-${invite.id}`}>
               <div className="social-notice-copy"><b>{invite.inviterName} invited you to a table</b><span>Table code: {invite.roomCode}</span></div>
               <div className="social-notice-actions">
-                <button type="button" data-testid={`accept-invite-${invite.id}`} onClick={() => acceptRoomInvite(invite.id)} disabled={acceptInvite.isPending || joinRoom.isPending}>Join table</button>
+                <button type="button" data-testid={`accept-invite-${invite.id}`} onClick={() => acceptRoomInvite(invite.id)} disabled={acceptInvite.isPending || joinRoom.isPending || joinTicTacToeRoom.isPending}>Join table</button>
                 <button type="button" data-testid={`dismiss-invite-${invite.id}`} onClick={() => dismissInvite.mutate({ id: invite.id }, { onSuccess: () => { setLiveInvites((current) => current.filter((item) => item.id !== invite.id)); refreshSocial(); } })}>Dismiss</button>
               </div>
             </div>

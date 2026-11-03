@@ -9,7 +9,7 @@ import {
   getGetAuthMeQueryKey, getGetLobbyQueryKey, getListFriendsQueryKey,
   getGetRecentMatchesQueryKey as getRecentMatchesQueryKey, useAcceptFriendInvite, useAcceptFriendRequest,
   useCreateFriendRequest, useDeclineFriendRequest, useGetAuthMe, useGetLobby,
-  useGetRecentMatches, useJoinRoom, useListFriends, useLogout,
+  useGetRecentMatches, useJoinRoom, useJoinTicTacToeRoom, useListFriends, useLogout,
 } from '@workspace/api-client-react';
 
 type Destination = 'home' | 'games' | 'friends' | 'leaderboard' | 'profile';
@@ -81,6 +81,7 @@ export default function SocialPage({ page }: { page: Destination }) {
   const declineRequest = useDeclineFriendRequest();
   const acceptInvite = useAcceptFriendInvite();
   const joinRoom = useJoinRoom();
+  const joinTicTacToeRoom = useJoinTicTacToeRoom();
   const logout = useLogout();
   const [username, setUsername] = useState('');
   const [notice, setNotice] = useState('');
@@ -107,16 +108,30 @@ export default function SocialPage({ page }: { page: Destination }) {
     });
   };
   const joinInvite = (id: string) => acceptInvite.mutate({ id }, {
-    onSuccess: (result) => joinRoom.mutate({ code: result.roomCode, data: { displayName: user?.username ?? 'Guest' } }, {
-      onSuccess: (room) => {
-        if (room.reconnectToken) {
-          sessionStorage.setItem(`dominoes-reconnect-${room.code}`, room.reconnectToken);
-          sessionStorage.setItem(`dominoes-display-name-${room.code}`, user?.username ?? 'Guest');
-          setLocation(`/room/${room.code}`);
-        } else setNotice('The invite was accepted, but the table did not issue a reconnect token.');
-      },
-      onError: () => setNotice('Invite accepted, but the room could not be joined.'),
-    }),
+    onSuccess: (result) => {
+      const displayName = user?.username ?? 'Guest';
+      if (result.game === 'tic-tac-toe') {
+        joinTicTacToeRoom.mutate({ code: result.roomCode, data: { displayName } }, {
+          onSuccess: (room) => {
+            sessionStorage.setItem(`tic-tac-toe-reconnect-${room.code}`, room.reconnectToken);
+            sessionStorage.setItem(`tic-tac-toe-display-name-${room.code}`, displayName);
+            setLocation(`/games/tic-tac-toe/${room.code}`);
+          },
+          onError: () => setNotice('Invite accepted, but the Tic-Tac-Toe room could not be joined.'),
+        });
+        return;
+      }
+      joinRoom.mutate({ code: result.roomCode, data: { displayName } }, {
+        onSuccess: (room) => {
+          if (room.reconnectToken) {
+            sessionStorage.setItem(`dominoes-reconnect-${room.code}`, room.reconnectToken);
+            sessionStorage.setItem(`dominoes-display-name-${room.code}`, displayName);
+            setLocation(`/room/${room.code}`);
+          } else setNotice('The invite was accepted, but the table did not issue a reconnect token.');
+        },
+        onError: () => setNotice('Invite accepted, but the room could not be joined.'),
+      });
+    },
     onError: () => setNotice('That invite is no longer available.'),
   });
   const title = page === 'home' ? 'Meet at the table.' : page === 'games' ? 'Games' : page === 'friends' ? 'Friends' : page === 'leaderboard' ? 'Leaderboard' : 'Your profile';
@@ -148,7 +163,7 @@ export default function SocialPage({ page }: { page: Destination }) {
         <span className="yard-avatar">{initials(request.username)}</span><span style={{ flex: 1 }}><b>{request.username}</b><small>Wants to be friends</small></span>
         <span className="yard-list-actions"><button className="yard-small-button" onClick={() => acceptRequest.mutate({ id: request.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`accept-request-${request.id}`}>Accept</button><button className="yard-small-button" onClick={() => declineRequest.mutate({ id: request.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`decline-request-${request.id}`}>Decline</button></span>
       </div>)}</div> : null}
-      {friendData?.invites.length ? <div className="yard-section-space"><p className="yard-kicker">Table invitations · {friendData.invites.length}</p>{friendData.invites.map((invite) => <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to table {invite.roomCode}</small></span><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button></div>)}</div> : null}
+      {friendData?.invites.length ? <div className="yard-section-space"><p className="yard-kicker">Game invitations · {friendData.invites.length}</p>{friendData.invites.map((invite) => <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to {invite.game === 'tic-tac-toe' ? 'Tic-Tac-Toe' : 'Lakou Domino'} · {invite.roomCode}</small></span><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button></div>)}</div> : null}
       <div className="yard-section-space">
         <p className="yard-kicker">Your friends · {friendRows.length}</p>
         {friendRows.length ? friendRows.map((friend) => <div className="yard-friend-row" key={friend.id} data-testid={`friend-${friend.id}`}><span className="yard-avatar">{initials(friend.username)}</span><span style={{ flex: 1 }}><b>{friend.username}</b><small className="yard-presence"><i style={{ background: friend.status ? 'var(--yard-accent)' : '#66676c' }} />{presenceText(friend.status?.status, friend.status?.detail)}</small></span>{friend.status?.status === 'game' && friend.status.roomCode && <Link className="yard-small-button" href={`/room/${friend.status.roomCode}`} data-testid={`watch-friend-${friend.id}`}>Watch</Link>}</div>) : <div className="yard-empty"><strong>Start your circle</strong><p>Add a username above to find a friend and invite them to the next table.</p></div>}
@@ -174,6 +189,7 @@ export default function SocialPage({ page }: { page: Destination }) {
               <Link href="/games/lakou" className="yard-button primary" data-testid="button-open-lobby">Play</Link>
             </div>
             <div className="yard-coming-soon"><Crosshair size={17} /><span>Mòpyon is up next</span><Link href="/games/mopyon" className="yard-panel-link">Preview</Link></div>
+            <div className="yard-coming-soon"><Grid3X3 size={17} /><span>Tic-Tac-Toe · Regular and Yard Mode</span><Link href="/games/tic-tac-toe" className="yard-panel-link">Play online</Link></div>
           </Panel>
         </div>
         <div className="yard-home-status">
@@ -187,7 +203,7 @@ export default function SocialPage({ page }: { page: Destination }) {
       {page === 'games' && <div className="yard-dashboard-grid">
         <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Lakou Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/lakou" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true" /></section>
             <div className="yard-panel yard-section-space yard-next-game"><div className="yard-panel-body"><p className="yard-kicker">COMING NEXT</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Mòpyon</h2><p className="yard-subtitle" style={{ margin: 0 }}>Five in a row, played on the intersections of a 15 × 15 board.</p><Link href="/games/mopyon" className="yard-button yard-section-space" data-testid="button-preview-mopyon"><Crosshair size={15} /> Try local game</Link><small className="yard-next-game-note">Two players, one screen. Online rooms can come next.</small></div></div>
-            <div className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">LOCAL PREVIEW</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Tic-Tac-Toe</h2><p className="yard-subtitle" style={{ margin: 0 }}>Regular and Yard Mode are ready for pass-and-play.</p><Link href="/games/tic-tac-toe" className="yard-button yard-section-space" data-testid="button-preview-tic-tac-toe"><Grid3X3 size={15} /> Try local game</Link></div></div>
+            <div className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">AVAILABLE NOW</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Tic-Tac-Toe</h2><p className="yard-subtitle" style={{ margin: 0 }}>Create a room, invite a friend, and play across devices in Regular or Yard Mode.</p><Link href="/games/tic-tac-toe" className="yard-button yard-section-space" data-testid="button-preview-tic-tac-toe"><Grid3X3 size={15} /> Play Tic-Tac-Toe</Link><small className="yard-next-game-note">Share a room link or invite a Lakou friend.</small></div></div>
         </div>
         <Panel title="Live activity"><div className="yard-metric"><b>{lobby.data?.onlinePlayers ?? '—'}</b><span>Players in the yard</span></div><p className="yard-subtitle">Open the Lakou lobby to browse live tables or start a match.</p></Panel>
       </div>}

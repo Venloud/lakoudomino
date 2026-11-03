@@ -44,6 +44,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Room"
+  /tic-tac-toe/rooms:
+    post:
+      operationId: createTicTacToeRoom
+      tags: [rooms]
+      summary: Create an online Tic-Tac-Toe room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicTacToeRoomInput"
+      responses:
+        "201":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicTacToeRoomAccess"
+  /tic-tac-toe/rooms/{code}/join:
+    post:
+      operationId: joinTicTacToeRoom
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicTacToeRoomJoinInput"
+      responses:
+        "200":
+          description: Room joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicTacToeRoomAccess"
+        "404":
+          description: Room not found
+        "409":
+          description: Room is full or already started
   /lobby:
     get:
       operationId: getLobby
@@ -453,6 +494,58 @@ components:
         isPrivate:
           type: boolean
           default: false
+    TicTacToeMode:
+      type: string
+      enum: [regular, yard]
+    TicTacToeStatus:
+      type: string
+      enum: [waiting, playing, finished]
+    TicTacToeRoomPlayer:
+      type: object
+      required: [seat, mark, name]
+      properties:
+        seat:
+          type: integer
+          enum: [0, 1]
+        mark:
+          type: string
+          enum: [X, O]
+        name:
+          type: string
+    TicTacToeRoomAccess:
+      type: object
+      required: [code, mode, status, players, reconnectToken]
+      properties:
+        code:
+          type: string
+        mode:
+          $ref: "#/components/schemas/TicTacToeMode"
+        status:
+          $ref: "#/components/schemas/TicTacToeStatus"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicTacToeRoomPlayer"
+        reconnectToken:
+          type: string
+    TicTacToeRoomInput:
+      type: object
+      required: [mode, displayName]
+      properties:
+        mode:
+          $ref: "#/components/schemas/TicTacToeMode"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
+    TicTacToeRoomJoinInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
     RoomJoinInput:
       type: object
       required: [displayName]
@@ -757,18 +850,20 @@ components:
         status: { type: string }
     FriendInviteNotification:
       type: object
-      required: [id, inviterId, inviterName, roomCode, status]
+      required: [id, inviterId, inviterName, roomCode, game, status]
       properties:
         id: { type: string, format: uuid }
         inviterId: { type: string, format: uuid }
         inviterName: { type: string }
         roomCode: { type: string }
+        game: { type: string, enum: [domino, tic-tac-toe] }
         status: { type: string, enum: [pending] }
     FriendInviteAcceptResponse:
       type: object
-      required: [roomCode]
+      required: [roomCode, game]
       properties:
         roomCode: { type: string, pattern: "^[A-Z0-9]{4,8}$" }
+        game: { type: string, enum: [domino, tic-tac-toe] }
     LeaderboardRow:
       type: object
       required: [id, name, points, gold, silver, bronze, isMe]

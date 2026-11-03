@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { createServer } from "node:http";
 import { attachRoomWebSocket, initializeRooms } from "./routes/rooms";
+import { initializeTicTacToeRooms } from "./routes/tic-tac-toe";
 
 const rawPort = process.env["PORT"];
 
@@ -26,6 +27,7 @@ server.on("error", (err) => {
 });
 
 await initializeRooms();
+await initializeTicTacToeRooms();
 server.listen(port, () => {
   logger.info({ port }, "Server listening");
 });

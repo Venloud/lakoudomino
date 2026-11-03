@@ -85,6 +85,59 @@ export const CreateRoomResponse = zod.object({
 
 
 /**
+ * @summary Create an online Tic-Tac-Toe room
+ */
+export const createTicTacToeRoomBodyDisplayNameMax = 24;
+
+
+
+export const CreateTicTacToeRoomBody = zod.object({
+  "mode": zod.enum(['regular', 'yard']),
+  "displayName": zod.string().min(1).max(createTicTacToeRoomBodyDisplayNameMax)
+})
+
+export const CreateTicTacToeRoomResponse = zod.object({
+  "code": zod.string(),
+  "mode": zod.enum(['regular', 'yard']),
+  "status": zod.enum(['waiting', 'playing', 'finished']),
+  "players": zod.array(zod.object({
+  "seat": zod.union([zod.literal(0),zod.literal(1)]),
+  "mark": zod.enum(['X', 'O']),
+  "name": zod.string()
+})),
+  "reconnectToken": zod.string()
+})
+
+
+export const joinTicTacToeRoomPathCodeRegExp = new RegExp('^[A-Z0-9]{4,8}$');
+
+
+export const JoinTicTacToeRoomParams = zod.object({
+  "code": zod.coerce.string().regex(joinTicTacToeRoomPathCodeRegExp)
+})
+
+export const joinTicTacToeRoomBodyDisplayNameMax = 24;
+
+
+
+export const JoinTicTacToeRoomBody = zod.object({
+  "displayName": zod.string().min(1).max(joinTicTacToeRoomBodyDisplayNameMax)
+})
+
+export const JoinTicTacToeRoomResponse = zod.object({
+  "code": zod.string(),
+  "mode": zod.enum(['regular', 'yard']),
+  "status": zod.enum(['waiting', 'playing', 'finished']),
+  "players": zod.array(zod.object({
+  "seat": zod.union([zod.literal(0),zod.literal(1)]),
+  "mark": zod.enum(['X', 'O']),
+  "name": zod.string()
+})),
+  "reconnectToken": zod.string()
+})
+
+
+/**
  * @summary Get open public waiting tables
  */
 export const getLobbyResponseTablesItemRowLengthMax = 20;
@@ -851,6 +904,7 @@ export const ListFriendsResponse = zod.object({
   "inviterId": zod.string().uuid(),
   "inviterName": zod.string(),
   "roomCode": zod.string(),
+  "game": zod.enum(['domino', 'tic-tac-toe']),
   "status": zod.enum(['pending'])
 }))
 })
@@ -927,7 +981,8 @@ export const acceptFriendInviteResponseRoomCodeRegExp = new RegExp('^[A-Z0-9]{4,
 
 
 export const AcceptFriendInviteResponse = zod.object({
-  "roomCode": zod.string().regex(acceptFriendInviteResponseRoomCodeRegExp)
+  "roomCode": zod.string().regex(acceptFriendInviteResponseRoomCodeRegExp),
+  "game": zod.enum(['domino', 'tic-tac-toe'])
 })
 
 

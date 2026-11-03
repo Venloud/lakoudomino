@@ -46,6 +46,23 @@
 .yard-ultimate-result { position: absolute; inset: 0; display: grid; place-items: center; color: var(--yard-accent); font-size: clamp(38px, 7vw, 88px); font-weight: 800; line-height: 1; opacity: .34; pointer-events: none; }
 .yard-ultimate-result.is-draw { color: var(--yard-muted); }
 .yard-tic-status span { color: var(--yard-muted); font-weight: 500; }
+.yard-tic-lobby { max-width: 720px; }
+.yard-tic-name-field { display: grid; gap: 7px; max-width: 340px; color: var(--yard-muted); font-size: 12px; }
+.yard-tic-name-field .yard-input, .yard-tic-join-form .yard-input, .yard-tic-friend-invites .yard-input { width: 100%; box-sizing: border-box; }
+.yard-tic-room-actions { display: grid; justify-items: start; gap: 14px; margin-top: 24px; }
+.yard-tic-or { color: var(--yard-muted); font-size: 11px; }
+.yard-tic-join-form { display: flex; width: min(100%, 440px); gap: 8px; }
+.yard-tic-join-form .yard-input { min-width: 0; }
+.yard-tic-room-copy { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--yard-line); }
+.yard-tic-room-copy h2 { margin: 0 0 7px; font-size: 13px; }
+.yard-tic-room-copy p { max-width: 520px; margin: 0; color: var(--yard-muted); font-size: 12px; line-height: 1.6; }
+.yard-tic-local-link { margin-top: 22px; padding: 0; border: 0; background: none; color: var(--yard-muted); font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.yard-tic-local-link:hover { color: var(--yard-text); }
+.yard-tic-notice { margin: 16px 0 0; color: #dca7a0; font-size: 12px; }
+.yard-tic-room-heading { align-items: center; }
+.yard-tic-room-heading .yard-button { flex: 0 0 auto; }
+.yard-tic-friend-invites { display: grid; gap: 7px; margin-top: 18px; color: var(--yard-muted); font-size: 11px; }
+.yard-tic-friend-invites select { color: var(--yard-text); }
 @media (max-width: 680px) {
   .yard-tic-main { width: min(100% - 32px, 820px); padding-top: 26px; }
   .yard-tic-layout { grid-template-columns: 1fr; }
@@ -53,4 +70,6 @@
   .yard-tic-main.is-yard-mode .yard-tic-layout { grid-template-columns: 1fr; }
   .yard-ultimate-board { width: 540px; min-width: 480px; }
   .yard-tic-mode-picker button { flex: 1; }
+  .yard-tic-join-form { flex-direction: column; }
+  .yard-tic-room-heading { align-items: flex-start; flex-direction: column; }
 }

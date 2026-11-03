@@ -10,3 +10,4 @@ export * from './room';
 export * from './runner';
 export * from './matchmaking';
 export * from './pacing';
+export * from './tic-tac-toe';
