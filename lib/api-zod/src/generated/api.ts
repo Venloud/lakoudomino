@@ -822,6 +822,28 @@ export const GetRecentMatchesResponse = zod.object({
 })
 
 
+/**
+ * @summary Get Tic-Tac-Toe results for the signed-in user
+ */
+export const GetTicTacToeResultsResponse = zod.object({
+  "summary": zod.object({
+  "games": zod.number().int(),
+  "wins": zod.number().int(),
+  "losses": zod.number().int(),
+  "draws": zod.number().int()
+}),
+  "results": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "roomCode": zod.string(),
+  "mode": zod.enum(['regular', 'yard']),
+  "outcome": zod.enum(['win', 'loss', 'draw']),
+  "mark": zod.enum(['X', 'O']),
+  "opponentName": zod.string(),
+  "completedAt": zod.coerce.date()
+}))
+})
+
+
 export const signupBodyUsernameMin = 3;
 export const signupBodyUsernameMax = 16;
 

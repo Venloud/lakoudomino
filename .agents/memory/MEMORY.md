@@ -1,4 +1,5 @@
 - [Native TypeScript tests](typescript-tests.md) — use Node's runner for explicit `.ts` imports; use existing `tsx` when authoritative sources are extensionless.
+- [pnpm workspace reformatting](pnpm-workspace-reformatting.md) — inspect workspace YAML after package changes because pnpm may reorder policies and strip comments.
 - [Vite preview module cache](vite-preview-cache.md) — restart the artifact workflow after adding or renaming TSX modules if HMR keeps resolving an obsolete extension.
 - [WebGL preview fallback](webgl-preview.md) — headless previews may lack a WebGL context; guard Canvas mounting and keep a functional fallback for non-WebGL clients.
 - [Browser visual QA](browser-visual-qa.md) — preview capture can verify this app when Playwright browsers are unavailable; keep the fallback UI fully functional.

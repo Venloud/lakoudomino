@@ -7,10 +7,12 @@ import {
 } from 'lucide-react';
 import {
   getGetAuthMeQueryKey, getGetLobbyQueryKey, getListFriendsQueryKey,
-  getGetRecentMatchesQueryKey as getRecentMatchesQueryKey, useAcceptFriendInvite, useAcceptFriendRequest,
+  getGetRecentMatchesQueryKey as getRecentMatchesQueryKey, getGetTicTacToeResultsQueryKey,
+  useAcceptFriendInvite, useAcceptFriendRequest,
   useCreateFriendRequest, useDeclineFriendRequest, useGetAuthMe, useGetLobby,
-  useGetRecentMatches, useJoinRoom, useJoinTicTacToeRoom, useListFriends, useLogout,
+  useGetRecentMatches, useGetTicTacToeResults, useJoinRoom, useJoinTicTacToeRoom, useListFriends, useLogout,
 } from '@workspace/api-client-react';
+import { TicTacToeProfileResults } from './tic-tac-toe-profile';
 
 type Destination = 'home' | 'games' | 'friends' | 'leaderboard' | 'profile';
 const navItems: { label: string; href: string; key: Destination }[] = [
@@ -76,6 +78,7 @@ export default function SocialPage({ page }: { page: Destination }) {
   const friendsQuery = useListFriends({ query: { queryKey: getListFriendsQueryKey(), enabled: signedIn, refetchOnWindowFocus: true } });
   const lobby = useGetLobby({ query: { queryKey: getGetLobbyQueryKey(), refetchInterval: 15000, refetchOnWindowFocus: true } });
   const recent = useGetRecentMatches({ query: { queryKey: getRecentMatchesQueryKey(), enabled: signedIn, refetchOnWindowFocus: true } });
+  const ticTacToeResults = useGetTicTacToeResults({ query: { queryKey: getGetTicTacToeResultsQueryKey(), enabled: signedIn, refetchOnWindowFocus: true } });
   const requestFriend = useCreateFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
   const declineRequest = useDeclineFriendRequest();
@@ -94,6 +97,7 @@ export default function SocialPage({ page }: { page: Destination }) {
       client.setQueryData(getGetAuthMeQueryKey(), { user: null });
       client.removeQueries({ queryKey: getListFriendsQueryKey() });
       client.removeQueries({ queryKey: getRecentMatchesQueryKey() });
+      client.removeQueries({ queryKey: getGetTicTacToeResultsQueryKey() });
       setLocation('/');
     },
     onError: () => setNotice('Could not sign out. Please try again.'),
@@ -216,9 +220,17 @@ export default function SocialPage({ page }: { page: Destination }) {
       {page === 'profile' && <>{!signedIn ? <Panel title="Your Lakou account"><div className="yard-empty"><strong>Sign in to see your profile</strong><p>Your record and recorded matches are attached to your account. Sign in to view them here.</p><Link href="/sign-in" className="yard-button primary" data-testid="link-profile-sign-in">Sign in</Link></div></Panel> : <>
         <Panel title="Player card"><div className="yard-profile-card"><span className="yard-avatar">{initials(user?.username ?? '')}</span><span><p className="yard-kicker">PLAYER</p><h2 style={{ margin: 0, fontSize: 20 }}>{user?.username}</h2><small className="yard-status">Lakou Domino account</small></span></div></Panel>
         <div className="yard-profile-stat-grid yard-section-space">
-          <div className="yard-profile-stat"><strong>{user?.crownPoints ?? 0}</strong><span>Crown points</span></div><div className="yard-profile-stat"><strong>{user?.games ?? 0}</strong><span>Games played</span></div><div className="yard-profile-stat"><strong>{user?.wins ?? 0}</strong><span>Wins</span></div><div className="yard-profile-stat"><strong>{user?.gold ?? 0} / {user?.silver ?? 0} / {user?.bronze ?? 0}</strong><span>Gold · silver · bronze</span></div>
+          <div className="yard-profile-stat"><strong>{user?.crownPoints ?? 0}</strong><span>Crown points</span></div><div className="yard-profile-stat"><strong>{user?.games ?? 0}</strong><span>Domino games</span></div><div className="yard-profile-stat"><strong>{user?.wins ?? 0}</strong><span>Domino wins</span></div><div className="yard-profile-stat"><strong>{user?.gold ?? 0} / {user?.silver ?? 0} / {user?.bronze ?? 0}</strong><span>Domino medals</span></div>
         </div>
         <div className="yard-section-space"><Panel title="Recent matches">{renderHistory()}</Panel></div>
+        <div className="yard-section-space"><Panel title="Tic-Tac-Toe results">
+          <TicTacToeProfileResults
+            data={ticTacToeResults.data}
+            isLoading={ticTacToeResults.isLoading}
+            isError={ticTacToeResults.isError}
+            onRetry={() => void ticTacToeResults.refetch()}
+          />
+        </Panel></div>
       </>}</>}
       <footer className="yard-section-space" style={{ color: 'var(--yard-muted)', fontSize: 10 }}><CircleHelp size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />509 Yard · Lakou Domino is the first game. <Link href="/how-to-play" className="yard-panel-link" style={{ marginLeft: 6 }}>How to play</Link></footer>
     </main>

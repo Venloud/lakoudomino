@@ -314,6 +314,18 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RecentMatchesResponse" }
         "401": { description: Authentication required }
+  /auth/tic-tac-toe-results:
+    get:
+      operationId: getTicTacToeResults
+      tags: [auth]
+      summary: Get Tic-Tac-Toe results for the signed-in user
+      responses:
+        "200":
+          description: Tic-Tac-Toe totals and recent results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicTacToeResultsResponse" }
+        "401": { description: Authentication required }
   /auth/signup:
     post:
       operationId: signup
@@ -805,6 +817,32 @@ components:
       required: [matches]
       properties:
         matches: { type: array, items: { $ref: "#/components/schemas/RecentMatch" } }
+    TicTacToeResult:
+      type: object
+      required: [id, roomCode, mode, outcome, mark, opponentName, completedAt]
+      properties:
+        id: { type: string, format: uuid }
+        roomCode: { type: string }
+        mode: { type: string, enum: [regular, yard] }
+        outcome: { type: string, enum: [win, loss, draw] }
+        mark: { type: string, enum: [X, O] }
+        opponentName: { type: string }
+        completedAt: { type: string, format: date-time }
+    TicTacToeResultsResponse:
+      type: object
+      required: [summary, results]
+      properties:
+        summary:
+          type: object
+          required: [games, wins, losses, draws]
+          properties:
+            games: { type: integer }
+            wins: { type: integer }
+            losses: { type: integer }
+            draws: { type: integer }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/TicTacToeResult" }
     Friendship:
       type: object
       required: [id, userLow, userHigh, requesterId, status]

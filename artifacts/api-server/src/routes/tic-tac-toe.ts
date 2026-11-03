@@ -13,13 +13,16 @@ import {
   type TicTacToeMode,
 } from "lakou-engine";
 import { CreateTicTacToeRoomBody, JoinTicTacToeRoomBody } from "@workspace/api-zod";
-import { db, dominoRooms, ticTacToeRooms } from "@workspace/db";
+import { db, dominoRooms, ticTacToeResults, ticTacToeRooms } from "@workspace/db";
+import { getIdentityFromRequest } from "../lib/auth-session";
+import { buildTicTacToeResultInserts } from "../lib/tic-tac-toe-results";
 
 type TicTacToePlayer = {
   seat: 0 | 1;
   mark: TicTacToeMark;
   name: string;
   reconnectTokenHash: string;
+  userId?: string | null;
 };
 
 type RoomStatus = "waiting" | "playing" | "finished";
@@ -30,6 +33,7 @@ type TicTacToeRoom = {
   status: RoomStatus;
   players: TicTacToePlayer[];
   state: TicTacToeGameState;
+  roundNumber: number;
   connections: Map<0 | 1, Set<WebSocket>>;
 };
 
@@ -75,6 +79,7 @@ function restoreRoom(record: {
   status: string;
   players: unknown;
   state: unknown;
+  roundNumber?: number;
 }): TicTacToeRoom | null {
   if (!/^[A-Z0-9]{4,8}$/.test(record.code) ||
       (record.mode !== "regular" && record.mode !== "yard") ||
@@ -84,13 +89,15 @@ function restoreRoom(record: {
   const players = record.players as TicTacToePlayer[];
   if (players.length < 1 || players.length > 2 || players.some((player, index) =>
     !player || player.seat !== index || player.mark !== (index === 0 ? "X" : "O") ||
-    typeof player.name !== "string" || typeof player.reconnectTokenHash !== "string")) return null;
+     typeof player.name !== "string" || typeof player.reconnectTokenHash !== "string" ||
+     (player.userId !== undefined && player.userId !== null && typeof player.userId !== "string"))) return null;
   return {
     code: record.code,
     mode: record.mode,
     status: record.status as RoomStatus,
     players,
     state: record.state,
+    roundNumber: Number.isInteger(record.roundNumber) && (record.roundNumber ?? 0) > 0 ? record.roundNumber! : 1,
     connections: new Map(),
   };
 }
@@ -100,17 +107,22 @@ export async function initializeTicTacToeRooms(): Promise<void> {
   const records = await db.select().from(ticTacToeRooms);
   for (const record of records) {
     const room = restoreRoom(record);
-    if (room) rooms.set(room.code, room);
+    if (room) {
+      rooms.set(room.code, room);
+      if (room.status === "finished") await persistRoom(room);
+    }
   }
 }
 
 async function persistRoom(room: TicTacToeRoom): Promise<void> {
+  const results = buildTicTacToeResultInserts(room);
   const values = {
     code: room.code,
     mode: room.mode,
     status: room.status,
-    players: room.players.map(({ seat, mark, name, reconnectTokenHash }) => ({ seat, mark, name, reconnectTokenHash })),
+    players: room.players.map(({ seat, mark, name, reconnectTokenHash, userId }) => ({ seat, mark, name, reconnectTokenHash, userId: userId ?? null })),
     state: room.state,
+    roundNumber: room.roundNumber,
     updatedAt: new Date(),
   };
   const previous = pendingWrites.get(room.code) ?? Promise.resolve();
@@ -119,6 +131,9 @@ async function persistRoom(room: TicTacToeRoom): Promise<void> {
       target: ticTacToeRooms.code,
       set: values,
     });
+    if (results.length) {
+      await db.insert(ticTacToeResults).values(results).onConflictDoNothing();
+    }
   });
   pendingWrites.set(room.code, next);
   try {
@@ -162,12 +177,14 @@ router.post("/tic-tac-toe/rooms", async (req, res) => {
 
   const code = await createRoomCode();
   const reconnectToken = issueReconnectToken();
+  const identity = await getIdentityFromRequest(req);
   const room: TicTacToeRoom = {
     code,
     mode: parsed.data.mode,
     status: "waiting",
-    players: [{ seat: 0, mark: "X", name: displayName, reconnectTokenHash: tokenHash(reconnectToken) }],
+    players: [{ seat: 0, mark: "X", name: displayName, reconnectTokenHash: tokenHash(reconnectToken), userId: identity?.userId ?? null }],
     state: parsed.data.mode === "regular" ? createTicTacToeState() : createYardTicTacToeState(),
+    roundNumber: 1,
     connections: new Map(),
   };
   rooms.set(code, room);
@@ -194,11 +211,13 @@ router.post("/tic-tac-toe/rooms/:code/join", async (req, res) => {
     return res.status(409).json({ error: "Choose a different name from the other player." });
   }
   const reconnectToken = issueReconnectToken();
+  const identity = await getIdentityFromRequest(req);
   room.players.push({
     seat: 1,
     mark: "O",
     name: displayName,
     reconnectTokenHash: tokenHash(reconnectToken),
+    userId: identity?.userId ?? null,
   });
   room.status = "playing";
   await persistRoom(room);
@@ -312,6 +331,7 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
       }
       room.state = room.mode === "regular" ? createTicTacToeState() : createYardTicTacToeState();
       room.status = "playing";
+      room.roundNumber += 1;
       await persistRoom(room);
       broadcastRoom(room);
       return;

@@ -1691,6 +1691,18 @@ body:has(.room-loading-page) { background: #141218; }
 .yard-profile-stat span { display: block; margin-top: 6px; color: var(--yard-muted); font-size: 10px; text-transform: uppercase; }
 .yard-profile-card { display: flex; align-items: center; gap: 16px; padding: 20px; }
 .yard-profile-card .yard-avatar { width: 56px; height: 56px; font-size: 18px; }
+.yard-tic-profile-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; }
+.yard-tic-profile-stats .yard-profile-stat { padding: 12px; }
+.yard-tic-profile-stats .yard-profile-stat strong { font-size: 17px; }
+.yard-tic-profile-history { display: grid; margin-top: 13px; }
+.yard-tic-profile-result { display: grid; grid-template-columns: 28px minmax(0,1fr) 22px; align-items: center; gap: 10px; min-height: 48px; border-bottom: 1px solid #2b2c30; }
+.yard-tic-result-badge { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 6px; background: #292a2f; color: var(--yard-muted); font: 700 11px 'Space Mono',monospace; }
+.yard-tic-result-badge.is-win { background: #263221; color: var(--yard-accent); }
+.yard-tic-result-badge.is-loss { color: #d49d94; }
+.yard-tic-profile-result b,.yard-tic-profile-result small { display: block; }
+.yard-tic-profile-result b { font-size: 11px; }
+.yard-tic-profile-result small { margin-top: 4px; color: var(--yard-muted); font-size: 9px; }
+.yard-tic-result-mark { justify-self: end; color: var(--yard-accent); font: 700 11px 'Space Mono',monospace; }
 .yard-mobile-label { display: none; }
 @media(max-width:800px) {
  .yard-topbar { gap: 8px; height: 60px; padding: 0 12px; }

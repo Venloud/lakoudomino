@@ -38,6 +38,7 @@ import type {
   Room,
   RoomCreateInput,
   RoomJoinInput,
+  TicTacToeResultsResponse,
   TicTacToeRoomAccess,
   TicTacToeRoomInput,
   TicTacToeRoomJoinInput,
@@ -1637,6 +1638,83 @@ export function useGetRecentMatches<TData = Awaited<ReturnType<typeof getRecentM
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetRecentMatchesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetTicTacToeResultsUrl = () => {
+
+
+
+
+  return `/api/auth/tic-tac-toe-results`
+}
+
+/**
+ * @summary Get Tic-Tac-Toe results for the signed-in user
+ */
+export const getTicTacToeResults = async ( options?: Parameters<typeof customFetch>[1]): Promise<TicTacToeResultsResponse> => {
+
+  return customFetch<TicTacToeResultsResponse>(getGetTicTacToeResultsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTicTacToeResultsQueryKey = () => {
+    return [
+    `/api/auth/tic-tac-toe-results`
+    ] as const;
+    }
+
+
+export const getGetTicTacToeResultsQueryOptions = <TData = Awaited<ReturnType<typeof getTicTacToeResults>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTicTacToeResults>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTicTacToeResultsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTicTacToeResults>>> = ({ signal }) => getTicTacToeResults({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTicTacToeResults>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTicTacToeResultsQueryResult = NonNullable<Awaited<ReturnType<typeof getTicTacToeResults>>>
+export type GetTicTacToeResultsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get Tic-Tac-Toe results for the signed-in user
+ */
+
+export function useGetTicTacToeResults<TData = Awaited<ReturnType<typeof getTicTacToeResults>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTicTacToeResults>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTicTacToeResultsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

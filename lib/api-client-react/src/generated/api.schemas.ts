@@ -419,6 +419,53 @@ export interface RecentMatchesResponse {
   matches: RecentMatch[];
 }
 
+export type TicTacToeResultMode = typeof TicTacToeResultMode[keyof typeof TicTacToeResultMode];
+
+
+export const TicTacToeResultMode = {
+  regular: 'regular',
+  yard: 'yard',
+} as const;
+
+export type TicTacToeResultOutcome = typeof TicTacToeResultOutcome[keyof typeof TicTacToeResultOutcome];
+
+
+export const TicTacToeResultOutcome = {
+  win: 'win',
+  loss: 'loss',
+  draw: 'draw',
+} as const;
+
+export type TicTacToeResultMark = typeof TicTacToeResultMark[keyof typeof TicTacToeResultMark];
+
+
+export const TicTacToeResultMark = {
+  X: 'X',
+  O: 'O',
+} as const;
+
+export interface TicTacToeResult {
+  id: string;
+  roomCode: string;
+  mode: TicTacToeResultMode;
+  outcome: TicTacToeResultOutcome;
+  mark: TicTacToeResultMark;
+  opponentName: string;
+  completedAt: string;
+}
+
+export type TicTacToeResultsResponseSummary = {
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+};
+
+export interface TicTacToeResultsResponse {
+  summary: TicTacToeResultsResponseSummary;
+  results: TicTacToeResult[];
+}
+
 export type FriendshipStatus = typeof FriendshipStatus[keyof typeof FriendshipStatus];
 
 

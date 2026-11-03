@@ -1,8 +1,9 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { desc, eq } from "drizzle-orm";
-import { db, dominoUsers, dominoSessions, dominoMatches, dominoMatchResults } from "@workspace/db";
+import { count, desc, eq, sql } from "drizzle-orm";
+import { db, dominoUsers, dominoSessions, dominoMatches, dominoMatchResults, ticTacToeResults } from "@workspace/db";
 import { createAuthSession, getIdentityFromRequest, hashSessionToken, setAuthCookie, clearAuthCookie } from "../lib/auth-session";
+import { GetTicTacToeResultsResponse } from "@workspace/api-zod";
 
 const router = Router();
 const usernamePattern = /^[A-Za-z0-9_]{3,16}$/;
@@ -40,6 +41,37 @@ router.get("/auth/recent-matches", async (req, res): Promise<void> => {
     .orderBy(desc(dominoMatches.recordedAt))
     .limit(8);
   res.json({ matches });
+});
+router.get("/auth/tic-tac-toe-results", async (req, res): Promise<void> => {
+  const identity = await getIdentityFromRequest(req);
+  if (!identity) { res.status(401).json({ error: "Authentication required" }); return; }
+  const [totals] = await db.select({
+    games: count(),
+    wins: sql<number>`count(*) filter (where ${ticTacToeResults.outcome} = 'win')`,
+    losses: sql<number>`count(*) filter (where ${ticTacToeResults.outcome} = 'loss')`,
+    draws: sql<number>`count(*) filter (where ${ticTacToeResults.outcome} = 'draw')`,
+  }).from(ticTacToeResults).where(eq(ticTacToeResults.userId, identity.userId));
+  const results = await db.select({
+    id: ticTacToeResults.id,
+    roomCode: ticTacToeResults.roomCode,
+    mode: ticTacToeResults.mode,
+    outcome: ticTacToeResults.outcome,
+    mark: ticTacToeResults.mark,
+    opponentName: ticTacToeResults.opponentName,
+    completedAt: ticTacToeResults.completedAt,
+  }).from(ticTacToeResults)
+    .where(eq(ticTacToeResults.userId, identity.userId))
+    .orderBy(desc(ticTacToeResults.completedAt))
+    .limit(8);
+  res.json(GetTicTacToeResultsResponse.parse({
+    summary: {
+      games: Number(totals?.games ?? 0),
+      wins: Number(totals?.wins ?? 0),
+      losses: Number(totals?.losses ?? 0),
+      draws: Number(totals?.draws ?? 0),
+    },
+    results,
+  }));
 });
 router.post("/auth/signup", async (req, res): Promise<void> => {
   const username = typeof req.body?.username === "string" ? req.body.username.trim() : "";
