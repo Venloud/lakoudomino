@@ -89,15 +89,16 @@ const gameGuides: GameGuide[] = [
   {
     name: 'Chess',
     status: 'Available now',
-    intro: 'Move pieces across the board and capture the opposing king in this local starter version.',
+    intro: 'Use standard chess rules to checkmate the opposing king.',
     href: '/games/chess',
     steps: [
-      'Pawns move forward one square (or two on their first move) and capture diagonally. A pawn reaching the far side promotes to another piece.',
+      'Pawns move forward one square (or two on their first move), capture diagonally, and may capture en passant immediately after an opposing pawn advances two squares. A pawn reaching the far side promotes to a queen, rook, bishop, or knight.',
       'Rooks move along ranks and files; bishops move diagonally; queens move in either direction.',
-      'Knights move in an L shape and can jump over pieces. Kings move one square in any direction, but never into check.',
-      'Checkmate the opposing king: it is in check and has no legal escape. White moves first.',
+      'Knights move in an L shape and can jump over pieces. Kings move one square in any direction, but may not move into or remain in check.',
+      'Castle with an unmoved king and rook when the path is clear and the king is not in, through, or into check.',
+      'Checkmate wins when the king is in check with no legal escape. If the player to move has no legal move but is not in check, the game is a draw by stalemate. White moves first.',
     ],
-    note: 'This first local version supports basic piece movement, captures, and pawn promotion. Check/checkmate, castling, and en passant are not included yet.',
+    note: 'Moves that expose your king are illegal. Promotion choices are queen, rook, bishop, or knight.',
   },
   {
     name: 'Dame',

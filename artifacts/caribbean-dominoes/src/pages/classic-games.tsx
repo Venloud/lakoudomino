@@ -7,6 +7,7 @@ import type { WordDirection, WordPlacement } from '../lib/word-yard';
 import { loadWordDictionary } from '../lib/word-yard-dictionary';
 import { createFillerBoard, playFillerMove } from '@/lib/filler';
 import { chooseChessBotMove } from '@/lib/chess-bot';
+import { createChessGame, getChessStatus, getLegalChessMoves, isKingInCheck, playChessMove, type ChessGame, type ChessMove, type ChessPieceKind } from '@/lib/chess';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
 import './word-yard.css';
@@ -57,6 +58,9 @@ function isChessGame(game: GameId): boolean {
 
 function chessIndexToSquare(index: number) {
   return `${String.fromCharCode(97 + index % 8)}${8 - Math.floor(index / 8)}` as Square;
+}
+function chessSquareToIndex(square: Square) {
+  return (8 - Number(square[1])) * 8 + square.charCodeAt(0) - 97;
 }
 function chessPieces(game: Chess): Piece[] {
   return game.board().flat().map((piece) => piece ? { side: piece.color === 'w' ? 0 : 1, kind: piece.type.toUpperCase() } : null);
@@ -132,6 +136,8 @@ export default function ClassicGamesPage() {
   const chessRef = useRef(new Chess());
   const [chessVersion, setChessVersion] = useState(0);
   const [playVsBot, setPlayVsBot] = useState(false);
+  const [chessState, setChessState] = useState<ChessGame>(createChessGame);
+  const [promotionMove, setPromotionMove] = useState<ChessMove | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [wordGame, setWordGame] = useState(createWordGame);
   const [wordDictionary, setWordDictionary] = useState<ReadonlySet<string> | null>(null);
@@ -153,25 +159,11 @@ export default function ClassicGamesPage() {
   }, [id]);
   useEffect(() => () => { if (kayTimerRef.current !== null) window.clearTimeout(kayTimerRef.current); }, []);
 
-  useEffect(() => {
-    if (id !== 'chess' || !playVsBot || turn !== 1 || winner !== null) return;
-    const timer = window.setTimeout(() => {
-      const game = chessRef.current;
-      const move = chooseChessBotMove(game.fen());
-      if (!move) return;
-      game.move(move);
-      setPieces(chessPieces(game));
-      setTurn(0);
-      if (game.isCheckmate()) setWinner(1);
-      else if (game.isDraw()) setWinner(2);
-      setChessVersion((version) => version + 1);
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [id, playVsBot, turn, winner, chessVersion]);
-
   const reset = () => {
     if (id === 'chess') {
       chessRef.current = new Chess();
+      setChessState(createChessGame());
+      setPromotionMove(null);
       setPieces(chessPieces(chessRef.current));
       setTurn(0); setWinner(null); setSelected(null); setChessVersion((version) => version + 1);
       return;
@@ -185,14 +177,20 @@ export default function ClassicGamesPage() {
   const chessLastMove = chessGame.history({ verbose: true }).at(-1);
   const chessLegalTargets = selected === null || id !== 'chess'
     ? new Set<Square>()
-    : new Set(chessGame.moves({ square: chessIndexToSquare(selected), verbose: true }).map((move) => move.to));
-  const chessCheckedKing = chessGame.isCheck()
-    ? chessGame.board().flat().find((piece) => piece?.type === 'k' && piece.color === chessGame.turn())?.square
+    : new Set(getLegalChessMoves(chessState, selected).map((move) => chessIndexToSquare(move.to)));
+  const chessKingIndex = chessState.board.findIndex((piece) => piece?.side === chessState.turn && piece.kind === 'K');
+  const chessCheckedKing = isKingInCheck(chessState.board, chessState.turn) && chessKingIndex >= 0
+    ? chessIndexToSquare(chessKingIndex)
     : undefined;
+  const chessStatus = id === 'chess' ? getChessStatus(chessState) : null;
   const turnLabel = id === 'kay' && kayAnimating
     ? `Player ${turn + 1} is sowing…`
     : id === 'chess'
-    ? winner === null ? `${turn === 0 ? 'White' : 'Black'} to move${chessGame.isCheck() ? ' · Check' : ''}` : winner === 2 ? 'Draw' : chessGame.isCheckmate() ? `Checkmate — ${playVsBot ? winner === 0 ? 'You win' : 'Bot wins' : `${winner === 0 ? 'White' : 'Black'} wins`}` : playVsBot ? winner === 0 ? 'You win' : 'Bot wins' : `${winner === 0 ? 'White' : 'Black'} wins`
+      ? winner === null
+        ? `${chessState.turn === 0 ? 'White' : 'Black'} to move${chessStatus === 'check' ? ' · Check' : ''}`
+        : winner === 2 ? 'Draw' : chessStatus === 'checkmate'
+          ? `Checkmate — ${playVsBot ? winner === 0 ? 'You win' : 'Bot wins' : `${winner === 0 ? 'White' : 'Black'} wins`}`
+          : playVsBot ? winner === 0 ? 'You win' : 'Bot wins' : `${winner === 0 ? 'White' : 'Black'} wins`
     : id === 'words' && wordGame.status === 'finished'
       ? wordGame.winner === 2 ? 'Draw' : `Player ${(wordGame.winner ?? 0) + 1} wins`
       : gameOver ? winner === 2 ? 'Draw' : `Player ${(winner ?? 0) + 1} wins`
@@ -220,26 +218,59 @@ export default function ClassicGamesPage() {
       setWinner(p0 === p1 ? 2 : p0 > p1 ? 0 : 1);
     } else if (!scored) setTurn(turn === 0 ? 1 : 0);
   };
+  const finishChessMove = (move: ChessMove, promotion: ChessPieceKind = 'Q') => {
+    const next = playChessMove(chessState, move, promotion);
+    if (!next) return;
+    const moving = chessState.board[move.from];
+    chessGame.move({
+      from: chessIndexToSquare(move.from),
+      to: chessIndexToSquare(move.to),
+      ...(moving?.kind === 'P' && [0, 7].includes(Math.floor(move.to / 8))
+        ? { promotion: promotion.toLowerCase() }
+        : {}),
+    });
+    setChessState(next);
+    setPieces(chessPieces(chessGame));
+    setTurn(next.turn);
+    setSelected(null);
+    setPromotionMove(null);
+    setChessVersion((version) => version + 1);
+    const status = getChessStatus(next);
+    if (status === 'checkmate') setWinner(chessState.turn);
+    else if (status === 'stalemate' || chessGame.isDraw()) setWinner(2);
+  };
+
+  useEffect(() => {
+    if (id !== 'chess' || !playVsBot || turn !== 1 || winner !== null) return;
+    const timer = window.setTimeout(() => {
+      const move = chooseChessBotMove(chessGame.fen());
+      if (!move) return;
+      finishChessMove({
+        from: chessSquareToIndex(move.from),
+        to: chessSquareToIndex(move.to),
+      }, (move.promotion?.toUpperCase() as ChessPieceKind | undefined) ?? 'Q');
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [id, playVsBot, turn, winner, chessVersion]);
   const makeMove = (index: number) => {
     if (winner !== null) return;
     if (id === 'chess') {
       if (playVsBot && turn === 1) return;
-      const game = chessRef.current;
-      const piece = pieces[index];
+      if (promotionMove) return;
+      const piece = chessState.board[index];
       if (selected === null) { if (piece?.side === turn) setSelected(index); return; }
       if (piece?.side === turn) { setSelected(index); return; }
-      const from = chessIndexToSquare(selected), to = chessIndexToSquare(index);
-      const legal = game.moves({ square: from, verbose: true }).some((move) => move.to === to);
-      if (!legal) { setSelected(null); return; }
-      try {
-        game.move({ from, to, promotion: 'q' });
-        setPieces(chessPieces(game));
+      const move = { from: selected, to: index };
+      if (!getLegalChessMoves(chessState, selected).some((candidate) => candidate.to === index)) {
         setSelected(null);
-        setTurn(game.turn() === 'w' ? 0 : 1);
-        if (game.isCheckmate()) setWinner(turn);
-        else if (game.isDraw()) setWinner(2);
-        setChessVersion((version) => version + 1);
-      } catch { setSelected(null); }
+        return;
+      }
+      const moving = chessState.board[selected];
+      const row = Math.floor(index / 8);
+      if (moving?.kind === 'P' && (row === 0 || row === 7)) {
+        setPromotionMove(move);
+        setSelected(null);
+      } else finishChessMove(move);
       return;
     }
     if (id === 'four-in-a-row') {
@@ -329,7 +360,7 @@ export default function ClassicGamesPage() {
       if (capturedIndex !== null) next[capturedIndex] = null;
       if (id === 'dame' && ((turn === 0 && toR === 0) || (turn === 1 && toR === 7))) next[index] = { ...moving, kind: 'K' };
       setPieces(next); setSelected(null);
-        if (id === 'dame' && !next.some((candidate) => candidate?.side !== turn)) setWinner(turn);
+      if (id === 'dame' && !next.some((candidate) => candidate?.side !== turn)) setWinner(turn);
       else setTurn(turn === 0 ? 1 : 0);
     }
   };
@@ -381,8 +412,7 @@ export default function ClassicGamesPage() {
 
   if (isChessGame(id)) return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
-    {id === 'chess' && winner !== null && <GameEndSequence gameName="Chess" perspective={winner === 2 ? 'draw' : playVsBot ? winner === 0 ? 'winner' : 'opponent' : 'local'} winnerName={playVsBot ? winner === 0 ? 'You' : 'The Yard bot' : winner === 0 ? 'White' : 'Black'} opponentName={playVsBot ? 'The Yard bot' : winner === 0 ? 'Black' : 'White'} onPlayAgain={reset} />}
-    {id === 'dame' && winner !== null && <GameEndSequence gameName="Dame" perspective={winner === 2 ? 'draw' : 'local'} winnerName={winner === 0 ? 'Player 1' : 'Player 2'} opponentName={winner === 0 ? 'Player 2' : 'Player 1'} onPlayAgain={reset} />}
+    {winner !== null && <GameEndSequence gameName="Chess" perspective={winner === 2 ? 'draw' : playVsBot ? winner === 0 ? 'winner' : 'opponent' : 'local'} winnerName={playVsBot ? winner === 0 ? 'You' : 'The Yard bot' : winner === 2 ? 'Players' : winner === 0 ? 'White' : 'Black'} opponentName={playVsBot ? 'The Yard bot' : winner === 0 ? 'Black' : 'White'} onPlayAgain={reset} />}
     <main className="yard-main" style={{ maxWidth: 980 }}>
       <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
       <header className="yard-heading" style={{ marginTop: 16 }}>
@@ -412,7 +442,7 @@ export default function ClassicGamesPage() {
               role="gridcell"
               aria-label={`${square}${piece ? ` ${isWhite ? 'White' : 'Black'} ${piece.kind}` : ' empty'}${isLegal ? ', legal move' : ''}${isCheck ? ', king in check' : ''}`}
               onClick={() => makeMove(i)}
-              disabled={winner !== null || (playVsBot && turn === 1)}
+              disabled={winner !== null || promotionMove !== null || (playVsBot && turn === 1)}
               className={`${(Math.floor(i / 8) + i % 8) % 2 ? 'dark' : 'light'}${piece ? ' occupied' : ''}${selected === i ? ' selected' : ''}${isLastMove ? ' last-move' : ''}${isCheck ? ' in-check' : ''}${isLegal ? ' legal' : ''}`}
             >{piece ? <ChessSprite piece={piece} /> : isLegal ? <i aria-hidden="true" /> : null}</button>;
           })}
@@ -426,8 +456,18 @@ export default function ClassicGamesPage() {
               })}</ol>}
           </section>
         </div>
+        {promotionMove && <div role="group" aria-label="Choose a promotion piece" style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 14 }}>
+          <strong style={{ alignSelf: 'center', color: '#f8f6ee' }}>Promote pawn:</strong>
+          {(['Q', 'R', 'B', 'N'] as const).map((kind) => <button
+            key={kind}
+            type="button"
+            className="yard-button"
+            aria-label={`Promote to ${({ Q: 'queen', R: 'rook', B: 'bishop', N: 'knight' } as const)[kind]}`}
+            onClick={() => finishChessMove(promotionMove, kind)}
+          >{chessGlyph({ side: chessState.turn, kind })} {{ Q: 'Queen', R: 'Rook', B: 'Bishop', N: 'Knight' }[kind]}</button>)}
+        </div>}
         <p style={{ maxWidth: 470, margin: '14px auto 0', textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>
-          Green dots show legal moves. Gold rings mark captures; the red square marks a king in check. Castling, en passant, promotion, and checkmate are handled by the rules engine.
+          Green dots show legal moves. Gold rings mark captures; the red square marks a king in check. Castling, en passant, promotion, checkmate, and stalemate are handled by the rules engine.
         </p>
       </section>
     </main>
