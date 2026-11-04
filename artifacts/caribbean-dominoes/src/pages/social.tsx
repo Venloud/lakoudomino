@@ -1,6 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
+import { Domino } from '../../../../lakou-engine/ui/Domino';
 import {
   Bell, ChevronDown, CircleHelp, Crosshair, Gamepad2, Grid3X3, LogOut, MessageCircle, Plus,
   Trophy, ArrowUpRight,
@@ -29,7 +30,6 @@ const presenceText = (status?: string | null, detail?: string) => {
   if (status === 'online') return 'Online';
   return 'Offline';
 };
-
 export function YardHeader({ active, username, notifications, onLogout }: { active: Destination; username?: string; notifications: number; onLogout: () => void }) {
   const [menu, setMenu] = useState(false);
   const [, setLocation] = useLocation();
@@ -64,7 +64,7 @@ function Panel({ title, action, children, className = '' }: { title: string; act
 function EmptyHistory({ onGames }: { onGames: () => void }) {
   return <div className="yard-empty" data-testid="empty-recent-matches">
     <strong>No recorded matches yet</strong>
-    <p>Your completed Lakou Domino matches will appear here. Start a game to put your first result on the board.</p>
+    <p>Your completed Domino matches will appear here. Start a game to put your first result on the board.</p>
     <button type="button" className="yard-button" onClick={onGames} data-testid="button-play-first-match">Find a game <ArrowUpRight size={14} /></button>
   </div>;
 }
@@ -139,12 +139,12 @@ export default function SocialPage({ page }: { page: Destination }) {
     onError: () => setNotice('That invite is no longer available.'),
   });
   const title = page === 'home' ? 'Meet at the table.' : page === 'games' ? 'Games' : page === 'friends' ? 'Friends' : page === 'leaderboard' ? 'Leaderboard' : 'Your profile';
-  const subtitle = page === 'home' ? 'Find your crew, jump into a match, and see who takes the points.' : page === 'games' ? 'One game is on the table. More games are on the way.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Lakou Domino record and recent results.';
+  const subtitle = page === 'home' ? 'Find your crew, jump into a match, and see who takes the points.' : page === 'games' ? 'Play local foundations now. Domino and Tic-Tac-Toe also support online rooms.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Domino record and recent results.';
   const recentMatches = recent.data?.matches ?? [];
   const friendRows = friendData?.friends ?? [];
-  const goGames = () => setLocation('/games/lakou');
+   const goGames = () => setLocation('/games/domino');
   const renderHistory = () => {
-    if (!signedIn) return <div className="yard-empty" data-testid="empty-history-sign-in"><strong>Sign in to see your match history</strong><p>Recorded results belong to your Lakou account. Sign in to see your recent games and standings.</p><Link href="/sign-in" className="yard-button primary" data-testid="link-history-sign-in">Sign in</Link></div>;
+     if (!signedIn) return <div className="yard-empty" data-testid="empty-history-sign-in"><strong>Sign in to see your match history</strong><p>Recorded results belong to your 509 Yard account. Sign in to see your recent games and standings.</p><Link href="/sign-in" className="yard-button primary" data-testid="link-history-sign-in">Sign in</Link></div>;
     if (recent.isLoading) return <div className="yard-loading" data-testid="loading-recent-matches"><i className="yard-skeleton" /><i className="yard-skeleton" /><i className="yard-skeleton" /></div>;
     if (recent.isError) return <div className="yard-empty" role="alert" data-testid="error-recent-matches"><strong>Match history is unavailable</strong><p>We couldn't load your recorded matches.</p><button className="yard-button" onClick={() => void recent.refetch()} data-testid="button-retry-history">Try again</button></div>;
     if (!recentMatches.length) return <EmptyHistory onGames={goGames} />;
@@ -167,7 +167,7 @@ export default function SocialPage({ page }: { page: Destination }) {
         <span className="yard-avatar">{initials(request.username)}</span><span style={{ flex: 1 }}><b>{request.username}</b><small>Wants to be friends</small></span>
         <span className="yard-list-actions"><button className="yard-small-button" onClick={() => acceptRequest.mutate({ id: request.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`accept-request-${request.id}`}>Accept</button><button className="yard-small-button" onClick={() => declineRequest.mutate({ id: request.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`decline-request-${request.id}`}>Decline</button></span>
       </div>)}</div> : null}
-      {friendData?.invites.length ? <div className="yard-section-space"><p className="yard-kicker">Game invitations · {friendData.invites.length}</p>{friendData.invites.map((invite) => <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to {invite.game === 'tic-tac-toe' ? 'Tic-Tac-Toe' : 'Lakou Domino'} · {invite.roomCode}</small></span><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button></div>)}</div> : null}
+      {friendData?.invites.length ? <div className="yard-section-space"><p className="yard-kicker">Game invitations · {friendData.invites.length}</p>{friendData.invites.map((invite) => <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to {invite.game === 'tic-tac-toe' ? 'Tic-Tac-Toe' : 'Domino'} · {invite.roomCode}</small></span><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button></div>)}</div> : null}
       <div className="yard-section-space">
         <p className="yard-kicker">Your friends · {friendRows.length}</p>
         {friendRows.length ? friendRows.map((friend) => <div className="yard-friend-row" key={friend.id} data-testid={`friend-${friend.id}`}><span className="yard-avatar">{initials(friend.username)}</span><span style={{ flex: 1 }}><b>{friend.username}</b><small className="yard-presence"><i style={{ background: friend.status ? 'var(--yard-accent)' : '#66676c' }} />{presenceText(friend.status?.status, friend.status?.detail)}</small></span>{friend.status?.status === 'game' && friend.status.roomCode && <Link className="yard-small-button" href={`/room/${friend.status.roomCode}`} data-testid={`watch-friend-${friend.id}`}>Watch</Link>}</div>) : <div className="yard-empty"><strong>Start your circle</strong><p>Add a username above to find a friend and invite them to the next table.</p></div>}
@@ -179,7 +179,7 @@ export default function SocialPage({ page }: { page: Destination }) {
     <main className="yard-main">
       {notice && <div className="yard-notice" role="status" data-testid="status-social-notice">{notice}</div>}
       <div className={`yard-heading${page === 'home' ? ' yard-home-heading' : ''}`}><div>{page !== 'home' && <p className="yard-kicker">509 YARD / {page.toUpperCase()}</p>}<h1>{title}</h1><p className="yard-subtitle">{subtitle}</p></div>
-        {page === 'home' ? <div className="yard-intro-actions"><Link className="yard-button primary" href="/games" data-testid="button-explore-games"><Gamepad2 size={15} /> Browse games</Link><Link className="yard-button" href="/friends" data-testid="button-find-friends">Find your crew</Link></div> : page === 'games' && <Link className="yard-button primary" href="/games/lakou" data-testid="button-play-lakou"><Gamepad2 size={15} /> Play Lakou Domino</Link>}
+        {page === 'home' ? <div className="yard-intro-actions"><Link className="yard-button primary" href="/games" data-testid="button-explore-games"><Gamepad2 size={15} /> Browse games</Link><Link className="yard-button" href="/friends" data-testid="button-find-friends">Find your crew</Link></div> : page === 'games' && <Link className="yard-button primary" href="/games/domino" data-testid="button-play-lakou"><Gamepad2 size={15} /> Play Domino</Link>}
       </div>
       {page === 'home' && <>
         <div className="yard-home-grid">
@@ -188,9 +188,9 @@ export default function SocialPage({ page }: { page: Destination }) {
           </Panel>
           <Panel title="Available games">
             <div className="yard-available-game" data-testid="card-featured-game">
-              <div className="yard-game-tile" aria-hidden="true"><i /><i /><i /></div>
-              <div className="yard-available-copy"><strong>Lakou Domino</strong><span>Multiplayer dominoes</span></div>
-              <Link href="/games/lakou" className="yard-button primary" data-testid="button-open-lobby">Play</Link>
+              <div className="yard-game-tile" aria-hidden="true"><Domino first={6} second={6} orientation="v" unit={26} skin="black-on-white" /></div>
+              <div className="yard-available-copy"><strong>Domino</strong><span>Multiplayer dominoes</span></div>
+              <Link href="/games/domino" className="yard-button primary" data-testid="button-open-lobby">Play</Link>
             </div>
             <div className="yard-coming-soon"><Crosshair size={17} /><span>Mòpyon is up next</span><Link href="/games/mopyon" className="yard-panel-link">Preview</Link></div>
             <div className="yard-coming-soon yard-games-queue"><Gamepad2 size={17} /><span>Coming after: Box (Dots and Boxes-style) → Kay (Mancala-style) → Chess → Dame (Checkers) → Word games (Scrabble-style) → Four in a Row → Filler → Block Drop</span></div>
@@ -207,21 +207,23 @@ export default function SocialPage({ page }: { page: Destination }) {
         </div>
       </>}
       {page === 'games' && <div className="yard-dashboard-grid">
-        <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Lakou Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/lakou" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true" /></section>
-            <div className="yard-panel yard-section-space yard-next-game"><div className="yard-panel-body"><p className="yard-kicker">COMING NEXT</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Mòpyon</h2><p className="yard-subtitle" style={{ margin: 0 }}>Five in a row, played on the intersections of a 15 × 15 board.</p><Link href="/games/mopyon" className="yard-button yard-section-space" data-testid="button-preview-mopyon"><Crosshair size={15} /> Try local game</Link><small className="yard-next-game-note">Two players, one screen. Online rooms can come next.</small><div className="yard-coming-soon yard-games-queue"><Gamepad2 size={15} /><span>Then: Box (Dots and Boxes-style) → Kay (Mancala-style) → Chess → Dame (Checkers) → Word games (Scrabble-style) → Four in a Row → Filler → Block Drop</span></div></div></div>
-            <div className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">PLAYABLE FOUNDATION</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Block Drop</h2><p className="yard-subtitle" style={{ margin: 0 }}>A falling-block arcade game. Clear lines and build your score.</p><Link href="/games/block-drop" className="yard-button yard-section-space" data-testid="button-play-block-drop"><Gamepad2 size={15} /> Play Block Drop</Link></div></div>
-            <div className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">AVAILABLE NOW</p><h2 style={{ fontSize: 17, margin: '0 0 5px' }}>Tic-Tac-Toe</h2><p className="yard-subtitle" style={{ margin: 0 }}>Create a room, invite a friend, and play across devices in Regular or Yard Mode.</p><Link href="/games/tic-tac-toe" className="yard-button yard-section-space" data-testid="button-preview-tic-tac-toe"><Grid3X3 size={15} /> Play Tic-Tac-Toe</Link><small className="yard-next-game-note">Share a room link or invite a Lakou friend.</small></div></div>
+        <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/domino" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true"><Domino first={6} second={6} orientation="v" unit={58} skin="black-on-white" /></div></section>
+            <section className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">PLAYABLE FOUNDATIONS</p><h2 style={{ fontSize: 17, margin: '0 0 8px' }}>Choose a game</h2><p className="yard-subtitle" style={{ margin: 0 }}>Local play is ready for the games in the yard. Online rooms can come next.</p>
+              <div className="yard-game-foundation-list">
+                {[['Tic-Tac-Toe', '/games/tic-tac-toe'], ['Mòpyon', '/games/mopyon'], ['Box · Dots and Boxes', '/games/box'], ['Kay · Mancala', '/games/kay'], ['Chess', '/games/chess'], ['Dame · Checkers', '/games/dame'], ['Word Yard', '/games/words'], ['Four in a Row', '/games/four-in-a-row'], ['Filler', '/games/filler'], ['Block Drop', '/games/block-drop']].map(([name, href]) => <Link key={href} href={href} className="yard-coming-soon"><Gamepad2 size={15} /><span>{name}</span><span className="yard-status">Play</span></Link>)}
+              </div>
+            </div></section>
         </div>
-        <Panel title="Live activity"><div className="yard-metric"><b>{lobby.data?.onlinePlayers ?? '—'}</b><span>Players in the yard</span></div><p className="yard-subtitle">Open the Lakou lobby to browse live tables or start a match.</p></Panel>
+        <Panel title="Live activity"><div className="yard-metric"><b>{lobby.data?.onlinePlayers ?? '—'}</b><span>Players in the yard</span></div><p className="yard-subtitle">Open the Domino lobby to browse live tables or start a match.</p></Panel>
       </div>}
       {page === 'friends' && <div className="yard-dashboard-grid"><Panel title="Your circle" action={<span className="yard-status">{signedIn ? `${friendRows.length} friends` : 'Sign in required'}</span>}>{renderFriends()}</Panel>
-        <div className="yard-side-stack"><Panel title="Table activity"><p className="yard-subtitle" style={{ margin: 0 }}>See who's online, send table invitations, and jump into games with friends.</p><Link href="/games/lakou" className="yard-button yard-section-space" data-testid="button-open-game-lobby">Open game lobby</Link></Panel><Panel title="Messages"><div className="yard-empty"><strong>Keep the conversation at the table</strong><p>Messages are available inside live Lakou Domino rooms.</p><Link href="/games/lakou" className="yard-panel-link">Find a table</Link></div></Panel></div>
+        <div className="yard-side-stack"><Panel title="Table activity"><p className="yard-subtitle" style={{ margin: 0 }}>See who's online, send table invitations, and jump into games with friends.</p><Link href="/games/domino" className="yard-button yard-section-space" data-testid="button-open-game-lobby">Open game lobby</Link></Panel><Panel title="Messages"><div className="yard-empty"><strong>Keep the conversation at the table</strong><p>Messages are available inside live Domino rooms.</p><Link href="/games/domino" className="yard-panel-link">Find a table</Link></div></Panel></div>
       </div>}
-      {page === 'leaderboard' && <Panel title="Crown points" action={<span className="yard-status">Lakou Domino · Points mode</span>}>
-        {lobby.isLoading ? <div className="yard-loading"><i className="yard-skeleton" /><i className="yard-skeleton" /><i className="yard-skeleton" /></div> : lobby.isError ? <div className="yard-empty" role="alert"><strong>Standings unavailable</strong><p>We couldn't load the live leaderboard.</p><button className="yard-button" onClick={() => void lobby.refetch()}>Try again</button></div> : leaderRows.length ? <div className="yard-rows">{leaderRows.map((row, index) => <div className="yard-rank-row" key={row.id} data-testid={`leaderboard-row-${row.id}`}><b>{String(index + 1).padStart(2, '0')}</b><span>{row.name}{row.isMe ? ' (you)' : ''}</span><strong>{row.points.toLocaleString()} CP</strong></div>)}</div> : <div className="yard-empty"><Trophy size={20} color="var(--yard-accent)" /><strong>No standings yet</strong><p>Points games against real players earn crown points. Start a match to join the board.</p><Link className="yard-button primary" href="/games/lakou">Play Points</Link></div>}
+      {page === 'leaderboard' && <Panel title="Crown points" action={<span className="yard-status">Domino · Points mode</span>}>
+        {lobby.isLoading ? <div className="yard-loading"><i className="yard-skeleton" /><i className="yard-skeleton" /><i className="yard-skeleton" /></div> : lobby.isError ? <div className="yard-empty" role="alert"><strong>Standings unavailable</strong><p>We couldn't load the live leaderboard.</p><button className="yard-button" onClick={() => void lobby.refetch()}>Try again</button></div> : leaderRows.length ? <div className="yard-rows">{leaderRows.map((row, index) => <div className="yard-rank-row" key={row.id} data-testid={`leaderboard-row-${row.id}`}><b>{String(index + 1).padStart(2, '0')}</b><span>{row.name}{row.isMe ? ' (you)' : ''}</span><strong>{row.points.toLocaleString()} CP</strong></div>)}</div> : <div className="yard-empty"><Trophy size={20} color="var(--yard-accent)" /><strong>No standings yet</strong><p>Points games against real players earn crown points. Start a match to join the board.</p><Link className="yard-button primary" href="/games/domino">Play Points</Link></div>}
       </Panel>}
-      {page === 'profile' && <>{!signedIn ? <Panel title="Your Lakou account"><div className="yard-empty"><strong>Sign in to see your profile</strong><p>Your record and recorded matches are attached to your account. Sign in to view them here.</p><Link href="/sign-in" className="yard-button primary" data-testid="link-profile-sign-in">Sign in</Link></div></Panel> : <>
-        <Panel title="Player card"><div className="yard-profile-card"><span className="yard-avatar">{initials(user?.username ?? '')}</span><span><p className="yard-kicker">PLAYER</p><h2 style={{ margin: 0, fontSize: 20 }}>{user?.username}</h2><small className="yard-status">Lakou Domino account</small></span></div></Panel>
+      {page === 'profile' && <>{!signedIn ? <Panel title="Your 509 Yard account"><div className="yard-empty"><strong>Sign in to see your profile</strong><p>Your record and recorded matches are attached to your account. Sign in to view them here.</p><Link href="/sign-in" className="yard-button primary" data-testid="link-profile-sign-in">Sign in</Link></div></Panel> : <>
+        <Panel title="Player card"><div className="yard-profile-card"><span className="yard-avatar">{initials(user?.username ?? '')}</span><span><p className="yard-kicker">PLAYER</p><h2 style={{ margin: 0, fontSize: 20 }}>{user?.username}</h2><small className="yard-status">509 Yard account</small></span></div></Panel>
         <div className="yard-profile-stat-grid yard-section-space">
           <div className="yard-profile-stat"><strong>{user?.crownPoints ?? 0}</strong><span>Crown points</span></div><div className="yard-profile-stat"><strong>{user?.games ?? 0}</strong><span>Domino games</span></div><div className="yard-profile-stat"><strong>{user?.wins ?? 0}</strong><span>Domino wins</span></div><div className="yard-profile-stat"><strong>{user?.gold ?? 0} / {user?.silver ?? 0} / {user?.bronze ?? 0}</strong><span>Domino medals</span></div>
         </div>
@@ -235,7 +237,7 @@ export default function SocialPage({ page }: { page: Destination }) {
           />
         </Panel></div>
       </>}</>}
-      <footer className="yard-section-space" style={{ color: 'var(--yard-muted)', fontSize: 10 }}><CircleHelp size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />509 Yard · Lakou Domino is the first game. <Link href="/how-to-play" className="yard-panel-link" style={{ marginLeft: 6 }}>How to play</Link></footer>
+      <footer className="yard-section-space" style={{ color: 'var(--yard-muted)', fontSize: 10 }}><CircleHelp size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />509 Yard · Domino is the first game. <Link href="/how-to-play" className="yard-panel-link" style={{ marginLeft: 6 }}>How to play</Link></footer>
     </main>
   </div>;
 }

@@ -338,6 +338,20 @@ paths:
       tags: [auth]
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AuthCredentials" } } } }
       responses: { "200": { description: Signed in, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } } }
+  /auth/google:
+    get:
+      operationId: googleAuthStart
+      tags: [auth]
+      summary: Start Google sign-in
+      responses: { "302": { description: Redirect to Google authorization } }
+  /auth/google/callback:
+    get:
+      operationId: googleAuthCallback
+      tags: [auth]
+      summary: Complete Google sign-in
+      responses:
+        "302": { description: Redirect back to the app after sign-in }
+        "400": { description: Invalid OAuth response }
   /auth/logout:
     post:
       operationId: logout

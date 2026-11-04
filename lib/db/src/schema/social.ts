@@ -3,7 +3,7 @@ import { integer, boolean, pgTable, text, timestamp, uuid, uniqueIndex } from "d
 export const dominoUsers = pgTable("domino_users", {
   id: uuid("id").defaultRandom().primaryKey(),
   username: text("username").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  passwordHash: text("password_hash"),
   crownPoints: integer("crown_points").notNull().default(0),
   games: integer("games").notNull().default(0),
   wins: integer("wins").notNull().default(0),
@@ -13,6 +13,14 @@ export const dominoUsers = pgTable("domino_users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
 });
+export const dominoUserIdentities = pgTable("domino_user_identities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull(),
+  provider: text("provider").notNull(),
+  providerUserId: text("provider_user_id").notNull(),
+  email: text("email").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("user_identity_provider_subject_idx").on(t.provider, t.providerUserId)]);
 export const dominoSessions = pgTable("domino_sessions", {
   tokenHash: text("token_hash").primaryKey(),
   userId: uuid("user_id"),

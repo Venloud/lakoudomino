@@ -14,10 +14,10 @@ type GameGuide = {
 
 const gameGuides: GameGuide[] = [
   {
-    name: 'Lakou Domino',
+    name: 'Domino',
     status: 'Available now',
     intro: 'Caribbean double-six dominoes. The table has 28 tiles; each player starts with 7.',
-    href: '/games/lakou',
+    href: '/games/domino',
     steps: [
       'On your turn, place a tile that matches one of the open ends. Matching numbers touch.',
       'If you have no legal play, pass. In four-player games, players do not draw from the boneyard.',
@@ -66,8 +66,9 @@ const gameGuides: GameGuide[] = [
   },
   {
     name: 'Box',
-    status: 'Coming soon',
+    status: 'Available now',
     intro: 'A turn-based game inspired by Dots and Boxes.',
+    href: '/games/box',
     steps: [
       'Take turns drawing one line between neighboring dots.',
       'Complete the fourth side of a square to claim that box and take another turn.',
@@ -76,51 +77,57 @@ const gameGuides: GameGuide[] = [
   },
   {
     name: 'Kay',
-    status: 'Coming soon',
+    status: 'Available now',
     intro: 'A sowing game inspired by Mancala, played with stones in small pits.',
+    href: '/games/kay',
     steps: [
       'Pick up the stones from one of your pits and distribute them one at a time around the board.',
       'The aim is to collect more stones than your opponent.',
     ],
-    note: 'Kay’s exact sowing direction, capture rules, and ending conditions are still to be set for 509 Yard. This guide will be updated before the game launches.',
+    note: 'This starter uses the common Kalah rules: six pits each, four stones per pit, capture from an empty pit, and keep sowing when your last stone lands in your store.',
   },
   {
     name: 'Chess',
-    status: 'Coming soon',
-    intro: 'Use your pieces to threaten the opponent’s king and deliver checkmate.',
+    status: 'Available now',
+    intro: 'Move pieces across the board and capture the opposing king in this local starter version.',
+    href: '/games/chess',
     steps: [
       'Pawns move forward one square (or two on their first move) and capture diagonally. A pawn reaching the far side promotes to another piece.',
       'Rooks move along ranks and files; bishops move diagonally; queens move in either direction.',
       'Knights move in an L shape and can jump over pieces. Kings move one square in any direction, but never into check.',
       'Checkmate the opposing king: it is in check and has no legal escape. White moves first.',
     ],
+    note: 'This first local version supports basic piece movement, captures, and pawn promotion. Check/checkmate, castling, and en passant are not included yet.',
   },
   {
     name: 'Dame',
-    status: 'Coming soon',
+    status: 'Available now',
     intro: 'Dame, also known as checkers, is a diagonal capture game.',
+    href: '/games/dame',
     steps: [
       'Move pieces diagonally on the dark squares. Jump over an opposing piece to capture it.',
       'Reach the far side of the board to promote a piece to a king; kings can move diagonally in either direction.',
       'Win by capturing or blocking all of your opponent’s pieces.',
     ],
-    note: 'Dame has regional rule variations. 509 Yard’s exact capture and promotion rules will be shown here before launch.',
+    note: 'This local foundation uses basic movement, captures, and promotion. Regional Dame rules can be refined later.',
   },
   {
     name: 'Word games',
-    status: 'Coming soon',
-    intro: 'A word-building game inspired by Scrabble.',
+    status: 'Available now',
+    intro: 'Build words from your letter rack and score points from each letter.',
+    href: '/games/words',
     steps: [
-      'Use letter tiles to form words that connect to the words already on the board.',
-      'Score points from the letters you play and any bonus squares they cover.',
-      'The player with the highest score at the end wins.',
+      'Take turns building words from the letters in your rack.',
+      'Each letter has a point value; used letters are replenished from the tile bag.',
+      'Use the starter dictionary and pass if you cannot make a word.',
     ],
-    note: 'The tile set, dictionary, board bonuses, and turn rules for 509 Yard are still being planned.',
+    note: 'This foundation focuses on local word-building and scoring. A shared board, complete dictionary, and bonus squares can be added later.',
   },
   {
     name: 'Four in a Row',
-    status: 'Coming soon',
+    status: 'Available now',
     intro: 'Drop pieces into a shared grid and try to connect four.',
+    href: '/games/four-in-a-row',
     steps: [
       'Take turns dropping one piece into a column; it lands in the lowest open space.',
       'Connect four of your pieces horizontally, vertically, or diagonally to win.',
@@ -129,11 +136,14 @@ const gameGuides: GameGuide[] = [
   },
   {
     name: 'Filler',
-    status: 'Coming soon',
-    intro: 'Filler is on the 509 Yard game list.',
+    status: 'Available now',
+    intro: 'Claim colored tiles by growing your connected territory from your corner.',
+    href: '/games/filler',
     steps: [
-      '509 Yard’s Filler rules and controls have not been defined yet.',
-      'This guide will include the full instructions when the playable version is ready.',
+      'Each player starts in an opposite corner on a random six-color board.',
+      'Take turns choosing a color different from both players’ current territory colors.',
+      'Your connected region absorbs every touching tile of the chosen color.',
+      'When the board is full, the player with more tiles wins; an equal count is a draw.',
     ],
   },
 ];
@@ -178,7 +188,7 @@ export default function HowToPlayPage() {
                   <ol>{game.steps.map((step) => <li key={step}>{step}</li>)}</ol>
                   {game.note && <p className="yard-guide-note"><BookOpen size={15} />{game.note}</p>}
                   {game.href && <Link className="yard-button primary yard-guide-play" href={game.href}>Play {game.name}</Link>}
-                  {game.name === 'Lakou Domino' && (
+                  {game.name === 'Domino' && (
                     <div className="yard-guide-modes">
                       <b>Regular</b><span>First out wins the hand; if the game locks, the fewest pips wins.</span>
                       <b>Points</b><span>Build score with open-end totals and Lakou bonuses until a player fills their score row.</span>

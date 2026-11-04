@@ -429,7 +429,7 @@ export default function Home() {
         onPlayFriends={() => createTable({ name: defaultName || 'Guest', mode: 'regular', rowBoxes: 10, turnSeconds: 30, private: true })}
         onPracticeBots={() => createTable({ name: defaultName || 'Guest', mode: 'regular', rowBoxes: 10, turnSeconds: 30, private: true }, true)}
         onProfileMenu={handleLogout}
-        onEditProfile={() => setNotice('Your username and record come from your Lakou account.')}
+        onEditProfile={() => setNotice('Your username and record come from your 509 Yard account.')}
         friends={signedIn ? friendViews : []}
         requests={signedIn ? requests : []}
         onAddFriend={(username) => addFriend.mutate({ data: { username } }, { onSuccess: refreshSocial, onError: () => setNotice('We could not send that friend request.') })}

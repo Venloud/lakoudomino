@@ -229,7 +229,7 @@ export default function TicTacToePage() {
   const sendFriendInvite = (friendId: string) => {
     if (!code) return;
     inviteFriend.mutate({ data: { friendId, roomCode: code } }, {
-      onSuccess: () => setNotice('Invite sent. Your friend can join from their Lakou inbox.'),
+      onSuccess: () => setNotice('Invite sent. Your friend can join from their 509 Yard inbox.'),
       onError: () => setNotice('We could not send that invite. Check that the room is still waiting.'),
     });
   };
@@ -403,7 +403,7 @@ function OnlineGame(props: {
           </div>
           {snapshot.mode === 'yard' && <p className="yard-tic-rule-note">Your move routes the other player to the matching small grid. If that grid is closed, they can choose any open one.</p>}
           {props.userId && snapshot.status === 'waiting' && props.friends.length > 0 && <div className="yard-tic-friend-invites">
-            <label htmlFor="tic-friend-invite">Invite a Lakou friend</label>
+            <label htmlFor="tic-friend-invite">Invite a 509 Yard friend</label>
             <select id="tic-friend-invite" className="yard-input" defaultValue="" onChange={(event) => event.target.value && props.onInviteFriend(event.target.value)} disabled={props.invitePending}>
               <option value="">Choose a friend</option>
               {props.friends.map((friend) => <option key={friend.id} value={friend.id}>{friend.username}</option>)}

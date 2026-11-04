@@ -1891,6 +1891,160 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getLoginMutationOptions(options));
     }
 
+export const getGoogleAuthStartUrl = () => {
+
+
+
+
+  return `/api/auth/google`
+}
+
+/**
+ * @summary Start Google sign-in
+ */
+export const googleAuthStart = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getGoogleAuthStartUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGoogleAuthStartQueryKey = () => {
+    return [
+    `/api/auth/google`
+    ] as const;
+    }
+
+
+export const getGoogleAuthStartQueryOptions = <TData = Awaited<ReturnType<typeof googleAuthStart>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof googleAuthStart>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGoogleAuthStartQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof googleAuthStart>>> = ({ signal }) => googleAuthStart({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof googleAuthStart>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GoogleAuthStartQueryResult = NonNullable<Awaited<ReturnType<typeof googleAuthStart>>>
+export type GoogleAuthStartQueryError = ErrorType<void>
+
+
+/**
+ * @summary Start Google sign-in
+ */
+
+export function useGoogleAuthStart<TData = Awaited<ReturnType<typeof googleAuthStart>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof googleAuthStart>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGoogleAuthStartQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGoogleAuthCallbackUrl = () => {
+
+
+
+
+  return `/api/auth/google/callback`
+}
+
+/**
+ * @summary Complete Google sign-in
+ */
+export const googleAuthCallback = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getGoogleAuthCallbackUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGoogleAuthCallbackQueryKey = () => {
+    return [
+    `/api/auth/google/callback`
+    ] as const;
+    }
+
+
+export const getGoogleAuthCallbackQueryOptions = <TData = Awaited<ReturnType<typeof googleAuthCallback>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof googleAuthCallback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGoogleAuthCallbackQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof googleAuthCallback>>> = ({ signal }) => googleAuthCallback({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof googleAuthCallback>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GoogleAuthCallbackQueryResult = NonNullable<Awaited<ReturnType<typeof googleAuthCallback>>>
+export type GoogleAuthCallbackQueryError = ErrorType<void>
+
+
+/**
+ * @summary Complete Google sign-in
+ */
+
+export function useGoogleAuthCallback<TData = Awaited<ReturnType<typeof googleAuthCallback>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof googleAuthCallback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGoogleAuthCallbackQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getLogoutUrl = () => {
 
 

@@ -13,6 +13,7 @@ import HowToPlayPage from '@/pages/how-to-play';
 import TicTacToePage from '@/pages/tic-tac-toe';
 import MopyonPage from '@/pages/mopyon';
 import BlockDropPage from '@/pages/block-drop';
+import ClassicGamesPage from '@/pages/classic-games';
 import {
   Route,
   Switch,
@@ -34,10 +35,18 @@ function Router() {
          <Route path="/games/mopyon" component={MopyonPage} />
          <Route path="/games/block-drop" component={BlockDropPage} />
          <Route path="/games/tic-tac-toe/:code" component={TicTacToePage} />
+         <Route path="/games/box" component={ClassicGamesPage} />
+         <Route path="/games/kay" component={ClassicGamesPage} />
+         <Route path="/games/chess" component={ClassicGamesPage} />
+         <Route path="/games/dame" component={ClassicGamesPage} />
+         <Route path="/games/words" component={ClassicGamesPage} />
+         <Route path="/games/four-in-a-row" component={ClassicGamesPage} />
+         <Route path="/games/filler" component={ClassicGamesPage} />
          <Route path="/friends"><SocialPage page="friends" /></Route>
          <Route path="/leaderboard"><SocialPage page="leaderboard" /></Route>
          <Route path="/profile"><SocialPage page="profile" /></Route>
-         <Route path="/games/lakou" component={Home} />
+          <Route path="/games/domino" component={Home} />
+          <Route path="/games/lakou" component={Home} />
           <Route path="/sign-in" component={SignInPage} />
           <Route path="/sign-up" component={SignUpPage} />
           <Route path="/how-to-play" component={HowToPlayPage} />

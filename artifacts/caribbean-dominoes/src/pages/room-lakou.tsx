@@ -420,7 +420,7 @@ export default function RoomPage() {
       onLeave: leaveWaitlist,
     } : undefined}
     seatOffer={offer ? {
-      tableName: room.hostName || 'Lakou Domino',
+      tableName: room.hostName || 'Domino',
       seatNumber: offer.seat ?? 0,
       reason: 'A seat opened at the table.',
       expiresAt: offer.expiresAt ?? Date.now() + 60000,

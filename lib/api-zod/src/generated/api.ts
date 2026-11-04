@@ -902,6 +902,18 @@ export const LoginResponse = zod.object({
 })
 
 
+/**
+ * @summary Start Google sign-in
+ */
+export const GoogleAuthStartResponse = zod.void()
+
+
+/**
+ * @summary Complete Google sign-in
+ */
+export const GoogleAuthCallbackResponse = zod.void()
+
+
 export const LogoutResponse = zod.void()
 
 
