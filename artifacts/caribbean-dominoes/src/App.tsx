@@ -14,6 +14,9 @@ import TicTacToePage from '@/pages/tic-tac-toe';
 import MopyonPage from '@/pages/mopyon';
 import BlockDropPage from '@/pages/block-drop';
 import ClassicGamesPage from '@/pages/classic-games';
+import ScrabblePage from '@/pages/scrabble';
+import BarricadePage from '@/pages/barricade';
+import AboutPage from '@/pages/about';
 import {
   Route,
   Switch,
@@ -42,6 +45,8 @@ function Router() {
          <Route path="/games/words" component={ClassicGamesPage} />
          <Route path="/games/four-in-a-row" component={ClassicGamesPage} />
          <Route path="/games/filler" component={ClassicGamesPage} />
+         <Route path="/games/scrabble" component={ScrabblePage} />
+         <Route path="/games/barricade" component={BarricadePage} />
          <Route path="/friends"><SocialPage page="friends" /></Route>
          <Route path="/leaderboard"><SocialPage page="leaderboard" /></Route>
          <Route path="/profile"><SocialPage page="profile" /></Route>
@@ -50,6 +55,7 @@ function Router() {
           <Route path="/sign-in" component={SignInPage} />
           <Route path="/sign-up" component={SignUpPage} />
           <Route path="/how-to-play" component={HowToPlayPage} />
+          <Route path="/about" component={AboutPage} />
          <Route path="/room/:code" component={RoomPage} />
         <Route component={NotFound} />
       </Switch>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link } from 'wouter';
 import { YardHeader } from './social';
+import { GameEndSequence } from '@/components/game-end-sequence';
 import { createMopyonState, MOPYON_BOARD_SIZE, playMopyonMove } from '@/lib/mopyon';
 import './mopyon.css';
 
@@ -11,6 +12,7 @@ export default function MopyonPage() {
 
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
+    {(game.winner || game.isDraw) && <GameEndSequence gameName="Mòpyon" perspective={game.isDraw ? 'draw' : 'local'} winnerName={game.winner === 'X' ? 'Player 1 · X' : 'Player 2 · O'} opponentName={game.winner === 'X' ? 'Player 2 · O' : 'Player 1 · X'} onPlayAgain={() => setGame(createMopyonState())} />}
     <main className="yard-main yard-mopyon-main">
       <Link href="/games" className="yard-mopyon-back"><ArrowLeft size={14} /> All games</Link>
       <div className="yard-heading">

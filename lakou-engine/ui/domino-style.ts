@@ -1,9 +1,13 @@
-export type DominoStyle = 'black-on-white' | 'white-on-black';
-export const DEFAULT_DOMINO_STYLE: DominoStyle = 'black-on-white';
+export type DominoStyle = 'playing-cards' | 'black-on-white' | 'white-on-black';
+export const DEFAULT_DOMINO_STYLE: DominoStyle = 'playing-cards';
 
 export function dominoAssetUrl(first: number, second: number, style: DominoStyle) {
   const low = Math.min(first, second);
   const high = Math.max(first, second);
+  if (style === 'playing-cards') {
+    const filename = low === 0 && high > 0 ? `${high}x0` : `${low}x${high}`;
+    return `/domino-assets/${style}/${filename}.png`;
+  }
   return `/domino-assets/${style}/${low}-${high}.png`;
 }
 
@@ -20,7 +24,7 @@ export function dominoStyleKey(playerName: string) {
 export function loadDominoStyle(playerName: string, storage?: DominoStyleStorage): DominoStyle {
   try {
     const value = storage?.getItem(dominoStyleKey(playerName));
-    return value === 'white-on-black' ? value : DEFAULT_DOMINO_STYLE;
+    return value === 'playing-cards' || value === 'black-on-white' || value === 'white-on-black' ? value : DEFAULT_DOMINO_STYLE;
   } catch {
     return DEFAULT_DOMINO_STYLE;
   }

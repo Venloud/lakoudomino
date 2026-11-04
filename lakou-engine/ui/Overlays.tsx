@@ -80,16 +80,17 @@ export function MatchOver({ rows, points, onAgain, onLeave, meSeat }: {
 }) {
   const medals = ['gold', 'silver', 'bronze'] as const;
   const winner = rows[0];
+  const isMeWinner = winner?.seat === meSeat;
   return (
-    <div className="lk-scrim">
+    <div className={`lk-scrim lk-final-sequence${isMeWinner ? ' is-winner' : meSeat === null ? ' is-spectator' : ' is-opponent'}`}>
       <div className="lk-modal lk-results" role="dialog" aria-label="Game over">
         <FlagStripe height={4} className="lk-modal-stripe" />
         <p className="lk-eyebrow">GAME OVER</p>
         <div className="lk-winner">
           <Avatar seat={winner.seat} name={winner.name} size={44} />
           <div>
-            <h2>{winner.seat === meSeat ? 'You won!' : `${winner.name} won`}</h2>
-            <p className="lk-gold">{points ? 'Filled the row first' : 'First to play every tile'}</p>
+            <h2>{isMeWinner ? 'You won!' : meSeat === null ? `${winner.name} won` : 'Good game'}</h2>
+            <p className="lk-gold">{isMeWinner ? (points ? 'Filled the row first' : 'First to play every tile') : meSeat === null ? (points ? 'Filled the row first' : 'First to play every tile') : `${winner.name} takes the match. There is always another game.`}</p>
           </div>
         </div>
         <div className="lk-scores">

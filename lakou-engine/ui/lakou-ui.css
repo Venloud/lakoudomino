@@ -1013,3 +1013,14 @@
 /* Keep breathing room around the transparent wordmark in the site navigation. */
 .lk-site-brand { padding: 4px 8px; }
 .lk-site-brand img { width: 100%; height: 100%; object-fit: contain; }
+
+/* Give the final match result a quick, staged arrival while preserving reduced motion. */
+.lk-final-sequence .lk-modal { animation: lk-final-arrive .46s cubic-bezier(.2,.8,.2,1) both; }
+.lk-final-sequence.is-opponent .lk-modal { border-color: rgba(201,174,115,.65); }
+@keyframes lk-final-arrive {
+  from { opacity: 0; transform: translateY(14px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lk-final-sequence, .lk-final-sequence .lk-modal { animation-duration: 1ms; }
+}

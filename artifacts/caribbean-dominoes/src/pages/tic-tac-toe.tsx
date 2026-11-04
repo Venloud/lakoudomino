@@ -11,6 +11,7 @@ import {
   useListFriends,
 } from '@workspace/api-client-react';
 import { YardHeader } from './social';
+import { GameEndSequence } from '@/components/game-end-sequence';
 import {
   createTicTacToeState,
   createYardTicTacToeState,
@@ -329,8 +330,10 @@ function OnlineGame(props: {
   const finished = snapshot.status === 'finished';
   const myTurn = snapshot.status === 'playing' && game.currentPlayer === snapshot.myMark;
   const otherPlayer = snapshot.players.find((player) => player.mark !== snapshot.myMark);
+  const roundWinner = game.winner ? snapshot.players.find((player) => player.mark === game.winner)?.name ?? otherPlayer?.name : undefined;
   return <div className="yard-app">
     <YardHeader active="games" username={props.username} notifications={0} onLogout={() => {}} />
+      {finished && <GameEndSequence gameName={snapshot.mode === 'yard' ? 'Yard Mode' : 'Tic-Tac-Toe'} perspective={!game.winner ? 'draw' : game.winner === snapshot.myMark ? 'winner' : 'opponent'} winnerName={roundWinner ?? 'Your opponent'} opponentName={otherPlayer?.name ?? 'Your friend'} onPlayAgain={props.onNewRound} />}
     <main className={`yard-main yard-tic-main${snapshot.mode === 'yard' ? ' is-yard-mode' : ''}`}>
       <Link href="/games/tic-tac-toe" className="yard-tic-back"><ArrowLeft size={14} /> Tic-Tac-Toe rooms</Link>
       <div className="yard-heading yard-tic-room-heading">
@@ -427,8 +430,10 @@ function LocalGame(props: {
 }) {
   const game = props.mode === 'regular' ? props.regular : props.yard;
   const finished = Boolean(game.winner || game.isDraw);
+  const localWinner = game.winner === 'X' ? 'Player 1 · X' : 'Player 2 · O';
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
+    {finished && <GameEndSequence gameName={props.mode === 'yard' ? 'Yard Mode' : 'Tic-Tac-Toe'} perspective={game.isDraw ? 'draw' : 'local'} winnerName={localWinner} opponentName={game.winner === 'X' ? 'Player 2 · O' : 'Player 1 · X'} onPlayAgain={() => props.mode === 'regular' ? props.setRegular(createTicTacToeState()) : props.setYard(createYardTicTacToeState())} />}
     <main className={`yard-main yard-tic-main${props.mode === 'yard' ? ' is-yard-mode' : ''}`}>
       <button type="button" className="yard-tic-back" onClick={props.onBack}><ArrowLeft size={14} /> Online rooms</button>
       <div className="yard-heading"><div><p className="yard-kicker">509 YARD / LOCAL GAME</p><h1>Tic-Tac-Toe</h1><p className="yard-subtitle">Two players share this device.</p></div></div>

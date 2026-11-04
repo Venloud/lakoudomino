@@ -1,0 +1,5 @@
+Domino artwork sourced from:
+https://github.com/safe-acid/Playing-cards-assets/tree/main/Domino%20assets
+
+The repository releases its original artwork under CC0 1.0 Universal.
+The source set contains the complete 28-tile double-six set.

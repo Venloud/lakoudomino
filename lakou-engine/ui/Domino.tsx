@@ -4,7 +4,7 @@ import { DEFAULT_DOMINO_STYLE, dominoAssetUrl, type DominoStyle } from './domino
 export { DEFAULT_DOMINO_STYLE, type DominoStyle } from './domino-style';
 export const DominoStyleContext = createContext<DominoStyle>(DEFAULT_DOMINO_STYLE);
 
-/** A tile uses 560×1120 art, displayed at the requested half-unit size. */
+/** A tile uses a 1:2 image, displayed at the requested half-unit size. */
 export interface DominoProps {
   first: number;
   second: number;

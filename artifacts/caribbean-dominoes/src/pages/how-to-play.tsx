@@ -112,7 +112,7 @@ const gameGuides: GameGuide[] = [
     note: 'This local foundation uses basic movement, captures, and promotion. Regional Dame rules can be refined later.',
   },
   {
-    name: 'Word games',
+    name: 'Word Yard',
     status: 'Available now',
     intro: 'Build words from your letter rack and score points from each letter.',
     href: '/games/words',
@@ -122,6 +122,32 @@ const gameGuides: GameGuide[] = [
       'Use the starter dictionary and pass if you cannot make a word.',
     ],
     note: 'This foundation focuses on local word-building and scoring. A shared board, complete dictionary, and bonus squares can be added later.',
+  },
+  {
+    name: 'Scrabble',
+    status: 'Available now',
+    intro: 'Place connected words on a shared board and score letter and premium-square points.',
+    href: '/games/scrabble',
+    steps: [
+      'Player 1 starts by placing a word across the center star. Each new play must connect to tiles already on the board.',
+      'Choose across or down, select a starting square, and make a word using your rack.',
+      'New tiles on double- or triple-letter and word squares earn bonuses. The rack refills from the tile bag.',
+      'Pass turns when needed; after four consecutive passes, remaining rack values are subtracted and the higher score wins.',
+    ],
+    note: 'This local version uses a starter dictionary and pass-and-play. Tile exchange and the full official dictionary are not included yet.',
+  },
+  {
+    name: 'Barricade',
+    status: 'Available now',
+    intro: 'Race your pawns to the finish while moving barricades and sending rivals back to base.',
+    href: '/games/barricade',
+    steps: [
+      'Roll the die and move one pawn toward the finish or back toward your base by the number rolled.',
+      'Barricades block movement. Land exactly on one to move it to an empty track space.',
+      'You may pass pawns, but landing on an opponent sends that pawn back to its base.',
+      'Reach the finish first to win. A pawn must land exactly on the final space.',
+    ],
+    note: 'This is a local two-player foundation on a winding track; the full multi-player board layout can be added later.',
   },
   {
     name: 'Four in a Row',

@@ -5,7 +5,7 @@ import {
 } from '../src/index';
 import { Table, type Ghost, type RevealRow } from './Table';
 import { DEFAULT_DOMINO_STYLE, DominoStyleContext, type DominoStyle } from './Domino';
-import { loadDominoStyle, saveDominoStyle } from './domino-style';
+import { dominoAssetUrl, loadDominoStyle, saveDominoStyle } from './domino-style';
 import { Avatar, ChatBox, FlagStripe, Hand, PlayerCard, SeatCard, TurnTimer, useCountdown, type ChatMessage } from './Parts';
 import { Banner, EndOfHand, MatchOver, SeatOffer, WaitlistPanel, type StandingRow, type WaitlistEntryView } from './Overlays';
 
@@ -408,12 +408,13 @@ export function LakouGame(props: LakouGameProps) {
             <p className="lk-sub">Your choice is saved for your player name and does not change the table appearance.</p>
             <div className="lk-domino-style-options" role="group" aria-label="Choose domino style">
               {([
+                ['playing-cards', 'Classic Dominoes'],
                 ['black-on-white', 'Detailed Black on White'],
                 ['white-on-black', 'Detailed White on Black'],
               ] as const).map(([style, label]) => (
                 <button key={style} type="button" className={`lk-domino-style-option${dominoStyle === style ? ' lk-selected' : ''}`}
                   aria-pressed={dominoStyle === style} onClick={() => changeDominoStyle(style)}>
-                  <img src={`/domino-assets/${style}/6-6.png`} alt="" />
+                  <img src={dominoAssetUrl(6, 6, style)} alt="" />
                   <span>{label}</span>
                   {dominoStyle === style && <b>Selected</b>}
                 </button>

@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { YardHeader } from './social';
+import { GameEndSequence } from '@/components/game-end-sequence';
 import { createFillerBoard, playFillerMove } from '@/lib/filler';
+import { LETTER_POINTS, WORDS } from '@/lib/word-game-data';
 
 type GameId = 'box' | 'kay' | 'chess' | 'dame' | 'words' | 'four-in-a-row' | 'filler';
 type Piece = { side: 0 | 1; kind: string } | null;
@@ -17,8 +19,12 @@ const GAME_INFO: Record<GameId, { name: string; intro: string }> = {
 };
 const COLORS = ['#56c746', '#e2b852', '#4e9de0', '#d86a72', '#a982da', '#42b7ad'];
 const COLOR_NAMES = ['green', 'gold', 'blue', 'coral', 'violet', 'teal'];
-const WORDS = new Set('ACE ACT ADD AGE AIR AND ANT ANY ARE ARM ART ASK ATE BAD BAG BAN BAR BAT BAY BED BEE BEG BET BIG BIN BIT BOW BOX BOY BUS BUT BUY CAB CAN CAP CAR CAT COW CUP CUT DAY DEN DID DIG DIM DIN DIP DOG DOT DRY DUE EAR EAT EEL EGG EGO ELF END ERA EVE EYE FAN FAR FAT FED FEE FEW FIG FIT FIX FLY FOG FOR FOX FUN GAP GAS GET GIN GOD GOT GUM GUN GUY HAD HAM HAS HAT HAY HEN HER HID HIM HIP HIS HIT HOG HOT HOW HUG ICE ILL INK JAM JAR JET JOB JOY KEY KID KIT LAB LAD LAP LAW LAY LED LEG LET LID LIE LIP LIT LOG LOT LOW MAD MAN MAP MAT MAY MEN MET MIX MOB MOM MOP MUD MUG NAP NET NEW NOD NOR NOT NOW NUN OAK OAR OAT OFF OIL OLD ONE OUR OUT OWL OWN PAD PAL PAN PAT PAW PAY PEA PEN PET PIE PIG PIN PIT POD POT PUB PUP PUT RAG RAN RAP RAT RAW RED RIB RID RIG RIP ROB ROD ROT ROW RUB RUG RUN SAD SAG SAP SAT SAW SAY SEA SEE SET SEW SHE SHY SIR SIT SIX SKI SKY SOB SON SOP SOW SPA SPY SUB SUE SUM SUN TAB TAG TAN TAP TAR TAX TEA TEN THE TIE TIN TIP TOE TON TOO TOP TOY TRY TUB TUG TWO USE VAN VAT VET VEX VIA VIE WAG WAR WAS WAY WEB WED WET WHO WHY WIG WIN WIT WOE WON WOO WOW YAK YAM YAP YEA YES YET YOU ZAP ZEN ZIP ZOO GAME GAMES PLAY YARD GREEN FRIENDS TABLE TURN STONE BOARD'.split(' '));
-const LETTER_POINTS: Record<string, number> = { A: 1, B: 3, C: 3, D: 2, E: 1, F: 4, G: 2, H: 4, I: 1, J: 8, K: 5, L: 1, M: 3, N: 1, O: 1, P: 3, Q: 10, R: 1, S: 1, T: 1, U: 1, V: 4, W: 4, X: 8, Y: 4, Z: 10 };
+const BOX_PLAYER_COLORS = ['#3b82f6', '#ef4444'];
+const CONNECT_PLAYER_COLORS = ['#e64553', '#f3c744'];
+const CHESS_GLYPHS = {
+  white: { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙' },
+  black: { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' },
+};
 const newWordRacks = () => [['A', 'E', 'R', 'T', 'N', 'S', 'O'], ['I', 'L', 'D', 'C', 'M', 'P', 'U']];
 
 function initialBoard(id: GameId): Piece[] {
@@ -35,6 +41,17 @@ function initialBoard(id: GameId): Piece[] {
   }
   return board;
 }
+
+function chessGlyph(piece: Piece) {
+  if (!piece) return '';
+  const side = piece.side === 0 ? 'white' : 'black';
+  return CHESS_GLYPHS[side][piece.kind as keyof typeof CHESS_GLYPHS.white];
+}
+
+function isChessGame(game: GameId): boolean {
+  return game === 'chess';
+}
+
 function fourWinner(board: (number | null)[], at: number): number | null {
   const row = Math.floor(at / 7), col = at % 7, mark = board[at];
   if (mark === null) return null;
@@ -68,6 +85,7 @@ export default function ClassicGamesPage() {
   const [turn, setTurn] = useState<0 | 1>(0);
   const [winner, setWinner] = useState<number | null>(null);
   const [four, setFour] = useState<(number | null)[]>(Array(42).fill(null));
+  const [fourHoverCol, setFourHoverCol] = useState<number | null>(null);
   const [dots, setDots] = useState<Set<string>>(new Set());
   const [edgeOwners, setEdgeOwners] = useState<Map<string, number>>(new Map());
   const [claimed, setClaimed] = useState<(number | null)[]>(Array(9).fill(null));
@@ -84,7 +102,9 @@ export default function ClassicGamesPage() {
   const [consecutivePasses, setConsecutivePasses] = useState(0);
 
   const reset = () => window.location.reload();
-  const turnLabel = winner === null ? `Player ${turn + 1} to move` : winner === 2 ? 'Draw' : `Player ${winner + 1} wins`;
+  const turnLabel = id === 'chess'
+    ? winner === null ? `${turn === 0 ? 'White' : 'Black'} to move` : winner === 2 ? 'Draw' : `${winner === 0 ? 'White' : 'Black'} wins`
+    : winner === null ? `Player ${turn + 1} to move` : winner === 2 ? 'Draw' : `Player ${winner + 1} wins`;
   const playBoxEdge = (key: string, adjacentBoxes: number[]) => {
     if (winner !== null || dots.has(key)) return;
     const nextEdges = new Set(dots);
@@ -208,6 +228,47 @@ export default function ClassicGamesPage() {
     else { setConsecutivePasses((value) => value + 1); setTurn(turn === 0 ? 1 : 0); }
   };
 
+  if (isChessGame(id)) return <div className="yard-app">
+    <YardHeader active="games" notifications={0} onLogout={() => {}} />
+    {winner !== null && <GameEndSequence gameName="Chess" perspective={winner === 2 ? 'draw' : 'local'} winnerName={winner === 0 ? 'White' : 'Black'} opponentName={winner === 0 ? 'Black' : 'White'} onPlayAgain={reset} />}
+    <main className="yard-main" style={{ maxWidth: 980 }}>
+      <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
+      <header className="yard-heading" style={{ marginTop: 16 }}>
+        <div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>Chess</h1><p className="yard-subtitle">White moves first. White starts at the bottom; Black starts at the top.</p></div>
+      </header>
+      <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+          <strong role="status">{turnLabel}</strong>
+          <button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,minmax(34px,60px))', justifyContent: 'center', border: '2px solid #58605c' }}>
+          {pieces.map((piece, i) => {
+            const isWhite = piece?.side === 0;
+            const pieceSide = isWhite ? 'White' : 'Black';
+            return <button
+              key={i}
+              type="button"
+              aria-label={`Square ${i + 1}${piece ? ` ${pieceSide} ${piece.kind}` : ''}`}
+              onClick={() => makeMove(i)}
+              style={{
+                aspectRatio: '1',
+                border: selected === i ? '3px solid #75d64a' : '1px solid #121417',
+                background: (Math.floor(i / 8) + i % 8) % 2 ? '#373b3c' : '#c9c6b8',
+                color: isWhite ? '#f8f6ee' : '#17191b',
+                fontSize: 25,
+                textShadow: isWhite ? '0 0 2px #15171a, 0 1px 3px #15171a' : '0 0 2px #f6f4ea, 0 1px 3px #f6f4ea',
+                cursor: 'pointer',
+              }}
+            >{chessGlyph(piece)}</button>;
+          })}
+        </div>
+        <p style={{ maxWidth: 470, margin: '14px auto 0', textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>
+          White pieces are outlined; Black pieces are filled. This foundation supports basic movement, but not check, castling, or en passant yet.
+        </p>
+      </section>
+    </main>
+  </div>;
+
   const title = info.name;
   const fillerScores = [
     fillerBoard.owners.filter((owner) => owner === 0).length,
@@ -217,24 +278,54 @@ export default function ClassicGamesPage() {
     fillerBoard.colors[fillerBoard.owners.findIndex((owner) => owner === 0)],
     fillerBoard.colors[fillerBoard.owners.findIndex((owner) => owner === 1)],
   ];
+  const getFourColumnAt = (clientX: number, element: HTMLElement) => {
+    const bounds = element.getBoundingClientRect();
+    if (bounds.width === 0) return null;
+    return Math.max(0, Math.min(6, Math.floor(((clientX - bounds.left) / bounds.width) * 7)));
+  };
+  const handleFourPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse' && event.pointerType !== 'pen') return;
+    const col = getFourColumnAt(event.clientX, event.currentTarget);
+    if (col !== null) setFourHoverCol((current) => current === col ? current : col);
+  };
+  const handleFourBoardClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const col = getFourColumnAt(event.clientX, event.currentTarget);
+    if (col === null) return;
+    makeMove(col);
+  };
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
+    {winner !== null && <GameEndSequence gameName={title} perspective={winner === 2 ? 'draw' : 'local'} winnerName={`Player ${winner + 1}`} opponentName={`Player ${winner === 0 ? 2 : 1}`} score={id === 'words' ? `Player 1 ${wordScores[0]} · Player 2 ${wordScores[1]}` : undefined} onPlayAgain={reset} />}
     <main className="yard-main" style={{ maxWidth: 980 }}>
       <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
       <header className="yard-heading" style={{ marginTop: 16 }}><div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>{title}</h1><p className="yard-subtitle">{info.intro}</p></div></header>
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}><strong role="status">{id === 'words' ? `${turnLabel} · ${wordScores[0]}–${wordScores[1]}` : turnLabel}</strong><button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button></div>
-        {id === 'box' && <p style={{ textAlign: 'center' }}>Boxes claimed: Player 1 {claimed.filter((owner) => owner === 0).length} · Player 2 {claimed.filter((owner) => owner === 1).length}</p>}
-        {id === 'four-in-a-row' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,minmax(36px,64px))', gap: 6, justifyContent: 'center' }}>{four.map((cell, i) => <button key={i} aria-label={`Column ${i % 7 + 1}, row ${Math.floor(i / 7) + 1}`} className="yard-button" style={{ height: 58, borderRadius: 50, background: cell === 0 ? '#70ce52' : cell === 1 ? '#e2b852' : '#111318' }} onClick={() => makeMove(i)} disabled={winner !== null} />)}</div>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}><strong role="status" style={id === 'box' && winner === null ? { color: BOX_PLAYER_COLORS[turn] } : id === 'four-in-a-row' && winner === null ? { color: CONNECT_PLAYER_COLORS[turn] } : undefined}>{id === 'words' ? `${turnLabel} · ${wordScores[0]}–${wordScores[1]}` : turnLabel}</strong><button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button></div>
+        {id === 'box' && <><div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 8, fontSize: 12 }}><span style={{ color: BOX_PLAYER_COLORS[0] }}>● Player 1 · Blue</span><span style={{ color: BOX_PLAYER_COLORS[1] }}>● Player 2 · Red</span></div><p style={{ textAlign: 'center' }}>Boxes claimed: Player 1 {claimed.filter((owner) => owner === 0).length} · Player 2 {claimed.filter((owner) => owner === 1).length}</p></>}
+        {id === 'four-in-a-row' && <div className="yard-connect-four">
+          <div className="yard-connect-legend"><span><i className="yard-connect-red" />Player 1 · Red</span><span><i className="yard-connect-yellow" />Player 2 · Yellow</span></div>
+          <div className="yard-connect-controls" aria-label="Drop a piece into a column">
+            {Array.from({ length: 7 }, (_, col) => <button key={col} type="button" className="yard-connect-drop" aria-label={`Drop into column ${col + 1}`} onClick={() => makeMove(col)} disabled={winner !== null || four[col] !== null}>Drop <span aria-hidden="true">↓</span></button>)}
+          </div>
+          <div className="yard-connect-interaction" role="group" aria-label="Move across the board to aim, then click to drop" onPointerMove={handleFourPointerMove} onPointerLeave={() => setFourHoverCol(null)} onClick={handleFourBoardClick}>
+            {fourHoverCol !== null && winner === null && <i className={`yard-connect-cursor-piece ${turn === 0 ? 'yard-connect-red' : 'yard-connect-yellow'}`} style={{ left: `${((fourHoverCol + 0.5) / 7) * 100}%` }} aria-hidden="true" />}
+            <div className="yard-connect-board" role="grid" aria-label="Four in a Row board">
+              {four.map((cell, i) => <span key={i} role="gridcell" aria-label={`Row ${Math.floor(i / 7) + 1}, column ${i % 7 + 1}${cell === null ? ', empty' : cell === 0 ? ', red piece' : ', yellow piece'}`} className="yard-connect-slot">
+                <i className={`yard-connect-disc${cell === 0 ? ' yard-connect-red' : cell === 1 ? ' yard-connect-yellow' : ''}`} />
+              </span>)}
+            </div>
+          </div>
+          <p className="yard-connect-hint">Move across the board to aim, then click to drop. Or use the column buttons above. Connect four horizontally, vertically, or diagonally.</p>
+        </div>}
         {id === 'box' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,minmax(30px,48px))', gridTemplateRows: 'repeat(7,42px)', gap: 1, justifyContent: 'center', overflowX: 'auto' }}>{Array.from({ length: 49 }, (_, i) => {
           const row = Math.floor(i / 7), col = i % 7;
           if (row % 2 === 0 && col % 2 === 0) return <span key={i} style={{ alignSelf: 'center', justifySelf: 'center', width: 10, height: 10, borderRadius: 10, background: '#e5e7e7', zIndex: 1 }} />;
-          if (row % 2 === 0) { const r = row / 2, c = Math.floor(col / 2), key = `h:${r}:${c}`; return <button key={i} aria-label={`Draw horizontal edge ${r + 1}, ${c + 1}`} disabled={dots.has(key) || winner !== null} onClick={() => playBoxEdge(key, [r > 0 ? (r - 1) * 3 + c : -1, r < 3 ? r * 3 + c : -1].filter((n) => n >= 0))} style={{ border: 0, background: dots.has(key) ? edgeOwners.get(key) === 0 ? '#75d54d' : '#e2b852' : '#34383a', cursor: 'pointer' }} />;
+          if (row % 2 === 0) { const r = row / 2, c = Math.floor(col / 2), key = `h:${r}:${c}`; return <button key={i} aria-label={`Draw horizontal edge ${r + 1}, ${c + 1}`} disabled={dots.has(key) || winner !== null} onClick={() => playBoxEdge(key, [r > 0 ? (r - 1) * 3 + c : -1, r < 3 ? r * 3 + c : -1].filter((n) => n >= 0))} style={{ border: 0, background: dots.has(key) ? BOX_PLAYER_COLORS[edgeOwners.get(key) ?? 0] : '#34383a', cursor: 'pointer' }} />;
           }
-          if (col % 2 === 0) { const r = Math.floor(row / 2), c = col / 2, key = `v:${r}:${c}`; return <button key={i} aria-label={`Draw vertical edge ${r + 1}, ${c + 1}`} disabled={dots.has(key) || winner !== null} onClick={() => playBoxEdge(key, [c > 0 ? r * 3 + c - 1 : -1, c < 3 ? r * 3 + c : -1].filter((n) => n >= 0))} style={{ border: 0, background: dots.has(key) ? edgeOwners.get(key) === 0 ? '#75d54d' : '#e2b852' : '#34383a', cursor: 'pointer' }} />;
+          if (col % 2 === 0) { const r = Math.floor(row / 2), c = col / 2, key = `v:${r}:${c}`; return <button key={i} aria-label={`Draw vertical edge ${r + 1}, ${c + 1}`} disabled={dots.has(key) || winner !== null} onClick={() => playBoxEdge(key, [c > 0 ? r * 3 + c - 1 : -1, c < 3 ? r * 3 + c : -1].filter((n) => n >= 0))} style={{ border: 0, background: dots.has(key) ? BOX_PLAYER_COLORS[edgeOwners.get(key) ?? 0] : '#34383a', cursor: 'pointer' }} />;
           }
           const owner = claimed[Math.floor(row / 2) * 3 + Math.floor(col / 2)];
-          return <span key={i} style={{ display: 'grid', placeItems: 'center', color: '#fff', background: owner === 0 ? '#25491e' : owner === 1 ? '#58451c' : 'transparent' }}>{owner === null ? '' : `P${owner + 1}`}</span>;
+          return <span key={i} style={{ display: 'grid', placeItems: 'center', color: '#fff', background: owner === 0 ? '#173968' : owner === 1 ? '#5d252b' : 'transparent' }}>{owner === null ? '' : `P${owner + 1}`}</span>;
         })}</div>}
         {id === 'kay' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(42px,72px))', gap: 8, justifyContent: 'center' }}><div style={{ gridColumn: 'span 6', textAlign: 'center' }}>Stores: Player 2 <b>{pits[13]}</b> · Player 1 <b>{pits[6]}</b></div>{[...Array(6)].map((_, i) => { const top = 12 - i; const bottom = i; return <button key={`t${i}`} className="yard-button" disabled={winner !== null || turn !== 1 || pits[top] === 0} onClick={() => makeMove(top)}> {pits[top]} </button>; })}{[...Array(6)].map((_, i) => <button key={`b${i}`} className="yard-button" disabled={winner !== null || turn !== 0 || pits[i] === 0} onClick={() => makeMove(i)}>{pits[i]}</button>)}</div>}
         {id === 'filler' && <div style={{ display: 'grid', gap: 12, justifyContent: 'center' }}>

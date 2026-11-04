@@ -1935,3 +1935,28 @@ body:has(.room-loading-page) { background: #141218; }
   0%, 100% { transform: scale(1); background: var(--lk-pip); box-shadow: none; }
   25% { transform: scale(1.15); background: var(--lk-gold); box-shadow: 0 0 3px 1px rgba(139,209,110,.35); }
 }
+
+.yard-connect-four { display: grid; gap: 12px; justify-items: center; }
+.yard-connect-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; color: var(--yard-text); font-size: 12px; }
+.yard-connect-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.yard-connect-legend i { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 1px 2px #fff8, 0 2px 3px #0007; }
+.yard-connect-red { background: linear-gradient(145deg, #ff6870, #d51f36 70%, #a80f25); }
+.yard-connect-yellow { background: linear-gradient(145deg, #fff08a, #f5c331 70%, #d69a13); }
+.yard-connect-controls { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: clamp(4px, 1.2vw, 10px); width: min(100%, 590px); margin-bottom: 10px; }
+.yard-connect-drop { min-height: 34px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #a9d7f4; font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; transition: color .15s ease, transform .15s ease, background .15s ease; }
+.yard-connect-drop span { margin-left: 2px; font-size: 15px; }
+.yard-connect-drop:hover:not(:disabled) { transform: translateY(2px); background: #ffffff10; color: #fff; }
+.yard-connect-drop:disabled { opacity: .35; cursor: not-allowed; }
+.yard-connect-interaction { position: relative; width: min(100%, 590px); touch-action: manipulation; }
+.yard-connect-interaction:hover { cursor: crosshair; }
+.yard-connect-cursor-piece { position: absolute; z-index: 2; top: -21px; width: 20px; height: 20px; border: 2px solid #ffffffaa; border-radius: 50%; box-shadow: inset 0 2px 3px #ffffff66, 0 3px 6px #0009; pointer-events: none; transform: translateX(-50%); transition: left 45ms linear; }
+.yard-connect-board { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: clamp(4px, 1.2vw, 10px); width: min(100%, 590px); padding: clamp(9px, 2vw, 16px); border: 1px solid #58a9df; border-radius: 18px; background: linear-gradient(145deg, #167dbd, #07539a 72%, #06427f); box-shadow: inset 0 2px 4px #dff5ff33, 0 12px 28px #0005; }
+.yard-connect-slot { display: grid; place-items: center; aspect-ratio: 1; min-width: 0; padding: 12%; border-radius: 50%; background: #0a3673; box-shadow: inset 0 4px 9px #031d45b8, inset 0 -1px 2px #ffffff25; }
+.yard-connect-disc { display: block; width: 100%; height: 100%; border: 2px solid #ffffff21; border-radius: 50%; background: #0b3470; }
+.yard-connect-disc.yard-connect-red { background: linear-gradient(145deg, #ff6870, #d51f36 70%, #a80f25); box-shadow: inset 0 3px 4px #ffffff55, 0 3px 5px #022953a8; }
+.yard-connect-disc.yard-connect-yellow { background: linear-gradient(145deg, #fff08a, #f5c331 70%, #d69a13); box-shadow: inset 0 3px 4px #ffffff80, 0 3px 5px #022953a8; }
+.yard-connect-hint { max-width: 440px; margin: 0; color: var(--yard-muted); text-align: center; font-size: 12px; line-height: 1.5; }
+@media (max-width: 480px) {
+  .yard-connect-four { gap: 8px; }
+  .yard-connect-board { border-radius: 13px; }
+}

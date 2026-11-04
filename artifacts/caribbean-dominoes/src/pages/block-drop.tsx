@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pause, Play, RotateCcw, Zap } from 'lucide-react';
 import { Link } from 'wouter';
 import { YardHeader } from './social';
+import { GameEndSequence } from '@/components/game-end-sequence';
 import {
   BLOCK_DROP_COLUMNS,
   BLOCK_DROP_ROWS,
@@ -81,6 +82,7 @@ export default function BlockDropPage() {
 
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
+    {game.status === 'gameover' && <GameEndSequence gameName="Block Drop" perspective="solo-loss" score={`${game.score.toLocaleString()} points · ${game.lines} lines`} detail="Your stack reached the top. Take a breath, then try for a new high score." onPlayAgain={freshGame} />}
     <main className="yard-main yard-block-drop-main">
       <Link href="/games" className="yard-mopyon-back"><ArrowLeft size={14} /> All games</Link>
       <div className="yard-heading">
