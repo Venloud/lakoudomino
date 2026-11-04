@@ -30,6 +30,48 @@ const credits = [
       { label: 'CC0 1.0 license', href: 'https://creativecommons.org/publicdomain/zero/1.0/' },
     ],
   },
+  {
+    title: 'Mancala · HTML5 reference',
+    creator: 'sheabunge',
+    description: 'Board and gameplay reference for Kay. No code or artwork from the repository is used.',
+    links: [
+      { label: 'GitHub project', href: 'https://github.com/sheabunge/mancala' },
+    ],
+  },
+  {
+    title: 'Mancala · AI and board variations reference',
+    creator: 'HappyHackingOrange',
+    description: 'Reference for alternate Mancala board layouts. No code or artwork from the repository is used.',
+    links: [
+      { label: 'GitHub project', href: 'https://github.com/HappyHackingOrange/Mancala' },
+    ],
+  },
+  {
+    title: '2D Chess Pack · Wood pieces',
+    creator: 'Screaming Brain Studios',
+    description: 'Top-down wood chess-piece sprites used on the Chess board. Released under CC0 1.0 Universal.',
+    links: [
+      { label: 'CC0 1.0 license', href: 'https://creativecommons.org/publicdomain/zero/1.0/' },
+    ],
+  },
+  {
+    title: 'Lila · Lichess',
+    creator: 'Lichess contributors',
+    description: 'Board feedback and move-history inspiration only. 509 Yard does not use Lila code or artwork. Lila is licensed under AGPL-3.0.',
+    links: [
+      { label: 'GitHub repository', href: 'https://github.com/lichess-org/lila' },
+      { label: 'AGPL-3.0 license', href: 'https://github.com/lichess-org/lila/blob/master/LICENSE' },
+    ],
+  },
+  {
+    title: 'Checkers pieces',
+    creator: 'VerzatileDev',
+    description: 'Assets by VerzatileDev, licensed under CC BY 4.0. Resized for Dame; artwork modified.',
+    links: [
+      { label: 'Creator page', href: 'https://verzatiledev.itch.io/' },
+      { label: 'CC BY 4.0 license', href: 'https://creativecommons.org/licenses/by/4.0/' },
+    ],
+  },
 ];
 
 export default function AboutPage() {
@@ -47,7 +89,7 @@ export default function AboutPage() {
         </header>
 
         <section className="yard-about-note">
-          References help guide game ideas and interactions. 509 Yard keeps its own visual character; Connect4 references below are inspiration only, not templates or copied assets.
+          References help guide game ideas and interactions. 509 Yard keeps its own visual character; listed projects are inspiration only, not copied code or artwork.
         </section>
 
         <section className="yard-about-credit-list" aria-label="Sources and credits">

@@ -247,6 +247,9 @@ importers:
       '@react-three/fiber':
         specifier: ^9.7.0
         version: 9.7.0(@types/react@19.3.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(three@0.186.0)
+      chess.js:
+        specifier: ^1.4.0
+        version: 1.4.0
       lakou-engine:
         specifier: workspace:*
         version: link:../../lakou-engine
@@ -1927,6 +1930,9 @@ packages:
 
   caniuse-lite@1.0.30001810:
     resolution: {integrity: sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg==}
+
+  chess.js@1.4.0:
+    resolution: {integrity: sha512-BBJgrrtKQOzFLonR0l+k64A98NLemPwNsCskwb+29bRwobUa4iTm51E1kwGPbWXAcfdDa18nad6vpPPKPWarqw==}
 
   chokidar@4.0.3:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
@@ -4922,6 +4928,8 @@ snapshots:
       three: 0.186.0
 
   caniuse-lite@1.0.30001810: {}
+
+  chess.js@1.4.0: {}
 
   chokidar@4.0.3:
     dependencies:

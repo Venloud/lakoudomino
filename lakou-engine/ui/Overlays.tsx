@@ -4,10 +4,53 @@ import { Avatar, FlagStripe, useCountdown } from './Parts';
 import { Domino } from './Domino';
 import { ordinal, seatColor } from './theme';
 
+export interface ScoreReason {
+  label: string;
+  amount: number;
+  pipsLeft?: number;
+}
+
 export interface StandingRow {
   seat: number; name: string; place: number; total: number; thisHand: number; pipsLeft: number; tilesLeft: Tile[]; isMe: boolean;
-  /** Why they scored this hand, e.g. ["Locked the game +150", "Ends +20"]. */
-  reasons?: string[];
+  /** Individual score events, kept separate for the hand-result tally. */
+  reasons?: ScoreReason[];
+}
+
+function CountUp({ value, delay = 0 }: { value: number; delay?: number }) {
+  const [count, setCount] = React.useState(0);
+  React.useEffect(() => {
+    setCount(0);
+    let frame = 0;
+    const timer = window.setTimeout(() => {
+      let start: number | null = null;
+      const tick = (now: number) => {
+        if (start === null) start = now;
+        const progress = Math.min(1, (now - start) / 420);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setCount(Math.round(value * eased));
+        if (progress < 1) frame = window.requestAnimationFrame(tick);
+      };
+      frame = window.requestAnimationFrame(tick);
+    }, delay);
+    return () => {
+      window.clearTimeout(timer);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [value, delay]);
+  return <span aria-label={String(value)}>{count}</span>;
+}
+
+function ScoreBreakdown({ reasons }: { reasons: ScoreReason[] }) {
+  return <div className="lk-reason-list" aria-label="How this hand's points were scored">
+    {reasons.map((reason, index) => {
+      const delay = 150 + index * 125;
+      return <div className="lk-score-reason" key={`${reason.label}-${index}`} style={{ animationDelay: `${delay}ms` }}>
+        <span className="lk-reason-label">{reason.label}</span>
+        {reason.pipsLeft !== undefined && <span className="lk-reason-pips"><CountUp value={reason.pipsLeft} delay={delay} /> pips left</span>}
+        <b className="lk-reason-points">+<CountUp value={reason.amount} delay={delay} /></b>
+      </div>;
+    })}
+  </div>;
 }
 
 /** Figma "Hand results" (17:409). */
@@ -21,8 +64,8 @@ export function EndOfHand({ handNumber, winnerSeat, winnerName, headline, rows, 
     ? `Next hand${secs != null && secs > 0 ? ` · ${secs}s` : ''}`
     : secs != null ? (secs > 0 ? `Next hand in ${secs}s` : 'Starting…') : 'Waiting for the host…';
   return (
-    <div className="lk-scrim">
-      <div className="lk-modal lk-results" role="dialog" aria-label={`Hand ${handNumber} results`}>
+    <div className="lk-scrim lk-hand-sequence">
+      <div className="lk-modal lk-results" role="dialog" aria-modal="true" aria-label={`Hand ${handNumber} results`}>
         <FlagStripe height={4} className="lk-modal-stripe" />
         <p className="lk-eyebrow">HAND {handNumber}  ·  RESULTS</p>
         <div className="lk-winner">
@@ -43,10 +86,10 @@ export function EndOfHand({ handNumber, winnerSeat, winnerName, headline, rows, 
                   <b>{r.name}{r.isMe ? ' (you)' : ''}</b>
                 </span>
                 <span className="lk-muted">{r.pipsLeft}</span>
-                <b className={r.thisHand ? 'lk-green' : 'lk-muted'}>{r.thisHand ? `+${r.thisHand}` : '—'}</b>
+                  <b className={r.thisHand ? 'lk-green lk-hand-points' : 'lk-muted'}>{r.thisHand ? <>+<CountUp value={r.thisHand} delay={Math.min((r.reasons?.length ?? 0) * 125 + 220, 850)} /></> : '—'}</b>
                 <b className="lk-total">{r.total}</b>
               </div>
-              {r.reasons && r.reasons.length > 0 && <span className="lk-reasons">{r.reasons.join('  ·  ')}</span>}
+              {r.reasons && r.reasons.length > 0 && <ScoreBreakdown reasons={r.reasons} />}
               {r.tilesLeft.length > 0 && (
                 <span className="lk-result-tiles">{r.tilesLeft.map((t, i) => <Domino key={i} first={t[0]} second={t[1]} orientation="h" unit={9} />)}</span>
               )}
@@ -83,7 +126,7 @@ export function MatchOver({ rows, points, onAgain, onLeave, meSeat }: {
   const isMeWinner = winner?.seat === meSeat;
   return (
     <div className={`lk-scrim lk-final-sequence${isMeWinner ? ' is-winner' : meSeat === null ? ' is-spectator' : ' is-opponent'}`}>
-      <div className="lk-modal lk-results" role="dialog" aria-label="Game over">
+      <div className="lk-modal lk-results" role="dialog" aria-modal="true" aria-label="Game over">
         <FlagStripe height={4} className="lk-modal-stripe" />
         <p className="lk-eyebrow">GAME OVER</p>
         <div className="lk-winner">

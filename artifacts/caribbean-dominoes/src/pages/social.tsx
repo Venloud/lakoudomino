@@ -16,6 +16,21 @@ import {
 import { TicTacToeProfileResults } from './tic-tac-toe-profile';
 
 type Destination = 'home' | 'games' | 'friends' | 'leaderboard' | 'profile' | 'about';
+
+function GameMark({ game }: { game: string }) {
+  if (game === 'tic-tac-toe' || game === 'mopyon') return <span className={`yard-game-mark yard-mark-${game}`} aria-hidden="true"><i>X</i><i>O</i></span>;
+  if (game === 'box') return <span className="yard-game-mark yard-mark-box" aria-hidden="true"><i /><i /><i /><i /><b /></span>;
+  if (game === 'kay') return <span className="yard-game-mark yard-mark-kay" aria-hidden="true"><i /><i /><i /><i /></span>;
+  if (game === 'chess') return <span className="yard-game-mark yard-mark-chess" aria-hidden="true">♞</span>;
+  if (game === 'dame') return <span className="yard-game-mark yard-mark-dame" aria-hidden="true"><i /><b /></span>;
+  if (game === 'words' || game === 'scrabble') return <span className={`yard-game-mark yard-mark-tile ${game}`} aria-hidden="true"><b>{game === 'words' ? 'W' : 'A'}</b><small>{game === 'words' ? '4' : '1'}</small></span>;
+  if (game === 'barricade') return <span className="yard-game-mark yard-mark-barricade" aria-hidden="true"><i /><b /></span>;
+  if (game === 'four-in-a-row') return <span className="yard-game-mark yard-mark-connect" aria-hidden="true"><i /><i /><i /><i /></span>;
+  if (game === 'filler') return <span className="yard-game-mark yard-mark-filler" aria-hidden="true"><i /><i /><i /><i /></span>;
+  if (game === 'block-drop') return <span className="yard-game-mark yard-mark-block" aria-hidden="true"><i /><i /><i /><i /></span>;
+  return <span className="yard-game-mark yard-mark-tic" aria-hidden="true"><i>X</i><i>O</i></span>;
+}
+
 const navItems: { label: string; href: string; key: Destination }[] = [
   { label: 'Home', href: '/', key: 'home' },
   { label: 'Games', href: '/games', key: 'games' },
@@ -210,7 +225,7 @@ export default function SocialPage({ page }: { page: Destination }) {
         <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/domino" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true"><Domino first={6} second={6} orientation="v" unit={58} /></div></section>
             <section className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">PLAYABLE FOUNDATIONS</p><h2 style={{ fontSize: 17, margin: '0 0 8px' }}>Choose a game</h2><p className="yard-subtitle" style={{ margin: 0 }}>Local play is ready for the games in the yard. Online rooms can come next.</p>
               <div className="yard-game-foundation-list">
-                {[['Tic-Tac-Toe', '/games/tic-tac-toe'], ['Mòpyon', '/games/mopyon'], ['Box · Dots and Boxes', '/games/box'], ['Kay · Mancala', '/games/kay'], ['Chess', '/games/chess'], ['Dame · Checkers', '/games/dame'], ['Word Yard', '/games/words'], ['Scrabble', '/games/scrabble'], ['Barricade', '/games/barricade'], ['Four in a Row', '/games/four-in-a-row'], ['Filler', '/games/filler'], ['Block Drop', '/games/block-drop']].map(([name, href]) => <Link key={href} href={href} className="yard-coming-soon"><Gamepad2 size={15} /><span>{name}</span><span className="yard-status">Play</span></Link>)}
+                 {[['Tic-Tac-Toe', '/games/tic-tac-toe'], ['Mòpyon', '/games/mopyon'], ['Box · Dots and Boxes', '/games/box'], ['Kay · Mancala', '/games/kay'], ['Chess', '/games/chess'], ['Dame · Checkers', '/games/dame'], ['Word Yard', '/games/words'], ['Scrabble', '/games/scrabble'], ['Barricade', '/games/barricade'], ['Four in a Row', '/games/four-in-a-row'], ['Filler', '/games/filler'], ['Block Drop', '/games/block-drop']].map(([name, href]) => <Link key={href} href={href} className="yard-coming-soon"><GameMark game={href.split('/').at(-1) ?? ''} /><span>{name}</span><span className="yard-status">Play</span></Link>)}
               </div>
             </div></section>
         </div>

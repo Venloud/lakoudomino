@@ -1,10 +1,12 @@
-import { useEffect, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
+import { Chess, type Square } from 'chess.js';
 import { LETTER_POINTS, WORD_BONUSES, WORD_BOARD_SIZE, createWordGame, passWordTurn, playWordTurn } from '../lib/word-yard';
 import type { WordDirection, WordPlacement } from '../lib/word-yard';
 import { loadWordDictionary } from '../lib/word-yard-dictionary';
 import { createFillerBoard, playFillerMove } from '@/lib/filler';
+import { chooseChessBotMove } from '@/lib/chess-bot';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
 import './word-yard.css';
@@ -14,7 +16,7 @@ type Piece = { side: 0 | 1; kind: string } | null;
 const GAME_INFO: Record<GameId, { name: string; intro: string }> = {
   box: { name: 'Box', intro: 'Take turns drawing edges. Complete a square to claim it and play again.' },
   kay: { name: 'Kay', intro: 'Sow stones around the pits. Capture stones and finish with the larger store.' },
-  chess: { name: 'Chess', intro: 'Move pieces and capture the opposing king. This first version uses basic piece movement.' },
+  chess: { name: 'Chess', intro: 'Play by full chess rules. Choose a friend or challenge the Yard bot.' },
   dame: { name: 'Dame', intro: 'Move diagonally, jump opponents, and crown a piece at the far edge.' },
   words: { name: 'Word Yard', intro: 'Build connected words on the shared board, score bonus squares, and use every tile in the bag.' },
   'four-in-a-row': { name: 'Four in a Row', intro: 'Drop a piece into a column and connect four in any direction.' },
@@ -51,6 +53,36 @@ function chessGlyph(piece: Piece) {
 
 function isChessGame(game: GameId): boolean {
   return game === 'chess';
+}
+
+function chessIndexToSquare(index: number) {
+  return `${String.fromCharCode(97 + index % 8)}${8 - Math.floor(index / 8)}` as Square;
+}
+function chessPieces(game: Chess): Piece[] {
+  return game.board().flat().map((piece) => piece ? { side: piece.color === 'w' ? 0 : 1, kind: piece.type.toUpperCase() } : null);
+}
+function ChessSprite({ piece }: { piece: Piece }) {
+  if (!piece) return null;
+  const color = piece.side === 0 ? 'white' : 'black';
+  const kind = { P: 'pawn', N: 'knight', B: 'bishop', R: 'rook', Q: 'queen', K: 'king' }[piece.kind as 'P' | 'N' | 'B' | 'R' | 'Q' | 'K'];
+  return <img className="yard-chess-sprite" src={`${import.meta.env.BASE_URL}chess-pieces/${color}-${kind}.png`} alt="" draggable={false} />;
+}
+function KayPit({ index, count, owner, turn, winner, onPick, row, animating, active }: {
+  index: number; count: number; owner: 0 | 1; turn: 0 | 1; winner: number | null;
+  onPick: (index: number) => void; row: 'top' | 'bottom'; animating: boolean; active: boolean;
+}) {
+  return <button type="button" className={`yard-kay-pit ${row}${active ? ' sowing' : ''}`} aria-label={`Player ${owner + 1}, pit ${index + 1}, ${count} stones`}
+    disabled={animating || winner !== null || turn !== owner || count === 0} onClick={() => onPick(index)}>
+    <span className="yard-kay-stones" aria-hidden="true">{Array.from({ length: Math.min(count, 12) }, (_, i) => <i key={i} />)}</span>
+    {active && <i className="yard-kay-arrival" aria-hidden="true" />}
+    <b>{count}</b>
+  </button>;
+}
+function KayStore({ player, count, active }: { player: 1 | 2; count: number; active: boolean }) {
+  return <div className={`yard-kay-store player-${player}${active ? ' sowing' : ''}`} aria-label={`Player ${player} store, ${count} stones`}>
+    <span>Player {player}</span><strong>{count}</strong>
+    <i aria-hidden="true">{Array.from({ length: Math.min(count, 12) }, (_, i) => <b key={i} />)}</i>
+  </div>;
 }
 
 function fourWinner(board: (number | null)[], at: number): number | null {
@@ -91,8 +123,15 @@ export default function ClassicGamesPage() {
   const [edgeOwners, setEdgeOwners] = useState<Map<string, number>>(new Map());
   const [claimed, setClaimed] = useState<(number | null)[]>(Array(9).fill(null));
   const [pits, setPits] = useState<number[]>(Array(14).fill(4).map((n, i) => i === 6 || i === 13 ? 0 : n));
+  const [kayAnimatedPits, setKayAnimatedPits] = useState<number[] | null>(null);
+  const [kayActivePit, setKayActivePit] = useState<number | null>(null);
+  const [kayAnimating, setKayAnimating] = useState(false);
+  const kayTimerRef = useRef<number | null>(null);
   const [fillerBoard, setFillerBoard] = useState(createFillerBoard);
   const [pieces, setPieces] = useState<Piece[]>(() => initialBoard(id === 'chess' ? 'chess' : 'dame'));
+  const chessRef = useRef(new Chess());
+  const [chessVersion, setChessVersion] = useState(0);
+  const [playVsBot, setPlayVsBot] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [wordGame, setWordGame] = useState(createWordGame);
   const [wordDictionary, setWordDictionary] = useState<ReadonlySet<string> | null>(null);
@@ -112,12 +151,48 @@ export default function ClassicGamesPage() {
     });
     return () => { active = false; };
   }, [id]);
+  useEffect(() => () => { if (kayTimerRef.current !== null) window.clearTimeout(kayTimerRef.current); }, []);
 
-  const reset = () => window.location.reload();
+  useEffect(() => {
+    if (id !== 'chess' || !playVsBot || turn !== 1 || winner !== null) return;
+    const timer = window.setTimeout(() => {
+      const game = chessRef.current;
+      const move = chooseChessBotMove(game.fen());
+      if (!move) return;
+      game.move(move);
+      setPieces(chessPieces(game));
+      setTurn(0);
+      if (game.isCheckmate()) setWinner(1);
+      else if (game.isDraw()) setWinner(2);
+      setChessVersion((version) => version + 1);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [id, playVsBot, turn, winner, chessVersion]);
+
+  const reset = () => {
+    if (id === 'chess') {
+      chessRef.current = new Chess();
+      setPieces(chessPieces(chessRef.current));
+      setTurn(0); setWinner(null); setSelected(null); setChessVersion((version) => version + 1);
+      return;
+    }
+    window.location.reload();
+  };
   const activeTurn = id === 'words' ? wordGame.turn : turn;
+  const kayBoardPits = kayAnimatedPits ?? pits;
   const gameOver = id === 'words' ? wordGame.status === 'finished' : winner !== null;
-  const turnLabel = id === 'chess'
-    ? winner === null ? `${turn === 0 ? 'White' : 'Black'} to move` : winner === 2 ? 'Draw' : `${winner === 0 ? 'White' : 'Black'} wins`
+  const chessGame = chessRef.current;
+  const chessLastMove = chessGame.history({ verbose: true }).at(-1);
+  const chessLegalTargets = selected === null || id !== 'chess'
+    ? new Set<Square>()
+    : new Set(chessGame.moves({ square: chessIndexToSquare(selected), verbose: true }).map((move) => move.to));
+  const chessCheckedKing = chessGame.isCheck()
+    ? chessGame.board().flat().find((piece) => piece?.type === 'k' && piece.color === chessGame.turn())?.square
+    : undefined;
+  const turnLabel = id === 'kay' && kayAnimating
+    ? `Player ${turn + 1} is sowing…`
+    : id === 'chess'
+    ? winner === null ? `${turn === 0 ? 'White' : 'Black'} to move${chessGame.isCheck() ? ' · Check' : ''}` : winner === 2 ? 'Draw' : chessGame.isCheckmate() ? `Checkmate — ${playVsBot ? winner === 0 ? 'You win' : 'Bot wins' : `${winner === 0 ? 'White' : 'Black'} wins`}` : playVsBot ? winner === 0 ? 'You win' : 'Bot wins' : `${winner === 0 ? 'White' : 'Black'} wins`
     : id === 'words' && wordGame.status === 'finished'
       ? wordGame.winner === 2 ? 'Draw' : `Player ${(wordGame.winner ?? 0) + 1} wins`
       : gameOver ? winner === 2 ? 'Draw' : `Player ${(winner ?? 0) + 1} wins`
@@ -147,6 +222,26 @@ export default function ClassicGamesPage() {
   };
   const makeMove = (index: number) => {
     if (winner !== null) return;
+    if (id === 'chess') {
+      if (playVsBot && turn === 1) return;
+      const game = chessRef.current;
+      const piece = pieces[index];
+      if (selected === null) { if (piece?.side === turn) setSelected(index); return; }
+      if (piece?.side === turn) { setSelected(index); return; }
+      const from = chessIndexToSquare(selected), to = chessIndexToSquare(index);
+      const legal = game.moves({ square: from, verbose: true }).some((move) => move.to === to);
+      if (!legal) { setSelected(null); return; }
+      try {
+        game.move({ from, to, promotion: 'q' });
+        setPieces(chessPieces(game));
+        setSelected(null);
+        setTurn(game.turn() === 'w' ? 0 : 1);
+        if (game.isCheckmate()) setWinner(turn);
+        else if (game.isDraw()) setWinner(2);
+        setChessVersion((version) => version + 1);
+      } catch { setSelected(null); }
+      return;
+    }
     if (id === 'four-in-a-row') {
       const col = index % 7; let row = 5;
       while (row >= 0 && four[row * 7 + col] !== null) row--;
@@ -158,30 +253,55 @@ export default function ClassicGamesPage() {
     } else if (id === 'box') {
       playBoxEdge(`e${index}`, []);
     } else if (id === 'kay') {
+      if (kayAnimating) return;
       const own = turn === 0 ? index < 6 : index >= 7 && index < 13;
       if (!own || pits[index] === 0) return;
       const next = [...pits]; let stones = next[index]; next[index] = 0; let pos = index;
-      while (stones > 0) { pos = (pos + 1) % 14; if ((turn === 0 && pos === 13) || (turn === 1 && pos === 6)) continue; next[pos]++; stones--; }
+      const landings: { pit: number; pits: number[] }[] = [];
+      while (stones > 0) {
+        pos = (pos + 1) % 14;
+        if ((turn === 0 && pos === 13) || (turn === 1 && pos === 6)) continue;
+        next[pos]++; stones--;
+        landings.push({ pit: pos, pits: [...next] });
+      }
       const ownSide = turn === 0 ? pos < 6 : pos > 6 && pos < 13;
       const opposite = 12 - pos;
       const extra = (turn === 0 && pos === 6) || (turn === 1 && pos === 13);
       if (ownSide && next[pos] === 1 && next[opposite] > 0) { next[turn === 0 ? 6 : 13] += next[opposite] + 1; next[pos] = 0; next[opposite] = 0; }
       const p0Empty = next.slice(0, 6).every((n) => n === 0), p1Empty = next.slice(7, 13).every((n) => n === 0);
-      if (p0Empty || p1Empty) {
+      const ended = p0Empty || p1Empty;
+      if (ended) {
         next[6] += next.slice(0, 6).reduce((a, b) => a + b, 0);
         next[13] += next.slice(7, 13).reduce((a, b) => a + b, 0);
         for (let pit = 0; pit < 6; pit++) next[pit] = 0;
         for (let pit = 7; pit < 13; pit++) next[pit] = 0;
-        setWinner(next[6] === next[13] ? 2 : next[6] > next[13] ? 0 : 1);
       }
-      setPits(next); if (!extra && winner === null) setTurn(turn === 0 ? 1 : 0);
+      const finishMove = () => {
+        setPits(next); setKayAnimatedPits(null); setKayActivePit(null); setKayAnimating(false);
+        if (ended) setWinner(next[6] === next[13] ? 2 : next[6] > next[13] ? 0 : 1);
+        else if (!extra) setTurn(turn === 0 ? 1 : 0);
+      };
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || landings.length === 0) finishMove();
+      else {
+        const start = [...pits]; start[index] = 0;
+        setKayAnimatedPits(start); setKayAnimating(true);
+        let step = 0;
+        const delay = Math.max(180, Math.min(260, 3200 / landings.length));
+        const sow = () => {
+          const landing = landings[step++];
+          setKayAnimatedPits(landing.pits); setKayActivePit(landing.pit);
+          if (step < landings.length) kayTimerRef.current = window.setTimeout(sow, delay);
+          else kayTimerRef.current = window.setTimeout(finishMove, 180);
+        };
+        kayTimerRef.current = window.setTimeout(sow, 120);
+      }
     } else if (id === 'filler') {
       const next = playFillerMove(fillerBoard, turn, index);
       if (!next) return;
       setFillerBoard({ colors: next.colors, owners: next.owners });
       if (next.winner !== null) setWinner(next.winner);
       else setTurn(turn === 0 ? 1 : 0);
-    } else if (id === 'chess' || id === 'dame') {
+    } else if (id === 'dame') {
       const piece = pieces[index];
       if (selected === null) { if (piece?.side === turn) setSelected(index); return; }
       if (piece?.side === turn) { setSelected(index); return; }
@@ -208,10 +328,8 @@ export default function ClassicGamesPage() {
       const next = [...pieces]; next[index] = moving; next[selected] = null;
       if (capturedIndex !== null) next[capturedIndex] = null;
       if (id === 'dame' && ((turn === 0 && toR === 0) || (turn === 1 && toR === 7))) next[index] = { ...moving, kind: 'K' };
-      if (id === 'chess' && moving.kind === 'P' && (toR === 0 || toR === 7)) next[index] = { ...moving, kind: 'Q' };
       setPieces(next); setSelected(null);
-      if (piece?.kind === 'K' && id === 'chess') setWinner(turn);
-      else if (id === 'dame' && !next.some((candidate) => candidate?.side !== turn)) setWinner(turn);
+        if (id === 'dame' && !next.some((candidate) => candidate?.side !== turn)) setWinner(turn);
       else setTurn(turn === 0 ? 1 : 0);
     }
   };
@@ -263,40 +381,53 @@ export default function ClassicGamesPage() {
 
   if (isChessGame(id)) return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
-    {winner !== null && <GameEndSequence gameName="Chess" perspective={winner === 2 ? 'draw' : 'local'} winnerName={winner === 0 ? 'White' : 'Black'} opponentName={winner === 0 ? 'Black' : 'White'} onPlayAgain={reset} />}
+    {id === 'chess' && winner !== null && <GameEndSequence gameName="Chess" perspective={winner === 2 ? 'draw' : playVsBot ? winner === 0 ? 'winner' : 'opponent' : 'local'} winnerName={playVsBot ? winner === 0 ? 'You' : 'The Yard bot' : winner === 0 ? 'White' : 'Black'} opponentName={playVsBot ? 'The Yard bot' : winner === 0 ? 'Black' : 'White'} onPlayAgain={reset} />}
+    {id === 'dame' && winner !== null && <GameEndSequence gameName="Dame" perspective={winner === 2 ? 'draw' : 'local'} winnerName={winner === 0 ? 'Player 1' : 'Player 2'} opponentName={winner === 0 ? 'Player 2' : 'Player 1'} onPlayAgain={reset} />}
     <main className="yard-main" style={{ maxWidth: 980 }}>
       <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
       <header className="yard-heading" style={{ marginTop: 16 }}>
-        <div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>Chess</h1><p className="yard-subtitle">White moves first. White starts at the bottom; Black starts at the top.</p></div>
+        <div><p className="yard-kicker">509 YARD / CHESS</p><h1>Chess</h1><p className="yard-subtitle">Full legal moves, check, checkmate, and a bot opponent.</p></div>
       </header>
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}>
           <strong role="status">{turnLabel}</strong>
           <button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,minmax(34px,60px))', justifyContent: 'center', border: '2px solid #58605c' }}>
+        <div className="yard-chess-tools">
+          <div className="yard-chess-modes" role="group" aria-label="Choose opponent">
+            <button className={`yard-button${playVsBot ? '' : ' primary'}`} type="button" aria-pressed={!playVsBot} onClick={() => setPlayVsBot(false)} disabled={chessGame.history().length > 0}>Two players</button>
+            <button className={`yard-button${playVsBot ? ' primary' : ''}`} type="button" aria-pressed={playVsBot} onClick={() => setPlayVsBot(true)} disabled={chessGame.history().length > 0}>Play the bot</button>
+          </div>
+          <p>{playVsBot ? 'You are White. The Yard bot is Black.' : 'White moves first. Select a piece to show its legal moves.'}</p>
+          <div className="yard-chess-board" role="grid" aria-label="Chess board">
           {pieces.map((piece, i) => {
+            const square = chessIndexToSquare(i);
             const isWhite = piece?.side === 0;
-            const pieceSide = isWhite ? 'White' : 'Black';
+            const isLegal = chessLegalTargets.has(square);
+            const isCheck = chessCheckedKing === square;
+            const isLastMove = chessLastMove?.from === square || chessLastMove?.to === square;
             return <button
-              key={i}
+              key={square}
               type="button"
-              aria-label={`Square ${i + 1}${piece ? ` ${pieceSide} ${piece.kind}` : ''}`}
+              role="gridcell"
+              aria-label={`${square}${piece ? ` ${isWhite ? 'White' : 'Black'} ${piece.kind}` : ' empty'}${isLegal ? ', legal move' : ''}${isCheck ? ', king in check' : ''}`}
               onClick={() => makeMove(i)}
-              style={{
-                aspectRatio: '1',
-                border: selected === i ? '3px solid #75d64a' : '1px solid #121417',
-                background: (Math.floor(i / 8) + i % 8) % 2 ? '#373b3c' : '#c9c6b8',
-                color: isWhite ? '#f8f6ee' : '#17191b',
-                fontSize: 25,
-                textShadow: isWhite ? '0 0 2px #15171a, 0 1px 3px #15171a' : '0 0 2px #f6f4ea, 0 1px 3px #f6f4ea',
-                cursor: 'pointer',
-              }}
-            >{chessGlyph(piece)}</button>;
+              disabled={winner !== null || (playVsBot && turn === 1)}
+              className={`${(Math.floor(i / 8) + i % 8) % 2 ? 'dark' : 'light'}${piece ? ' occupied' : ''}${selected === i ? ' selected' : ''}${isLastMove ? ' last-move' : ''}${isCheck ? ' in-check' : ''}${isLegal ? ' legal' : ''}`}
+            >{piece ? <ChessSprite piece={piece} /> : isLegal ? <i aria-hidden="true" /> : null}</button>;
           })}
+          </div>
+          <section className="yard-chess-history" aria-label="Move history">
+            <strong>Moves</strong>
+            {chessGame.history().length === 0 ? <span className="yard-chess-history-empty">Your moves will appear here.</span> :
+              <ol>{Array.from({ length: Math.ceil(chessGame.history().length / 2) }, (_, i) => {
+                const moves = chessGame.history();
+                return <li key={i}><span>{i + 1}.</span><b>{moves[i * 2]}</b><b>{moves[i * 2 + 1] ?? ''}</b></li>;
+              })}</ol>}
+          </section>
         </div>
         <p style={{ maxWidth: 470, margin: '14px auto 0', textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>
-          White pieces are outlined; Black pieces are filled. This foundation supports basic movement, but not check, castling, or en passant yet.
+          Green dots show legal moves. Gold rings mark captures; the red square marks a king in check. Castling, en passant, promotion, and checkmate are handled by the rules engine.
         </p>
       </section>
     </main>
@@ -368,7 +499,12 @@ export default function ClassicGamesPage() {
           const owner = claimed[Math.floor(row / 2) * 3 + Math.floor(col / 2)];
           return <span key={i} style={{ display: 'grid', placeItems: 'center', color: '#fff', background: owner === 0 ? '#173968' : owner === 1 ? '#5d252b' : 'transparent' }}>{owner === null ? '' : `P${owner + 1}`}</span>;
         })}</div>}
-        {id === 'kay' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,minmax(42px,72px))', gap: 8, justifyContent: 'center' }}><div style={{ gridColumn: 'span 6', textAlign: 'center' }}>Stores: Player 2 <b>{pits[13]}</b> · Player 1 <b>{pits[6]}</b></div>{[...Array(6)].map((_, i) => { const top = 12 - i; const bottom = i; return <button key={`t${i}`} className="yard-button" disabled={winner !== null || turn !== 1 || pits[top] === 0} onClick={() => makeMove(top)}> {pits[top]} </button>; })}{[...Array(6)].map((_, i) => <button key={`b${i}`} className="yard-button" disabled={winner !== null || turn !== 0 || pits[i] === 0} onClick={() => makeMove(i)}>{pits[i]}</button>)}</div>}
+        {id === 'kay' && <div className="yard-kay-board" role="group" aria-label="Mancala board">
+          <KayStore player={2} count={kayBoardPits[13]} active={kayAnimating && kayActivePit === 13} />
+          {[...Array(6)].map((_, i) => <KayPit key={`top-${i}`} index={12 - i} count={kayBoardPits[12 - i]} owner={1} turn={turn} winner={winner} onPick={makeMove} row="top" animating={kayAnimating} active={kayActivePit === 12 - i} />)}
+          <KayStore player={1} count={kayBoardPits[6]} active={kayAnimating && kayActivePit === 6} />
+          {[...Array(6)].map((_, i) => <KayPit key={`bottom-${i}`} index={i} count={kayBoardPits[i]} owner={0} turn={turn} winner={winner} onPick={makeMove} row="bottom" animating={kayAnimating} active={kayActivePit === i} />)}
+        </div>}
         {id === 'filler' && <div style={{ display: 'grid', gap: 12, justifyContent: 'center' }}>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 18, color: '#ddd', fontSize: 12 }}>
             <span>Player 1 · <b>{fillerScores[0]}</b> tiles</span>
@@ -385,7 +521,27 @@ export default function ClassicGamesPage() {
           </div>
           <p style={{ maxWidth: 420, margin: '0 auto', textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>Choose a color different from both current territories. Connected tiles of your chosen color join your side. Most tiles wins when the board is full.</p>
         </div>}
-        {(id === 'chess' || id === 'dame') && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,minmax(34px,60px))', justifyContent: 'center', border: '2px solid #58605c' }}>{pieces.map((piece, i) => <button key={i} aria-label={`Square ${i + 1}${piece ? ` ${piece.side === 0 ? 'player one' : 'player two'} ${piece.kind}` : ''}`} onClick={() => makeMove(i)} style={{ aspectRatio: '1', border: selected === i ? '3px solid #75d64b' : '1px solid #121417', background: (Math.floor(i / 8) + i % 8) % 2 ? '#373b3c' : '#c9c6b8', color: piece?.side === 0 ? '#141517' : '#f7f5eb', fontSize: 25, textShadow: '0 1px 2px #000', cursor: 'pointer' }}>{piece ? (id === 'chess' ? ({ K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' } as Record<string, string>)[piece.kind] : '●') : ''}</button>)}</div>}
+        {id === 'chess' && <div className="yard-chess-tools">
+          <div className="yard-chess-modes" role="group" aria-label="Choose opponent">
+            <button className={`yard-button${playVsBot ? '' : ' primary'}`} type="button" onClick={() => setPlayVsBot(false)} disabled={chessGame.history().length > 0}>Two players</button>
+            <button className={`yard-button${playVsBot ? ' primary' : ''}`} type="button" onClick={() => setPlayVsBot(true)} disabled={chessGame.history().length > 0}>Play the bot</button>
+          </div>
+          <p>{playVsBot ? 'You play White. The Yard bot plays Black.' : 'White moves first. Select a piece to see its legal moves.'}</p>
+          <div className="yard-chess-board" role="grid" aria-label="Chess board">
+            {pieces.map((piece, i) => {
+              const square = chessIndexToSquare(i);
+              const isLastMove = chessLastMove?.from === square || chessLastMove?.to === square;
+              const isLegal = chessLegalTargets.has(square);
+              const isCheck = chessCheckedKing === square;
+              const disabled = winner !== null || (playVsBot && turn === 1);
+              const light = (Math.floor(i / 8) + i % 8) % 2 === 0;
+              return <button key={square} type="button" role="gridcell" aria-label={`${square}${piece ? ` ${piece.side === 0 ? 'white' : 'black'} ${piece.kind}` : ''}${isLegal ? ', legal move' : ''}${isCheck ? ', king in check' : ''}`} onClick={() => makeMove(i)} disabled={disabled} className={`${light ? 'light' : 'dark'}${piece ? ' occupied' : ''}${selected === i ? ' selected' : ''}${isLastMove ? ' last-move' : ''}${isCheck ? ' in-check' : ''}${isLegal ? ' legal' : ''}`}>
+                {piece ? chessGlyph(piece) : isLegal ? <i aria-hidden="true" /> : null}
+              </button>;
+            })}
+          </div>
+        </div>}
+        {id === 'dame' && <div className="yard-dame-board" style={{ display: 'grid', gridTemplateColumns: 'repeat(8,minmax(34px,60px))', justifyContent: 'center', border: '2px solid #58605c' }}>{pieces.map((piece, i) => <button key={i} aria-label={`Square ${i + 1}${piece ? ` player ${piece.side + 1} ${piece.kind}` : ''}`} onClick={() => makeMove(i)} style={{ aspectRatio: '1', border: selected === i ? '3px solid #75d64b' : '1px solid #121417', background: (Math.floor(i / 8) + i % 8) ? '#373b3c' : '#c9c6b8', cursor: 'pointer' }}>{piece ? <img className="yard-dame-piece" src={`${import.meta.env.BASE_URL}dame-pieces/player-${piece.side + 1}.png`} alt="" draggable={false} /> : ''}</button>)}</div>}
         {id === 'words' && <div className="word-yard" data-testid="word-yard-game">
           <div className="wy-layout">
             <div className="wy-main">

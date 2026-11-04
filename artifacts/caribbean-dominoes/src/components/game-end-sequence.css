@@ -7,7 +7,24 @@
   padding: 20px;
   background: rgba(6, 9, 10, .76);
   backdrop-filter: blur(6px);
-  animation: yard-end-fade 220ms ease-out both;
+  animation: yard-end-fade 240ms ease-out both;
+  isolation: isolate;
+}
+
+.yard-end-scrim.is-winner::before {
+  position: absolute;
+  inset: 8% 4%;
+  z-index: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 12% 18%, #a4e276 0 3px, transparent 4px),
+    radial-gradient(circle at 27% 72%, #f2d27f 0 3px, transparent 4px),
+    radial-gradient(circle at 82% 20%, #a4e276 0 3px, transparent 4px),
+    radial-gradient(circle at 74% 76%, #e1c486 0 3px, transparent 4px),
+    radial-gradient(circle at 52% 12%, #f2d27f 0 2px, transparent 3px),
+    radial-gradient(circle at 42% 88%, #a4e276 0 2px, transparent 3px);
+  content: "";
+  animation: yard-end-spark 820ms cubic-bezier(.16,.7,.25,1) both;
 }
 
 .yard-end-card {
@@ -19,7 +36,9 @@
   color: #f6f4eb;
   text-align: center;
   box-shadow: 0 24px 84px rgba(0, 0, 0, .56);
-  animation: yard-end-arrive 480ms cubic-bezier(.2, .8, .2, 1) both;
+  position: relative;
+  z-index: 1;
+  animation: yard-end-arrive 460ms cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .yard-end-mark {
@@ -31,7 +50,7 @@
   border-radius: 18px;
   color: #a4e276;
   background: rgba(117, 214, 74, .13);
-  animation: yard-end-mark 420ms 100ms cubic-bezier(.2, .8, .2, 1) both;
+  animation: yard-end-mark 400ms 80ms cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .yard-end-scrim.is-opponent .yard-end-card { border-color: rgba(201, 174, 115, .3); }
@@ -49,6 +68,13 @@
 .yard-end-card h2 { margin: 0; font-size: clamp(27px, 7vw, 36px); line-height: 1.08; letter-spacing: -.04em; }
 .yard-end-copy { max-width: 350px; margin: 11px auto 0; color: #c1c7c1; font-size: 14px; line-height: 1.55; }
 .yard-end-score { margin: 14px 0 0; color: #a4e276; font-size: 13px; font-weight: 800; }
+.yard-end-card h2, .yard-end-copy, .yard-end-score, .yard-end-perspectives, .yard-end-draw-note, .yard-end-actions {
+  animation: yard-end-text 320ms 90ms ease-out both;
+}
+.yard-end-copy { animation-delay: 130ms; }
+.yard-end-score { animation-delay: 160ms; }
+.yard-end-perspectives, .yard-end-draw-note { animation-delay: 190ms; }
+.yard-end-actions { animation-delay: 230ms; }
 
 .yard-end-perspectives {
   display: grid;
@@ -96,6 +122,8 @@
 @keyframes yard-end-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes yard-end-arrive { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes yard-end-mark { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
+@keyframes yard-end-text { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes yard-end-spark { 0% { opacity: 0; transform: scale(.84) translateY(10px); } 30% { opacity: .8; } 100% { opacity: 0; transform: scale(1.08) translateY(-8px); } }
 
 @media (max-width: 430px) {
   .yard-end-card { padding: 22px 17px; }
@@ -103,6 +131,44 @@
   .yard-end-primary, .yard-end-secondary { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .yard-end-scrim, .yard-end-card, .yard-end-mark { animation-duration: 1ms; animation-delay: 0ms; }
+  .yard-end-scrim, .yard-end-scrim::before, .yard-end-card, .yard-end-mark,
+  .yard-end-card h2, .yard-end-copy, .yard-end-score, .yard-end-perspectives,
+  .yard-end-draw-note, .yard-end-actions { animation-duration: 1ms; animation-delay: 0ms; }
   .yard-end-primary, .yard-end-secondary { transition: none; }
+}
+
+/* Shared tactile motion for the local game boards. */
+.yard-tic-cell, .yard-ultimate-cell, .yard-mopyon-point, .yard-connect-slot,
+.yard-kay-pit, .yard-scrabble-board button, .yard-chess-board button {
+  transition: transform 150ms cubic-bezier(.2,.75,.25,1), box-shadow 150ms ease-out, filter 150ms ease-out;
+}
+.yard-panel button:not(.yard-button) {
+  transition: transform 150ms cubic-bezier(.2,.75,.25,1), box-shadow 150ms ease-out, filter 150ms ease-out, background-color 150ms ease-out;
+}
+.yard-panel button:not(.yard-button):not(:disabled):active { transform: scale(.97); }
+.yard-tic-cell:not(:disabled):active, .yard-ultimate-cell:not(:disabled):active,
+.yard-mopyon-point:not(:disabled):active, .yard-connect-slot:not(:disabled):active,
+.yard-kay-pit:not(:disabled):active, .yard-scrabble-board button:active,
+.yard-chess-board button:active { transform: scale(.96); }
+.yard-tic-cell[data-mark], .yard-ultimate-cell[data-mark], .yard-mopyon-point[data-mark] {
+  animation: yard-game-mark-land 210ms cubic-bezier(.18,.8,.25,1) both;
+}
+.yard-block-drop-cell:not(.is-empty) { animation: yard-block-land 180ms cubic-bezier(.18,.8,.25,1) both; }
+.yard-dame-piece { transition: transform 150ms cubic-bezier(.2,.75,.25,1), filter 150ms ease-out; }
+.yard-dame-board button:hover .yard-dame-piece { transform: translateY(-2px); filter: brightness(1.08); }
+@keyframes yard-game-mark-land {
+  0% { opacity: .55; transform: scale(.42) rotate(-8deg); }
+  72% { opacity: 1; transform: scale(1.08) rotate(2deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes yard-block-land {
+  from { opacity: .65; transform: translateY(-7px) scale(.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .yard-tic-cell, .yard-ultimate-cell, .yard-mopyon-point, .yard-connect-slot,
+  .yard-kay-pit, .yard-scrabble-board button, .yard-chess-board button,
+  .yard-panel button:not(.yard-button),
+  .yard-tic-cell[data-mark], .yard-ultimate-cell[data-mark], .yard-mopyon-point[data-mark],
+  .yard-block-drop-cell:not(.is-empty), .yard-dame-piece { animation: none !important; transition: none !important; }
 }

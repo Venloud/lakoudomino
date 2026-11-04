@@ -7,7 +7,7 @@ import { Table, type Ghost, type RevealRow } from './Table';
 import { DEFAULT_DOMINO_STYLE, DominoStyleContext, type DominoStyle } from './Domino';
 import { dominoAssetUrl, loadDominoStyle, saveDominoStyle } from './domino-style';
 import { Avatar, ChatBox, FlagStripe, Hand, PlayerCard, SeatCard, TurnTimer, useCountdown, type ChatMessage } from './Parts';
-import { Banner, EndOfHand, MatchOver, SeatOffer, WaitlistPanel, type StandingRow, type WaitlistEntryView } from './Overlays';
+import { Banner, EndOfHand, MatchOver, SeatOffer, WaitlistPanel, type ScoreReason, type StandingRow, type WaitlistEntryView } from './Overlays';
 
 /**
  * The whole Lakou Domino game screen, built from the Figma frames
@@ -63,20 +63,20 @@ function useWidth() {
 const sameTile = (a: Tile, b: Tile) => (a[0] === b[0] && a[1] === b[1]) || (a[0] === b[1] && a[1] === b[0]);
 const pipsOf = (tiles: Tile[]) => tiles.reduce((s, t) => s + t[0] + t[1], 0);
 
-/** "Domino! 118 pips left +120 · Ends +25 · Pass bonus +50 ×2" — why a player got their points this hand. */
-function reasonsFor(entries: { amount: number; reason?: string; pipsLeft?: number; doubled?: boolean }[]): string[] {
-  const out: string[] = [];
+/** Keep each scoring event separate so the result screen can reveal the math in order. */
+function reasonsFor(entries: { amount: number; reason?: string; pipsLeft?: number; doubled?: boolean }[]): ScoreReason[] {
+  const out: ScoreReason[] = [];
   const ends = entries.filter((e) => !e.reason).reduce((a, e) => a + e.amount, 0);
   const passes = entries.filter((e) => e.reason === 'pass');
   for (const e of entries) {
-    if (e.reason === 'domino') out.push(`Domino! ${e.pipsLeft} pips left over +${e.amount}`);
-    if (e.reason === 'lockedGame') out.push(`Locked the game +${e.amount}`);
-    if (e.reason === 'lowestLock') out.push(`Lowest hand +${e.amount}`);
-    if (e.reason === 'allFour') out.push(`${e.doubled ? 'Double all four' : 'All four'} +${e.amount}`);
-    if (e.reason === 'blockedDouble') out.push(`Blocked a double +${e.amount}`);
+    if (e.reason === 'domino') out.push({ label: 'Domino!', amount: e.amount, pipsLeft: e.pipsLeft });
+    if (e.reason === 'lockedGame') out.push({ label: 'Locked the game', amount: e.amount });
+    if (e.reason === 'lowestLock') out.push({ label: 'Lowest hand', amount: e.amount });
+    if (e.reason === 'allFour') out.push({ label: e.doubled ? 'Double all four' : 'All four', amount: e.amount });
+    if (e.reason === 'blockedDouble') out.push({ label: 'Blocked a double', amount: e.amount });
   }
-  if (ends) out.push(`Ends +${ends}`);
-  if (passes.length) out.push(`Pass bonus +${passes.reduce((a, e) => a + e.amount, 0)}${passes.length > 1 ? ` (${passes.length} passes)` : ''}`);
+  if (ends) out.push({ label: 'Ends', amount: ends });
+  if (passes.length) out.push({ label: `Pass bonus${passes.length > 1 ? ` · ${passes.length} passes` : ''}`, amount: passes.reduce((a, e) => a + e.amount, 0) });
   return out;
 }
 
@@ -153,7 +153,7 @@ export function LakouGame(props: LakouGameProps) {
       if (handOverAt == null) setHandOverAt(Date.now());
     } else if (handOverAt != null) setHandOverAt(null);
   }, [view.handOver]); // eslint-disable-line react-hooks/exhaustive-deps
-  const revealMs = props.revealMs ?? 3000;
+  const revealMs = props.revealMs ?? 2400;
   const [revealDone, setRevealDone] = useState(false);
   useEffect(() => {
     setRevealDone(false);

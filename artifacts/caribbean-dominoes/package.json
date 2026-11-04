@@ -77,9 +77,10 @@
     "zod": "catalog:"
   },
   "dependencies": {
-    "lakou-engine": "workspace:*",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
+    "chess.js": "^1.4.0",
+    "lakou-engine": "workspace:*",
     "three": "^0.186.0"
   }
 }
