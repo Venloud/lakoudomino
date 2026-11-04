@@ -1,10 +1,13 @@
-import { useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
+import { LETTER_POINTS, WORD_BONUSES, WORD_BOARD_SIZE, createWordGame, passWordTurn, playWordTurn } from '../lib/word-yard';
+import type { WordDirection, WordPlacement } from '../lib/word-yard';
+import { loadWordDictionary } from '../lib/word-yard-dictionary';
+import { createFillerBoard, playFillerMove } from '@/lib/filler';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
-import { createFillerBoard, playFillerMove } from '@/lib/filler';
-import { LETTER_POINTS, WORDS } from '@/lib/word-game-data';
+import './word-yard.css';
 
 type GameId = 'box' | 'kay' | 'chess' | 'dame' | 'words' | 'four-in-a-row' | 'filler';
 type Piece = { side: 0 | 1; kind: string } | null;
@@ -13,7 +16,7 @@ const GAME_INFO: Record<GameId, { name: string; intro: string }> = {
   kay: { name: 'Kay', intro: 'Sow stones around the pits. Capture stones and finish with the larger store.' },
   chess: { name: 'Chess', intro: 'Move pieces and capture the opposing king. This first version uses basic piece movement.' },
   dame: { name: 'Dame', intro: 'Move diagonally, jump opponents, and crown a piece at the far edge.' },
-  words: { name: 'Word Yard', intro: 'Use your letter rack to build a word and score its letter values.' },
+  words: { name: 'Word Yard', intro: 'Build connected words on the shared board, score bonus squares, and use every tile in the bag.' },
   'four-in-a-row': { name: 'Four in a Row', intro: 'Drop a piece into a column and connect four in any direction.' },
   filler: { name: 'Filler', intro: 'Choose a new color to absorb connected tiles and claim more of the board than your opponent.' },
 };
@@ -25,8 +28,6 @@ const CHESS_GLYPHS = {
   white: { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙' },
   black: { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' },
 };
-const newWordRacks = () => [['A', 'E', 'R', 'T', 'N', 'S', 'O'], ['I', 'L', 'D', 'C', 'M', 'P', 'U']];
-
 function initialBoard(id: GameId): Piece[] {
   const board: Piece[] = Array(64).fill(null);
   if (id === 'chess') {
@@ -93,18 +94,34 @@ export default function ClassicGamesPage() {
   const [fillerBoard, setFillerBoard] = useState(createFillerBoard);
   const [pieces, setPieces] = useState<Piece[]>(() => initialBoard(id === 'chess' ? 'chess' : 'dame'));
   const [selected, setSelected] = useState<number | null>(null);
-  const [racks, setRacks] = useState(newWordRacks);
-  const [letterBag, setLetterBag] = useState('EEEEEEEEEEEEAAAAAAAIIIIIIIIIIOOOOOOOONNNNNNRRRRRRTTTTTLLLLSSSSUUUUDDDDGGGBCMMPPFHHVVWWYYKJXQZ');
-  const [word, setWord] = useState('');
-  const [wordError, setWordError] = useState('');
-  const [wordScores, setWordScores] = useState<[number, number]>([0, 0]);
-  const [lastWord, setLastWord] = useState('');
-  const [consecutivePasses, setConsecutivePasses] = useState(0);
+  const [wordGame, setWordGame] = useState(createWordGame);
+  const [wordDictionary, setWordDictionary] = useState<ReadonlySet<string> | null>(null);
+  const [wordPlacements, setWordPlacements] = useState<WordPlacement[]>([]);
+  const [selectedRackIndex, setSelectedRackIndex] = useState<number | null>(null);
+  const [wordDirection, setWordDirection] = useState<WordDirection>('horizontal');
+  const [blankLetter, setBlankLetter] = useState('A');
+  const [wordFeedback, setWordFeedback] = useState('Select a rack tile, then choose an empty board square.');
+
+  useEffect(() => {
+    if (id !== 'words') return;
+    let active = true;
+    loadWordDictionary().then((dictionary) => {
+      if (active) setWordDictionary(dictionary);
+    }).catch(() => {
+      if (active) setWordFeedback('The word list could not be loaded. Reload this page to try again.');
+    });
+    return () => { active = false; };
+  }, [id]);
 
   const reset = () => window.location.reload();
+  const activeTurn = id === 'words' ? wordGame.turn : turn;
+  const gameOver = id === 'words' ? wordGame.status === 'finished' : winner !== null;
   const turnLabel = id === 'chess'
     ? winner === null ? `${turn === 0 ? 'White' : 'Black'} to move` : winner === 2 ? 'Draw' : `${winner === 0 ? 'White' : 'Black'} wins`
-    : winner === null ? `Player ${turn + 1} to move` : winner === 2 ? 'Draw' : `Player ${winner + 1} wins`;
+    : id === 'words' && wordGame.status === 'finished'
+      ? wordGame.winner === 2 ? 'Draw' : `Player ${(wordGame.winner ?? 0) + 1} wins`
+      : gameOver ? winner === 2 ? 'Draw' : `Player ${(winner ?? 0) + 1} wins`
+        : `Player ${activeTurn + 1} to move`;
   const playBoxEdge = (key: string, adjacentBoxes: number[]) => {
     if (winner !== null || dots.has(key)) return;
     const nextEdges = new Set(dots);
@@ -199,33 +216,49 @@ export default function ClassicGamesPage() {
     }
   };
 
-  const submitWord = () => {
-    const value = word.toUpperCase().replace(/[^A-Z]/g, '');
-    const available = [...racks[turn]];
-    if (value.length < 2 || !WORDS.has(value) || !value.split('').every((letter) => {
-      const position = available.indexOf(letter);
-      if (position < 0) return false;
-      available.splice(position, 1);
-      return true;
-    })) { setWordError('Use a word from the starter list and only letters in your rack.'); return; }
-    const nextRacks = racks.map((rack, player) => player === turn ? [...rack] : rack) as string[][];
-    for (const letter of value) nextRacks[turn].splice(nextRacks[turn].indexOf(letter), 1);
-    let nextBag = letterBag;
-    while (nextRacks[turn].length < 7 && nextBag.length) {
-      const drawAt = Math.floor(Math.random() * nextBag.length);
-      nextRacks[turn].push(nextBag[drawAt]);
-      nextBag = nextBag.slice(0, drawAt) + nextBag.slice(drawAt + 1);
+  const placeWordTile = (index: number) => {
+    if (wordGame.status !== 'playing') return;
+    const alreadyPlaced = wordPlacements.find((placement) => placement.index === index);
+    if (alreadyPlaced) {
+      setWordPlacements((current) => current.filter((placement) => placement.index !== index));
+      setSelectedRackIndex(alreadyPlaced.rackIndex);
+      setWordFeedback('Tile returned to your rack selection.');
+      return;
     }
-    setLetterBag(nextBag);
-    setRacks(nextRacks);
-    const points = [...value].reduce((sum, letter) => sum + LETTER_POINTS[letter], 0);
-    setWordScores((old) => { const next: [number, number] = [...old]; next[turn] += points; return next; });
-    setLastWord(value); setWord(''); setWordError(''); setConsecutivePasses(0); setTurn(turn === 0 ? 1 : 0);
+    if (wordGame.board[index] || selectedRackIndex === null) return;
+    const rackLetter = wordGame.racks[wordGame.turn][selectedRackIndex];
+    if (rackLetter === undefined) return;
+    const letter = rackLetter === '?' ? blankLetter : rackLetter;
+    setWordPlacements((current) => [...current, { index, rackIndex: selectedRackIndex, letter }]);
+    setSelectedRackIndex(null);
+    setWordFeedback('Tile placed. Add more tiles or play your word.');
   };
-  const passWordTurn = () => {
-    setWord(''); setWordError('');
-    if (consecutivePasses >= 1) setWinner(wordScores[0] === wordScores[1] ? 2 : wordScores[0] > wordScores[1] ? 0 : 1);
-    else { setConsecutivePasses((value) => value + 1); setTurn(turn === 0 ? 1 : 0); }
+  const submitWord = () => {
+    if (!wordDictionary) {
+      setWordFeedback('The word list is still loading. Try again in a moment.');
+      return;
+    }
+    const result = playWordTurn(wordGame, wordPlacements, wordDirection, wordDictionary);
+    if (!result.ok) {
+      setWordFeedback(result.reason);
+      return;
+    }
+    setWordGame(result.state);
+    setWordPlacements([]);
+    setSelectedRackIndex(null);
+    const ending = result.state.status === 'finished'
+      ? result.state.winner === 2 ? ' The game is a draw.' : ` Player ${(result.state.winner ?? 0) + 1} wins.`
+      : '';
+    setWordFeedback(`${result.words.join(' · ')} scored ${result.score} points.${ending}`);
+  };
+  const passWordTurnHandler = () => {
+    const next = passWordTurn(wordGame);
+    setWordGame(next);
+    setWordPlacements([]);
+    setSelectedRackIndex(null);
+    setWordFeedback(next.status === 'finished'
+      ? `Two passes ended the game. Remaining rack values were deducted. ${next.winner === 2 ? 'The game is a draw.' : `Player ${(next.winner ?? 0) + 1} wins.`}`
+      : 'Player passed. Another consecutive pass will end the round.');
   };
 
   if (isChessGame(id)) return <div className="yard-app">
@@ -293,14 +326,22 @@ export default function ClassicGamesPage() {
     if (col === null) return;
     makeMove(col);
   };
+  const finalWinner = id === 'words' ? wordGame.winner : winner;
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
-    {winner !== null && <GameEndSequence gameName={title} perspective={winner === 2 ? 'draw' : 'local'} winnerName={`Player ${winner + 1}`} opponentName={`Player ${winner === 0 ? 2 : 1}`} score={id === 'words' ? `Player 1 ${wordScores[0]} · Player 2 ${wordScores[1]}` : undefined} onPlayAgain={reset} />}
+    {gameOver && <GameEndSequence
+      gameName={title}
+      perspective={finalWinner === 2 ? 'draw' : 'local'}
+      winnerName={finalWinner === 2 ? 'Players' : `Player ${(finalWinner ?? 0) + 1}`}
+      opponentName={finalWinner === 0 ? 'Player 2' : 'Player 1'}
+      score={id === 'words' ? `Player 1 ${wordGame.scores[0]} · Player 2 ${wordGame.scores[1]}` : undefined}
+      onPlayAgain={reset}
+    />}
     <main className="yard-main" style={{ maxWidth: 980 }}>
       <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
       <header className="yard-heading" style={{ marginTop: 16 }}><div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>{title}</h1><p className="yard-subtitle">{info.intro}</p></div></header>
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}><strong role="status" style={id === 'box' && winner === null ? { color: BOX_PLAYER_COLORS[turn] } : id === 'four-in-a-row' && winner === null ? { color: CONNECT_PLAYER_COLORS[turn] } : undefined}>{id === 'words' ? `${turnLabel} · ${wordScores[0]}–${wordScores[1]}` : turnLabel}</strong><button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}><strong role="status" data-testid="status-current-turn" style={id === 'box' && winner === null ? { color: BOX_PLAYER_COLORS[turn] } : id === 'four-in-a-row' && winner === null ? { color: CONNECT_PLAYER_COLORS[turn] } : undefined}>{id === 'words' ? `${turnLabel} · ${wordGame.scores[0]}–${wordGame.scores[1]}` : turnLabel}</strong><button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button></div>
         {id === 'box' && <><div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 8, fontSize: 12 }}><span style={{ color: BOX_PLAYER_COLORS[0] }}>● Player 1 · Blue</span><span style={{ color: BOX_PLAYER_COLORS[1] }}>● Player 2 · Red</span></div><p style={{ textAlign: 'center' }}>Boxes claimed: Player 1 {claimed.filter((owner) => owner === 0).length} · Player 2 {claimed.filter((owner) => owner === 1).length}</p></>}
         {id === 'four-in-a-row' && <div className="yard-connect-four">
           <div className="yard-connect-legend"><span><i className="yard-connect-red" />Player 1 · Red</span><span><i className="yard-connect-yellow" />Player 2 · Yellow</span></div>
@@ -345,7 +386,94 @@ export default function ClassicGamesPage() {
           <p style={{ maxWidth: 420, margin: '0 auto', textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>Choose a color different from both current territories. Connected tiles of your chosen color join your side. Most tiles wins when the board is full.</p>
         </div>}
         {(id === 'chess' || id === 'dame') && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8,minmax(34px,60px))', justifyContent: 'center', border: '2px solid #58605c' }}>{pieces.map((piece, i) => <button key={i} aria-label={`Square ${i + 1}${piece ? ` ${piece.side === 0 ? 'player one' : 'player two'} ${piece.kind}` : ''}`} onClick={() => makeMove(i)} style={{ aspectRatio: '1', border: selected === i ? '3px solid #75d64b' : '1px solid #121417', background: (Math.floor(i / 8) + i % 8) % 2 ? '#373b3c' : '#c9c6b8', color: piece?.side === 0 ? '#141517' : '#f7f5eb', fontSize: 25, textShadow: '0 1px 2px #000', cursor: 'pointer' }}>{piece ? (id === 'chess' ? ({ K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' } as Record<string, string>)[piece.kind] : '●') : ''}</button>)}</div>}
-        {id === 'words' && <div style={{ maxWidth: 540, margin: 'auto', display: 'grid', gap: 14 }}><p>Your rack: <b>{racks[turn].join(' · ')}</b></p><label>Build a word from your letters<input className="yard-input" value={word} onChange={(event) => { setWord(event.target.value); setWordError(''); }} maxLength={7} /></label><div style={{ display: 'flex', gap: 8 }}><button className="yard-button primary" onClick={submitWord} disabled={winner !== null}>Play word</button><button className="yard-button" onClick={passWordTurn} disabled={winner !== null}>Pass</button></div><p role={wordError ? 'alert' : 'status'}>{wordError || (lastWord ? `${lastWord} scored ${[...lastWord].reduce((sum, letter) => sum + LETTER_POINTS[letter], 0)} points.` : 'Starter dictionary and letter scores. Two consecutive passes end the game.')}</p></div>}
+        {id === 'words' && <div className="word-yard" data-testid="word-yard-game">
+          <div className="wy-layout">
+            <div className="wy-main">
+              <p className="wy-caption" style={{ textAlign: 'center', margin: '0 0 10px' }}>15 × 15 word board · first word covers the center</p>
+              <div className="wy-board-frame">
+                <div className="wy-board" role="grid" aria-label="Word Yard board">
+                  {wordGame.board.map((boardTile, index) => {
+                    const pendingTile = wordPlacements.find((placement) => placement.index === index);
+                    const tile = pendingTile
+                      ? { letter: pendingTile.letter, blank: wordGame.racks[wordGame.turn][pendingTile.rackIndex] === '?' }
+                      : boardTile;
+                    const bonus = !tile ? WORD_BONUSES.get(index) : undefined;
+                    const bonusLabels = { 'double-letter': '2L', 'triple-letter': '3L', 'double-word': '2W', 'triple-word': '3W', center: '★' };
+                    const row = Math.floor(index / WORD_BOARD_SIZE) + 1;
+                    const col = index % WORD_BOARD_SIZE + 1;
+                    const isPlayableCell = !gameOver && (!boardTile || !!pendingTile);
+                    return <button
+                      key={index}
+                      type="button"
+                      role="gridcell"
+                      className="wy-cell"
+                      data-bonus={bonus}
+                      data-bonus-label={bonus ? bonusLabels[bonus] : undefined}
+                      data-testid={`word-board-cell-${index}`}
+                      aria-label={`Row ${row}, column ${col}${tile ? `, ${tile.letter}${tile.blank ? ', blank tile' : ''}` : bonus ? `, ${bonus.replace('-', ' ')}` : ', empty'}${pendingTile ? ', pending tile, click to return' : ''}`}
+                      disabled={!isPlayableCell || (!tile && selectedRackIndex === null)}
+                      onClick={() => placeWordTile(index)}
+                    >{tile && <span className="wy-tile" aria-hidden="true">
+                      <span className="wy-letter">{tile.letter}</span>
+                      <span className="wy-value">{tile.blank ? 0 : LETTER_POINTS[tile.letter]}</span>
+                    </span>}</button>;
+                  })}
+                </div>
+              </div>
+              <p className="wy-caption" style={{ margin: '10px 0 0', textAlign: 'center' }}>
+                Bonuses count only on the turn a tile is placed. Empty bag: {wordGame.bag.length} tiles.
+                {wordDictionary ? ` Dictionary: ${wordDictionary.size.toLocaleString()} words.` : ' Loading dictionary…'}
+              </p>
+            </div>
+            <aside className="wy-sidebar" aria-label="Word Yard game controls">
+              <section className="wy-rack-panel" aria-label={`Player ${wordGame.turn + 1} rack`}>
+                <h2 className="wy-panel-heading"><span>Player {wordGame.turn + 1} rack</span><small>{wordGame.racks[wordGame.turn].length} tiles</small></h2>
+                <div className="wy-rack" role="group" aria-label="Choose a tile from your rack">
+                  {wordGame.racks[wordGame.turn].map((letter, index) => <button
+                    key={`${letter}-${index}`}
+                    type="button"
+                    className={`wy-tile${selectedRackIndex === index ? ' is-selected' : ''}`}
+                    aria-label={`Select ${letter === '?' ? 'blank tile' : `letter ${letter}, ${LETTER_POINTS[letter]} points`}`}
+                    aria-pressed={selectedRackIndex === index}
+                    data-testid={`word-rack-tile-${index}`}
+                    disabled={gameOver || wordPlacements.some((placement) => placement.rackIndex === index)}
+                    onClick={() => {
+                      setSelectedRackIndex((current) => current === index ? null : index);
+                      if (letter === '?') setBlankLetter('A');
+                    }}
+                  ><span className="wy-letter">{letter}</span><span className="wy-value">{LETTER_POINTS[letter]}</span></button>)}
+                </div>
+                {selectedRackIndex !== null && wordGame.racks[wordGame.turn][selectedRackIndex] === '?' && <label className="wy-word-entry">
+                  Choose a letter for the blank tile
+                  <select value={blankLetter} onChange={(event) => setBlankLetter(event.target.value)} data-testid="select-blank-letter">
+                    {'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter) => <option key={letter} value={letter}>{letter}</option>)}
+                  </select>
+                </label>}
+                <p className="wy-caption" style={{ margin: '10px 0 0' }}>
+                  {selectedRackIndex === null ? 'Select a tile, then tap a square.' : 'Now choose an empty square on the board.'}
+                </p>
+              </section>
+              <section className="wy-score-panel" aria-label="Player scores">
+                <span className={`wy-score-label${wordGame.turn === 0 && !gameOver ? ' is-active' : ''}`}>Player 1</span>
+                <span className={`wy-score-value${wordGame.turn === 0 && !gameOver ? ' is-active' : ''}`} data-testid="word-score-player-1">{wordGame.scores[0]}</span>
+                <span className={`wy-score-label${wordGame.turn === 1 && !gameOver ? ' is-active' : ''}`}>Player 2</span>
+                <span className={`wy-score-value${wordGame.turn === 1 && !gameOver ? ' is-active' : ''}`} data-testid="word-score-player-2">{wordGame.scores[1]}</span>
+              </section>
+              <section className="wy-rack-panel" aria-label="Play controls">
+                <div className="wy-play-row" style={{ marginTop: 0 }}>
+                  <button className="wy-action" type="button" aria-pressed={wordDirection === 'horizontal'} disabled={gameOver} onClick={() => setWordDirection('horizontal')}>Across</button>
+                  <button className="wy-action" type="button" aria-pressed={wordDirection === 'vertical'} disabled={gameOver} onClick={() => setWordDirection('vertical')}>Down</button>
+                </div>
+                <div className="wy-play-row">
+                  <button className="wy-action wy-action-primary" type="button" data-testid="button-play-word" onClick={submitWord} disabled={gameOver || !wordDictionary || wordPlacements.length === 0}>Play word</button>
+                  <button className="wy-action" type="button" data-testid="button-pass-word" onClick={passWordTurnHandler} disabled={gameOver}>Pass</button>
+                  <button className="wy-action" type="button" data-testid="button-clear-word" onClick={() => { setWordPlacements([]); setSelectedRackIndex(null); setWordFeedback('Draft cleared.'); }} disabled={gameOver || (!wordPlacements.length && selectedRackIndex === null)}>Clear</button>
+                </div>
+                <p className="wy-message" data-state={wordFeedback.includes('scored') ? 'success' : wordFeedback.includes('not ') || wordFeedback.includes('must') || wordFeedback.includes('Place') ? 'error' : undefined} role="status" aria-live="polite" data-testid="status-word-feedback">{wordFeedback}</p>
+              </section>
+            </aside>
+          </div>
+        </div>}
       </section>
       <p className="yard-subtitle" style={{ marginTop: 12 }}>Local pass-and-play foundation. Online play and advanced rules can be added later.</p>
     </main>

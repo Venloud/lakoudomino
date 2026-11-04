@@ -114,14 +114,17 @@ const gameGuides: GameGuide[] = [
   {
     name: 'Word Yard',
     status: 'Available now',
-    intro: 'Build words from your letter rack and score points from each letter.',
+    intro: 'Build connected words on a shared 15 × 15 board and score letter and word bonuses.',
     href: '/games/words',
     steps: [
-      'Take turns building words from the letters in your rack.',
-      'Each letter has a point value; used letters are replenished from the tile bag.',
-      'Use the starter dictionary and pass if you cannot make a word.',
+      'Select tiles from your rack and place them in one continuous row or column. Existing board tiles can complete a word between your new tiles.',
+      'The first word must cover the center. Every later play must connect to a tile already on the board.',
+      'The main word and every cross-word created by your play must be in the bundled English dictionary.',
+      'Score the letters in every word. Double- and triple-letter and word squares apply only the first time a tile is placed there. Playing all seven rack tiles earns 50 extra points.',
+      'After a play, draw replacement tiles from the shared bag. Pass when you cannot or do not want to play; two consecutive passes end the game.',
+      'If the bag is empty and a player uses their last tile, that player gains the opponent’s remaining tile points. If both players pass, each loses the value of their remaining tiles.',
     ],
-    note: 'This foundation focuses on local word-building and scoring. A shared board, complete dictionary, and bonus squares can be added later.',
+    note: 'The bundled word list is broad and includes uncommon entries. Word Yard is local pass-and-play; both players share one screen.',
   },
   {
     name: 'Scrabble',
