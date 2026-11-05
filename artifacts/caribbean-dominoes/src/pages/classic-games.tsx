@@ -8,6 +8,7 @@ import { loadWordDictionary, lookupWordDefinitions } from '../lib/word-yard-dict
 import type { WordDefinition } from '../lib/word-yard-dictionary';
 import { createFillerBoard, playFillerMove, type FillerPlayer } from '@/lib/filler';
 import { chooseChessBotMove } from '@/lib/chess-bot';
+import { getDameLegalMoves, playDameMove, type DamePiece } from '@/lib/dame';
 import { playKayMove } from '@/lib/kay';
 import { getAutomaticChessDrawReason, hasAutomaticChessDraw } from '@/lib/chess-rules';
 import { clearSavedChessMatch, loadSavedChessMatch, saveChessMatch } from '@/lib/chess-persistence';
@@ -229,6 +230,7 @@ export default function ClassicGamesPage() {
   const chessClockUpdatedAtRef = useRef(Date.now());
   const [promotionMove, setPromotionMove] = useState<ChessMove | null>(restoredChessMatch?.promotionMove ?? null);
   const [selected, setSelected] = useState<number | null>(null);
+  const [dameForcedFrom, setDameForcedFrom] = useState<number | null>(null);
   const [wordGame, setWordGame] = useState(initialWordGame);
   const [wordDictionary, setWordDictionary] = useState<ReadonlySet<string> | null>(null);
   const [pendingWordChallenge, setPendingWordChallenge] = useState<PendingWordChallenge | null>(null);
@@ -333,7 +335,7 @@ export default function ClassicGamesPage() {
       setDrawOfferBy(null);
       setReviewPly(null);
       setPieces(chessPieces(chessRef.current));
-      setTurn(0); setWinner(null); setSelected(null); setChessVersion((version) => version + 1);
+      setTurn(0); setWinner(null); setSelected(null); setDameForcedFrom(null); setChessVersion((version) => version + 1);
       return;
     }
     window.location.reload();
@@ -660,34 +662,30 @@ export default function ClassicGamesPage() {
       else if (next.winner !== null) setFillerWinner(next.winner);
     } else if (id === 'dame') {
       const piece = pieces[index];
-      if (selected === null) { if (piece?.side === turn) setSelected(index); return; }
-      if (piece?.side === turn) { setSelected(index); return; }
-      const fromR = Math.floor(selected / 8), fromC = selected % 8, toR = Math.floor(index / 8), toC = index % 8;
-      const moving = pieces[selected];
-      if (!moving || (piece && piece.side === turn)) return;
-      const dr = toR - fromR, dc = toC - fromC;
-      let valid = false;
-      let capturedIndex: number | null = null;
-      if (id === 'dame') {
-        const direction = turn === 0 ? -1 : 1;
-        const allowedDirection = moving.kind === 'K' ? Math.abs(dr) === 1 || Math.abs(dr) === 2 : dr === direction || dr === 2 * direction;
-        valid = allowedDirection && Math.abs(dc) === Math.abs(dr) && (Math.abs(dr) === 1 ? !piece : !piece && !!pieces[(fromR + dr / 2) * 8 + fromC + dc / 2] && pieces[(fromR + dr / 2) * 8 + fromC + dc / 2]?.side !== turn);
-        if (valid && Math.abs(dr) === 2) capturedIndex = (fromR + dr / 2) * 8 + fromC + dc / 2;
+      const dameBoard = pieces as DamePiece[];
+      const legalMoves = getDameLegalMoves(dameBoard, turn, dameForcedFrom);
+      if (dameForcedFrom !== null) {
+        if (index === dameForcedFrom) return;
+        const result = playDameMove(dameBoard, turn, dameForcedFrom, index, dameForcedFrom);
+        if (!result) return;
+        setPieces(result.board); setTurn(result.turn); setDameForcedFrom(result.forcedFrom);
+        setSelected(result.forcedFrom);
+        if (result.winner !== null) { setWinner(result.winner); setSelected(null); }
+        return;
       }
-      else {
-        const kind = moving.kind;
-        valid = kind === 'N' ? Math.abs(dr * dc) === 2
-          : kind === 'K' ? Math.max(Math.abs(dr), Math.abs(dc)) === 1
-          : kind === 'P' ? (dc === 0 && !piece && dr === (turn === 0 ? -1 : 1)) || (dc === 0 && !piece && fromR === (turn === 0 ? 6 : 1) && dr === (turn === 0 ? -2 : 2) && !pieces[(fromR + (turn === 0 ? -1 : 1)) * 8 + fromC]) || (Math.abs(dc) === 1 && dr === (turn === 0 ? -1 : 1) && !!piece)
-          : (kind === 'R' ? (dr === 0 || dc === 0) : kind === 'B' ? Math.abs(dr) === Math.abs(dc) : dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc)) && pathIsClear(pieces, selected, index);
+      if (selected === null) {
+        if (piece?.side === turn && legalMoves.some((move) => move.from === index)) setSelected(index);
+        return;
       }
-      if (!valid) { setSelected(null); return; }
-      const next = [...pieces]; next[index] = moving; next[selected] = null;
-      if (capturedIndex !== null) next[capturedIndex] = null;
-      if (id === 'dame' && ((turn === 0 && toR === 0) || (turn === 1 && toR === 7))) next[index] = { ...moving, kind: 'K' };
-      setPieces(next); setSelected(null);
-      if (id === 'dame' && !next.some((candidate) => candidate?.side !== turn)) setWinner(turn);
-      else setTurn(turn === 0 ? 1 : 0);
+      if (piece?.side === turn) {
+        if (legalMoves.some((move) => move.from === index)) setSelected(index);
+        return;
+      }
+      const result = playDameMove(dameBoard, turn, selected, index);
+      if (!result) { setSelected(null); return; }
+      setPieces(result.board); setTurn(result.turn); setDameForcedFrom(result.forcedFrom);
+      setSelected(result.forcedFrom);
+      if (result.winner !== null) { setWinner(result.winner); setSelected(null); }
     }
   };
 
@@ -736,29 +734,14 @@ export default function ClassicGamesPage() {
         options.sort((a, b) => b.scoring - a.scoring || a.danger - b.danger);
         if (options[0]) playBoxEdge(options[0].key, options[0].adjacent, true);
       } else if (id === 'dame') {
-        const moves: { from: number; to: number; capture: boolean }[] = [];
-        pieces.forEach((piece, from) => {
-          if (piece?.side !== 1) return;
-          const r = Math.floor(from / 8), c = from % 8;
-          for (const dr of (piece.kind === 'K' ? [-2, -1, 1, 2] : [1, 2])) for (const dc of [-Math.abs(dr), Math.abs(dr)]) {
-            const nr = r + dr, nc = c + dc, to = nr * 8 + nc;
-            if (nr < 0 || nr > 7 || nc < 0 || nc > 7 || pieces[to]) continue;
-            const jumped = Math.abs(dr) === 2 ? pieces[(r + dr / 2) * 8 + c + dc / 2] : null;
-            if (Math.abs(dr) === 2 ? jumped?.side === 0 : !jumped) moves.push({ from, to, capture: Boolean(jumped) });
-          }
-        });
-        if (selected !== null && pieces[selected]?.side === 1) {
-          const move = moves.find((candidate) => candidate.from === selected);
-          if (move) makeMove(move.to, true);
-        } else {
-          const move = moves.sort((a, b) => Number(b.capture) - Number(a.capture))[0];
-          if (move) makeMove(move.from, true);
-          else setWinner(0);
-        }
+        const moves = getDameLegalMoves(pieces as DamePiece[], 1, dameForcedFrom);
+        const move = (selected === null ? moves[0] : moves.find((candidate) => candidate.from === selected)) ?? moves[0];
+        if (!move) setWinner(0);
+        else makeMove(selected === move.from ? move.to : move.from, true);
       }
     }, 420);
     return () => window.clearTimeout(timer);
-  }, [id, playVsBot, activeTurn, gameOver, kayAnimating, four, fillerBoard, fillerCurrentColors, pits, dots, claimed, pieces, selected]);
+  }, [id, playVsBot, activeTurn, gameOver, kayAnimating, four, fillerBoard, fillerCurrentColors, pits, dots, claimed, pieces, selected, dameForcedFrom]);
 
   const placeWordTile = (index: number) => {
     if (wordGame.status !== 'playing' || pendingWordChallenge) return;
