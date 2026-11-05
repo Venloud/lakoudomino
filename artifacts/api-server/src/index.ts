@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { attachRoomWebSocket, initializeRooms } from "./routes/rooms";
 import { initializeTicTacToeRooms } from "./routes/tic-tac-toe";
 import { initializeWordYardRooms } from "./routes/word-yard";
+import { initializeArcadeRooms } from "./routes/arcade";
 
 const rawPort = process.env["PORT"];
 
@@ -30,6 +31,7 @@ server.on("error", (err) => {
 await initializeRooms();
 await initializeTicTacToeRooms();
 await initializeWordYardRooms();
+await initializeArcadeRooms();
 server.listen(port, () => {
   logger.info({ port }, "Server listening");
 });
