@@ -28,7 +28,12 @@ export default function ScrabblePage() {
   const applyRemoteGame = useCallback((state: unknown) => {
     if (state && typeof state === 'object' && Array.isArray((state as ScrabbleGame).board) &&
       Array.isArray((state as ScrabbleGame).racks) && typeof (state as ScrabbleGame).turn === 'number') {
-      setGame(state as ScrabbleGame);
+      const remote = state as ScrabbleGame;
+      setGame({
+        ...remote,
+        bag: [],
+        bagCount: typeof remote.bagCount === 'number' ? remote.bagCount : Array.isArray(remote.bag) ? remote.bag.length : 0,
+      });
       setSelectedRackTiles([]);
       setWord('');
     }
@@ -129,7 +134,7 @@ export default function ScrabblePage() {
           <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} disabled={onlineSession !== null} onClick={() => { setPracticeBot(true); if (playerCount !== 2) newGame(2); }}>Practice vs bot</button>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 18, marginBottom: 12, fontSize: 13 }}>
-          {game.scores.map((score, index) => <span key={index} aria-current={game.turn === index ? 'step' : undefined}>Player {index + 1} <b>{score}</b></span>)}<span>Tiles left <b>{game.bag.length}</b></span>
+          {game.scores.map((score, index) => <span key={index} aria-current={game.turn === index ? 'step' : undefined}>Player {index + 1} <b>{score}</b></span>)}<span>Tiles left <b>{game.bagCount}</b></span>
         </div>
         <div role="grid" aria-label="Scrabble board" className="yard-scrabble-board" style={{ display: 'grid', gridTemplateColumns: `repeat(${SCRABBLE_SIZE}, minmax(0,1fr))`, gap: 2, width: 'min(100%, 660px)', margin: '0 auto', padding: 5, borderRadius: 8, background: '#0e1112' }}>
           {game.board.map((tile, index) => {
@@ -167,7 +172,7 @@ export default function ScrabblePage() {
             <button type="button" className="yard-button" aria-pressed={direction === 'horizontal'} disabled={botTurn} onClick={() => setDirection('horizontal')}>Across</button>
             <button type="button" className="yard-button" aria-pressed={direction === 'vertical'} disabled={botTurn} onClick={() => setDirection('vertical')}>Down</button>
             <button type="button" className="yard-button primary" onClick={handlePlay} disabled={game.winner !== null || botTurn || !canAct}>Play word</button>
-            <button type="button" className="yard-button" onClick={handleExchange} disabled={game.winner !== null || botTurn || !canAct || selectedRackTiles.length === 0 || game.bag.length < 7}>Exchange selected</button>
+            <button type="button" className="yard-button" onClick={handleExchange} disabled={game.winner !== null || botTurn || !canAct || selectedRackTiles.length === 0 || game.bagCount < 7}>Exchange selected</button>
             <button type="button" className="yard-button" onClick={handlePass} disabled={game.winner !== null || botTurn || !canAct}>Pass</button>
           </div>
           <p role="status" style={{ minHeight: 18, margin: 0, textAlign: 'center', color: '#b7b8b9', fontSize: 12 }}>{message}</p>
