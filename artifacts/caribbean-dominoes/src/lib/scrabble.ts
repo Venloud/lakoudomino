@@ -8,6 +8,7 @@ export type ScrabbleGame = {
   board: (ScrabbleTile | null)[];
   racks: string[][];
   bag: string[];
+  bagCount: number;
   scores: number[];
   turn: ScrabblePlayer;
   playerCount: 2 | 3 | 4;
@@ -57,7 +58,7 @@ export function createScrabbleGame(random: () => number = Math.random, playerCou
     remaining = draw.bag;
     return draw.drawn;
   });
-  return { board: Array(SCRABBLE_SIZE * SCRABBLE_SIZE).fill(null), racks, bag: remaining, scores: Array(playerCount).fill(0), turn: 0, playerCount, passes: 0, winner: null };
+  return { board: Array(SCRABBLE_SIZE * SCRABBLE_SIZE).fill(null), racks, bag: remaining, bagCount: remaining.length, scores: Array(playerCount).fill(0), turn: 0, playerCount, passes: 0, winner: null };
 }
 
 function adjacentIndexes(index: number): number[] {
@@ -157,11 +158,12 @@ export function playScrabbleWord(game: ScrabbleGame, move: ScrabbleMove): Scrabb
   if (newIndexes.size === 7) points += 50;
   const scores = [...game.scores];
   scores[player] += points;
-  const refill = drawTiles(game.bag, Math.min(7 - rack.length, game.bag.length));
+  const drawCount = Math.min(7 - rack.length, game.bagCount);
+  const refill = drawTiles(game.bag, drawCount);
   const racks = game.racks.map((tiles) => [...tiles]);
   racks[player] = [...rack, ...refill.drawn];
-  const next: ScrabbleGame = { ...game, board, racks, bag: refill.bag, scores, turn: nextPlayer(game), passes: 0 };
-  const emptied = next.bag.length === 0 && racks[player].length === 0;
+  const next: ScrabbleGame = { ...game, board, racks, bag: refill.bag, bagCount: game.bagCount - drawCount, scores, turn: nextPlayer(game), passes: 0 };
+  const emptied = next.bagCount === 0 && racks[player].length === 0;
   if (emptied) {
     let opponentLeftover = 0;
     racks.forEach((tiles, index) => {
@@ -177,7 +179,7 @@ export function playScrabbleWord(game: ScrabbleGame, move: ScrabbleMove): Scrabb
 
 export function exchangeScrabbleTiles(game: ScrabbleGame, tiles: string[], random: () => number = Math.random): ScrabbleResult {
   if (game.winner !== null) return { error: 'This game is already over.' };
-  if (game.bag.length < 7) return { error: 'You need at least 7 tiles in the bag to exchange.' };
+  if (game.bagCount < 7) return { error: 'You need at least 7 tiles in the bag to exchange.' };
   if (tiles.length === 0) return { error: 'Select at least one tile to exchange.' };
   const rack = [...game.racks[game.turn]];
   for (const tile of tiles) {
@@ -185,8 +187,9 @@ export function exchangeScrabbleTiles(game: ScrabbleGame, tiles: string[], rando
     if (index < 0) return { error: 'One or more selected tiles are not in your rack.' };
     rack.splice(index, 1);
   }
-  const draw = drawTiles(game.bag, tiles.length);
-  const bag = shuffle([...draw.bag, ...tiles], random);
+  const drawCount = Math.min(tiles.length, game.bagCount);
+  const draw = drawTiles(game.bag, drawCount);
+  const bag = game.bag.length ? shuffle([...draw.bag, ...tiles], random) : [];
   const racks = game.racks.map((current, index) => index === game.turn ? [...rack, ...draw.drawn] : [...current]);
   return { game: { ...game, racks, bag, turn: nextPlayer(game), passes: 0 } };
 }

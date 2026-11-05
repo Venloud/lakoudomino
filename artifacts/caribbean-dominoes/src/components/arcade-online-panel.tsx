@@ -26,6 +26,16 @@ const isRoom = (value: unknown): value is PublicRoom =>
   typeof (value as PublicRoom).code === "string" &&
   Array.isArray((value as PublicRoom).players);
 
+const clientStateFor = (game: string, state: unknown): unknown => {
+  if (game !== "scrabble" || !state || typeof state !== "object" || Array.isArray(state)) return state;
+  const gameState = state as Record<string, unknown>;
+  const bag = Array.isArray(gameState.bag) ? gameState.bag : [];
+  const bagCount = Number.isInteger(gameState.bagCount) && Number(gameState.bagCount) >= 0
+    ? Number(gameState.bagCount)
+    : bag.length;
+  return { ...gameState, bag: [], bagCount };
+};
+
 export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemoteState, onRoomChange }: Props) {
   const [name, setName] = useState(() => localStorage.getItem("yard-display-name") ?? "");
   const [codeInput, setCodeInput] = useState("");
@@ -47,12 +57,17 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
   const outgoingState = useMemo(() => {
     if (game !== "scrabble" || !access || !state || typeof state !== "object" || Array.isArray(state)) return state;
     const gameState = state as Record<string, unknown>;
+    const bagCount = Number.isInteger(gameState.bagCount) && Number(gameState.bagCount) >= 0
+      ? Number(gameState.bagCount)
+      : Array.isArray(gameState.bag) ? gameState.bag.length : 0;
+    const publicState = { ...gameState };
+    delete publicState.bagCount;
     return {
-      ...gameState,
+      ...publicState,
       racks: Array.isArray(gameState.racks)
         ? gameState.racks.map((rack, index) => index === access.seat && Array.isArray(rack) ? rack : [])
         : [],
-      bag: Array.isArray(gameState.bag) ? gameState.bag.map(() => "") : [],
+      bag: Array.from({ length: bagCount }, () => ""),
     };
   }, [access, game, state]);
 
@@ -88,9 +103,10 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
             const ownState = game === "block-drop" && Array.isArray(data.room.state)
               ? data.room.state[access.seat]
               : data.room.state;
-            const serialized = JSON.stringify(ownState);
+            const clientState = clientStateFor(game, ownState);
+            const serialized = JSON.stringify(clientState);
           lastReceivedRef.current = serialized;
-          onRemoteState(data.room.state);
+          onRemoteState(game === "block-drop" ? data.room.state : clientState);
         }
       } else if (data.type === "resigned") {
         setNotice(data.seat === access.seat ? "You left the match." : "An opponent left the match.");

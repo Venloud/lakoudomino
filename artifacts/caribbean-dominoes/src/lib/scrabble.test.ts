@@ -6,6 +6,7 @@ const fixture = (overrides: Partial<ScrabbleGame> = {}): ScrabbleGame => ({
   board: Array(SCRABBLE_SIZE * SCRABBLE_SIZE).fill(null),
   racks: [['C', 'A', 'T', 'S', 'E', 'R', 'N'], ['T', 'A', 'R', 'E', 'S', 'N', 'O']],
   bag: [],
+  bagCount: overrides.bagCount ?? overrides.bag?.length ?? 0,
   scores: [0, 0],
   turn: 0,
   playerCount: 2,
@@ -20,6 +21,7 @@ describe('Scrabble foundation', () => {
     assert.equal(game.racks[0].length, 7);
     assert.equal(game.racks[1].length, 7);
     assert.equal(game.bag.length, 86);
+    assert.equal(game.bagCount, 86);
   });
 
   it('supports a four-player deal and cycles turns around all seats', () => {
@@ -41,8 +43,31 @@ describe('Scrabble foundation', () => {
     assert.ok(exchanged.game);
     assert.equal(exchanged.game.racks[0].length, 7);
     assert.equal(exchanged.game.bag.length, 86);
+    assert.equal(exchanged.game.bagCount, 86);
     assert.equal(exchanged.game.turn, 1);
-    assert.match(exchangeScrabbleTiles({ ...game, bag: [] }, ['A']).error ?? '', /at least 7/);
+    assert.match(exchangeScrabbleTiles({ ...game, bag: [], bagCount: 0 }, ['A']).error ?? '', /at least 7/);
+  });
+
+  it('keeps online bag counts separate from hidden tile identities during moves', () => {
+    const online = fixture({ bag: [], bagCount: 10 });
+    const word = playScrabbleWord(online, { word: 'CAT', row: 7, col: 6, direction: 'horizontal' });
+    assert.ok(word.game);
+    assert.deepEqual(word.game.racks[0], ['S', 'E', 'R', 'N']);
+    assert.equal(word.game.racks[0].includes(''), false);
+    assert.equal(word.game.bag.length, 0);
+    assert.equal(word.game.bagCount, 7);
+
+    const passed = passScrabbleTurn(online);
+    assert.deepEqual(passed.racks[0], online.racks[0]);
+    assert.equal(passed.bag.length, 0);
+    assert.equal(passed.bagCount, 10);
+
+    const exchanged = exchangeScrabbleTiles(online, ['C']);
+    assert.ok(exchanged.game);
+    assert.equal(exchanged.game.racks[0].length, 6);
+    assert.equal(exchanged.game.racks[0].includes(''), false);
+    assert.equal(exchanged.game.bag.length, 0);
+    assert.equal(exchanged.game.bagCount, 10);
   });
 
   it('requires the first word to cover the center and scores its double-word square', () => {
