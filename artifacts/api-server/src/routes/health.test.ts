@@ -3,7 +3,13 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import express from "express";
 import test from "node:test";
-import { loadPersistedRooms, type PersistedRoomStore } from "../lib/room-persistence.ts";
+import {
+  createRoomRecoveryAlertPayload,
+  getRoomRecoveryDiagnostics,
+  loadPersistedRooms,
+  type RoomRecoveryDiagnostics,
+  type PersistedRoomStore,
+} from "../lib/room-persistence.ts";
 import healthRouter from "./health.ts";
 
 test("health exposes skipped-room counts and field paths without identifiers or credentials", async () => {
@@ -60,6 +66,14 @@ test("health exposes skipped-room counts and field paths without identifiers or 
       { fieldPath: "mode", occurrenceCount: 2 },
       { fieldPath: "seats", occurrenceCount: 2 },
     ]);
+    assert.deepEqual(createRoomRecoveryAlertPayload(getRoomRecoveryDiagnostics()), {
+      event: "persisted_room_recovery_skipped",
+      skippedRoomCount: 2,
+      issueCounts: [
+        { fieldPath: "mode", occurrenceCount: 2 },
+        { fieldPath: "seats", occurrenceCount: 2 },
+      ],
+    });
     const serialized = JSON.stringify(body);
     assert.equal(serialized.includes("PRIVATE-ROOM-CODE"), false);
     assert.equal(serialized.includes("ANOTHER-PRIVATE-CODE"), false);
@@ -69,4 +83,31 @@ test("health exposes skipped-room counts and field paths without identifiers or 
       server.close((error) => error ? reject(error) : resolveClose());
     });
   }
+});
+
+test("recovery alert is absent for zero skips and only contains aggregate safe paths", () => {
+  const emptyDiagnostics: RoomRecoveryDiagnostics = {
+    checkedAt: null,
+    skippedRoomCount: 0,
+    issueCounts: [],
+  };
+  assert.equal(createRoomRecoveryAlertPayload(emptyDiagnostics), null);
+
+  const alert = createRoomRecoveryAlertPayload({
+    checkedAt: "2026-11-05T00:00:00.000Z",
+    skippedRoomCount: 1,
+    issueCounts: [
+      { fieldPath: "mode", occurrenceCount: 1 },
+      { fieldPath: "RECONNECT-HASH-SENTINEL", occurrenceCount: 1 },
+    ],
+  });
+  assert.deepEqual(alert, {
+    event: "persisted_room_recovery_skipped",
+    skippedRoomCount: 1,
+    issueCounts: [
+      { fieldPath: "mode", occurrenceCount: 1 },
+      { fieldPath: "unknown", occurrenceCount: 1 },
+    ],
+  });
+  assert.equal(JSON.stringify(alert).includes("RECONNECT-HASH-SENTINEL"), false);
 });
