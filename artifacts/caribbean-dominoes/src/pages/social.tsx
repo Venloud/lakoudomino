@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import {
@@ -8,10 +8,11 @@ import {
 import {
   getGetAuthMeQueryKey, getGetLobbyQueryKey, getListFriendsQueryKey,
   getGetRecentMatchesQueryKey as getRecentMatchesQueryKey, getGetTicTacToeResultsQueryKey,
-  useAcceptFriendInvite, useAcceptFriendRequest, useCreateFriendInvite,
+  useAcceptFriendInvite, useAcceptFriendRequest, useCreateFriendInvite, useDismissFriendInvite,
   useCreateFriendRequest, useDeclineFriendRequest, useGetAuthMe, useGetLobby,
   useGetRecentMatches, useGetTicTacToeResults, useJoinRoom, useJoinTicTacToeRoom, useListFriends, useLogout,
 } from '@workspace/api-client-react';
+import { getClientId } from '@/lib/lakou-session';
 import { TicTacToeProfileResults } from './tic-tac-toe-profile';
 
 type Destination = 'home' | 'games' | 'friends' | 'leaderboard' | 'profile' | 'about';
@@ -235,6 +236,7 @@ export default function SocialPage({ page }: { page: Destination }) {
   const acceptRequest = useAcceptFriendRequest();
   const declineRequest = useDeclineFriendRequest();
   const acceptInvite = useAcceptFriendInvite();
+  const dismissInvite = useDismissFriendInvite();
   const createFriendInvite = useCreateFriendInvite();
   const joinRoom = useJoinRoom();
   const joinTicTacToeRoom = useJoinTicTacToeRoom();
@@ -245,6 +247,38 @@ export default function SocialPage({ page }: { page: Destination }) {
   const [invitingFriendId, setInvitingFriendId] = useState<string | null>(null);
   const friendData = friendsQuery.data;
   const unreadSocial = (friendData?.requests.length ?? 0) + (friendData?.invites.length ?? 0);
+  useEffect(() => {
+    if (!signedIn) return;
+    let closed = false;
+    let retry: number | undefined;
+    let socket: WebSocket | null = null;
+    const connect = () => {
+      if (closed) return;
+      socket = new WebSocket(`${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?lobby=1&clientId=${encodeURIComponent(getClientId())}`);
+      socket.onopen = () => {
+        void client.invalidateQueries({ queryKey: getListFriendsQueryKey() });
+      };
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as { type?: string };
+          if (message.type === 'roomInvite' || message.type === 'friendRequest' || message.type === 'friendRequestUpdated') {
+            void client.invalidateQueries({ queryKey: getListFriendsQueryKey() });
+          }
+        } catch {
+          // Ignore unrelated malformed lobby events; the friends query remains the source of truth.
+        }
+      };
+      socket.onclose = () => {
+        if (!closed) retry = window.setTimeout(connect, 1200);
+      };
+    };
+    connect();
+    return () => {
+      closed = true;
+      if (retry !== undefined) window.clearTimeout(retry);
+      socket?.close();
+    };
+  }, [client, signedIn]);
   const leaderRows = lobby.data?.leaderboard ?? [];
   const openGames = lobby.data?.tables ?? [];
   const handleLogout = () => logout.mutate(undefined, {
@@ -283,6 +317,7 @@ export default function SocialPage({ page }: { page: Destination }) {
   };
   const joinInvite = (id: string) => acceptInvite.mutate({ id }, {
     onSuccess: (result) => {
+      void client.invalidateQueries({ queryKey: getListFriendsQueryKey() });
       const displayName = user?.username ?? 'Guest';
       if (result.game === 'word-yard') {
         void fetch(`/api/word-yard/rooms/${encodeURIComponent(result.roomCode)}/join`, {
@@ -389,7 +424,7 @@ export default function SocialPage({ page }: { page: Destination }) {
       </div>)}</div> : null}
       {friendData?.invites.length ? <div className="yard-section-space"><p className="yard-kicker">Game invitations · {friendData.invites.length}</p>{friendData.invites.map((invite) => {
         const gameName = gameCatalog.find((game) => game.slug === invite.game || (game.slug === 'words' && invite.game === 'word-yard'))?.name ?? invite.game;
-        return <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to {gameName} · {invite.roomCode}</small></span><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button></div>;
+        return <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to {gameName} · {invite.roomCode}</small></span><span className="yard-list-actions"><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button><button className="yard-small-button" disabled={dismissInvite.isPending} onClick={() => dismissInvite.mutate({ id: invite.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`dismiss-invite-${invite.id}`}>Dismiss</button></span></div>;
       })}</div> : null}
       <div className="yard-section-space">
         <p className="yard-kicker">Your friends · {friendRows.length}</p>
