@@ -782,6 +782,7 @@ export interface Presence {
   status: PresenceStatus;
   detail?: string;
   roomCode?: string;
+  game?: string;
 }
 
 export interface Friend {

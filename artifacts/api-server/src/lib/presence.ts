@@ -3,7 +3,7 @@ import WebSocket from "ws";
 import { db, dominoUsers } from "@workspace/db";
 import { logger } from "./logger";
 
-export type Presence = { status: "lobby" | "game" | "online"; detail?: string; roomCode?: string };
+export type Presence = { status: "lobby" | "game" | "online"; detail?: string; roomCode?: string; game?: string };
 export type PresenceClient = "lobby" | "room";
 export type PresenceRegistration = {
   identityKey: string;
@@ -13,6 +13,7 @@ export type PresenceRegistration = {
   status: Presence["status"];
   detail?: string;
   roomCode?: string;
+  game?: string;
 };
 type Connection = PresenceRegistration & { socket: WebSocket };
 
@@ -44,11 +45,14 @@ export function trackPresence(socket: WebSocket, registration: PresenceRegistrat
 
 export function updatePresence(
   socket: WebSocket,
-  update: Partial<Pick<PresenceRegistration, "status" | "detail" | "roomCode">>,
+  update: Partial<Pick<PresenceRegistration, "status" | "detail" | "roomCode" | "game">>,
 ): void {
   const previous = connections.get(socket);
   if (!previous) return;
-  connections.set(socket, { ...previous, ...update, socket });
+  const next = { ...previous, ...update, socket };
+  if (previous.status === next.status && previous.detail === next.detail &&
+      previous.roomCode === next.roomCode && previous.game === next.game) return;
+  connections.set(socket, next);
   broadcastPresenceChanged();
 }
 
@@ -77,6 +81,7 @@ export function getPresenceForUser(userId: string): Presence | null {
     status: current.status,
     ...(current.detail ? { detail: current.detail } : {}),
     ...(current.status === "game" && current.roomCode ? { roomCode: current.roomCode } : {}),
+    ...(current.status === "game" && current.game ? { game: current.game } : {}),
   };
 }
 
