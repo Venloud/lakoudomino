@@ -695,8 +695,33 @@ components:
       properties:
         status:
           type: string
+        roomRecovery:
+          type: object
+          description: Safe summary of the most recent persisted Domino room recovery attempt.
+          properties:
+            checkedAt:
+              type: string
+              format: date-time
+              nullable: true
+            skippedRoomCount:
+              type: integer
+              minimum: 0
+            issueCounts:
+              type: array
+              items:
+                type: object
+                properties:
+                  fieldPath:
+                    type: string
+                    maxLength: 120
+                  occurrenceCount:
+                    type: integer
+                    minimum: 1
+                required: [fieldPath, occurrenceCount]
+          required: [checkedAt, skippedRoomCount, issueCounts]
       required:
         - status
+        - roomRecovery
     RoomMode:
       type: string
       enum: [regular, points]

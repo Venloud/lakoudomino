@@ -12,8 +12,23 @@ import * as zod from 'zod';
  * Returns server health status
  * @summary Health check
  */
+export const healthCheckResponseRoomRecoverySkippedRoomCountMin = 0;
+
+export const healthCheckResponseRoomRecoveryIssueCountsItemFieldPathMax = 120;
+
+
+
+
 export const HealthCheckResponse = zod.object({
-  "status": zod.string()
+  "status": zod.string(),
+  "roomRecovery": zod.object({
+  "checkedAt": zod.coerce.date().nullable(),
+  "skippedRoomCount": zod.number().int().min(healthCheckResponseRoomRecoverySkippedRoomCountMin),
+  "issueCounts": zod.array(zod.object({
+  "fieldPath": zod.string().max(healthCheckResponseRoomRecoveryIssueCountsItemFieldPathMax),
+  "occurrenceCount": zod.number().int().min(1)
+}))
+}).describe('Safe summary of the most recent persisted Domino room recovery attempt.')
 })
 
 
