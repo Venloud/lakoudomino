@@ -63,6 +63,39 @@ test('checkmate ends the game and stalemate is a draw', () => {
   assert.equal(getChessStatus(stalemate), 'stalemate');
 });
 
+test('threefold repetition ends the game automatically', () => {
+  let game = createChessGame();
+  for (let cycle = 0; cycle < 2; cycle++) {
+    game = move(game, 62, 45);
+    game = move(game, 6, 21);
+    game = move(game, 45, 62);
+    game = move(game, 21, 6);
+  }
+  assert.equal(getChessStatus(game), 'threefold-repetition');
+});
+
+test('the 50-move rule ends after 100 quiet half-moves and resets on a pawn move', () => {
+  const quietPosition = { ...position([[60, 0, 'K'], [4, 1, 'K'], [0, 0, 'R']]), halfmoveClock: 99 };
+  const afterQuietMove = move(quietPosition, 0, 8);
+  assert.equal(afterQuietMove.halfmoveClock, 100);
+  assert.equal(getChessStatus(afterQuietMove), 'fifty-move-rule');
+
+  const pawnPosition = { ...position([[60, 0, 'K'], [4, 1, 'K'], [52, 0, 'P']]), halfmoveClock: 99 };
+  const afterPawnMove = move(pawnPosition, 52, 44);
+  assert.equal(afterPawnMove.halfmoveClock, 0);
+  assert.notEqual(getChessStatus(afterPawnMove), 'fifty-move-rule');
+
+  const capturePosition = { ...position([[60, 0, 'K'], [4, 1, 'K'], [0, 0, 'R'], [8, 1, 'N']]), halfmoveClock: 99 };
+  assert.equal(move(capturePosition, 0, 8).halfmoveClock, 0);
+});
+
+test('kings with insufficient minor material end the game automatically', () => {
+  assert.equal(getChessStatus(position([[60, 0, 'K'], [4, 1, 'K']])), 'insufficient-material');
+  assert.equal(getChessStatus(position([[60, 0, 'K'], [4, 1, 'K'], [42, 0, 'B']])), 'insufficient-material');
+  assert.equal(getChessStatus(position([[60, 0, 'K'], [4, 1, 'K'], [42, 0, 'N']])), 'insufficient-material');
+  assert.equal(getChessStatus(position([[60, 0, 'K'], [4, 1, 'K'], [42, 0, 'B'], [26, 1, 'B']])), 'insufficient-material');
+});
+
 test('castling moves the rook and is forbidden through an attacked square', () => {
   const rights: ChessGame['castling'] = {
     0: { kingSide: true, queenSide: true },

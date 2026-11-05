@@ -96,7 +96,7 @@ const gameGuides: GameGuide[] = [
       'Rooks move along ranks and files; bishops move diagonally; queens move in either direction.',
       'Knights move in an L shape and can jump over pieces. Kings move one square in any direction, but may not move into or remain in check.',
       'Castle with an unmoved king and rook when the path is clear and the king is not in, through, or into check.',
-      'Checkmate wins when the king is in check with no legal escape. If the player to move has no legal move but is not in check, the game is a draw by stalemate. White moves first.',
+      'Checkmate wins when the king is in check with no legal escape. The game ends in a draw by stalemate, insufficient material, threefold repetition, or the 50-move rule. Fivefold repetition and the 75-move rule also end the game automatically. White moves first.',
     ],
     note: 'Moves that expose your king are illegal. Promotion choices are queen, rook, bishop, or knight.',
   },
