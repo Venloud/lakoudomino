@@ -6,9 +6,11 @@ import { once } from "node:events";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { WebSocket } from "ws";
 import { pool } from "@workspace/db";
 import { autoStep, createMatch } from "lakou-engine";
 import { serializeRoom } from "../lib/room-persistence-codec.ts";
+import { SOCKET_AUTHENTICATION_ERROR, SOCKET_PROTOCOL_ERROR } from "../lib/room-protocol.ts";
 import type { PersistedRoomState } from "../lib/room-types.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -90,6 +92,76 @@ async function stopRoomsProcess(child: ChildProcess): Promise<void> {
   ]);
   if (timeout) clearTimeout(timeout);
   await exited;
+}
+
+async function createRoomsTable(schema: string): Promise<void> {
+  await pool.query(`
+    CREATE TABLE "${schema}".domino_rooms (
+      code text PRIMARY KEY,
+      host_name text NOT NULL,
+      mode text NOT NULL,
+      row_length integer NOT NULL,
+      player_count integer NOT NULL DEFAULT 4,
+      row_boxes integer NOT NULL DEFAULT 10,
+      two_player_variant text NOT NULL DEFAULT 'draw',
+      turn_seconds integer NOT NULL DEFAULT 30,
+      is_private boolean NOT NULL DEFAULT false,
+      seed integer,
+      status text NOT NULL,
+      seats jsonb NOT NULL,
+      last_action text,
+      engine_state jsonb,
+      waitlist jsonb NOT NULL DEFAULT '[]',
+      offers jsonb NOT NULL DEFAULT '[]',
+      active_match_id text,
+      stats_recorded boolean NOT NULL DEFAULT false,
+      match_participants jsonb NOT NULL DEFAULT '[]',
+      host_disconnected_at bigint,
+      quarantined_at timestamptz,
+      quarantine_issues jsonb,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+async function receiveSocketMessage(socket: WebSocket): Promise<JsonRecord> {
+  return await new Promise((resolveMessage, rejectMessage) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+    };
+    const onMessage = (raw: unknown) => {
+      cleanup();
+      try {
+        resolveMessage(JSON.parse(String(raw)) as JsonRecord);
+      } catch (error) {
+        rejectMessage(error);
+      }
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      rejectMessage(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectMessage(new Error("Timed out waiting for a room WebSocket message."));
+    }, 5_000);
+    socket.once("message", onMessage);
+    socket.once("error", onError);
+  });
+}
+
+async function openRoomSocket(baseUrl: string, code: string): Promise<WebSocket> {
+  const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws?code=${encodeURIComponent(code)}`);
+  await once(socket, "open");
+  return socket;
+}
+
+async function expectSocketError(socket: WebSocket, payload: string, expected: string): Promise<void> {
+  const message = receiveSocketMessage(socket);
+  socket.send(payload);
+  assert.deepEqual(await message, { type: "error", message: expected });
 }
 
 function makeRoom(code: string, match: ReturnType<typeof createMatch>["match"], botOnTurn: boolean): PersistedRoomState {
@@ -195,33 +267,7 @@ test("a restored bot turn resumes automatically while a restored human turn wait
   let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
   await pool.query(`CREATE SCHEMA ${quotedSchema}`);
   try {
-    await pool.query(`
-      CREATE TABLE ${quotedSchema}.domino_rooms (
-        code text PRIMARY KEY,
-        host_name text NOT NULL,
-        mode text NOT NULL,
-        row_length integer NOT NULL,
-        player_count integer NOT NULL DEFAULT 4,
-        row_boxes integer NOT NULL DEFAULT 10,
-        two_player_variant text NOT NULL DEFAULT 'draw',
-        turn_seconds integer NOT NULL DEFAULT 30,
-        is_private boolean NOT NULL DEFAULT false,
-        seed integer,
-        status text NOT NULL,
-        seats jsonb NOT NULL,
-        last_action text,
-        engine_state jsonb,
-        waitlist jsonb NOT NULL DEFAULT '[]',
-        offers jsonb NOT NULL DEFAULT '[]',
-        active_match_id text,
-        stats_recorded boolean NOT NULL DEFAULT false,
-        match_participants jsonb NOT NULL DEFAULT '[]',
-        host_disconnected_at bigint,
-        quarantined_at timestamptz,
-        quarantine_issues jsonb,
-        updated_at timestamptz NOT NULL DEFAULT now()
-      )
-    `);
+    await createRoomsTable(schema);
 
     const initial = createMatch({
       mode: "regular",
@@ -261,6 +307,100 @@ test("a restored bot turn resumes automatically while a restored human turn wait
       "a restored human turn must wait for the player instead of playing automatically",
     );
   } finally {
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("live room WebSocket rejects invalid and unauthenticated messages without changing the room snapshot", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room WebSocket integration tests.");
+
+  const schema = `rooms_ws_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  let spectator: WebSocket | undefined;
+  let player: WebSocket | undefined;
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    const createResponse = await fetch(`${api.baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        displayName: "Protocol host",
+        mode: "regular",
+        playerCount: 2,
+        rowLength: 10,
+        rowBoxes: 10,
+        twoPlayerVariant: "draw",
+        isPrivate: true,
+      }),
+    });
+    if (createResponse.status !== 201) assert.fail(`room create failed: ${await createResponse.text()}`);
+    const created = await createResponse.json() as { code: string; reconnectToken: string };
+    const joinResponse = await fetch(`${api.baseUrl}/api/rooms/${created.code}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "Protocol guest" }),
+    });
+    if (joinResponse.status !== 200) assert.fail(`room join failed: ${await joinResponse.text()}`);
+    const joined = await joinResponse.json() as { reconnectToken: string };
+    const startResponse = await fetch(`${api.baseUrl}/api/rooms/${created.code}/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reconnectToken: created.reconnectToken }),
+    });
+    if (startResponse.status !== 200) assert.fail(`room start failed: ${await startResponse.text()}`);
+    const baseline = await getGame(api.baseUrl, created.code);
+
+    spectator = await openRoomSocket(api.baseUrl, created.code);
+    const unchanged = async () => assert.deepEqual(await getGame(api!.baseUrl, created.code), baseline);
+    await expectSocketError(spectator, "{malformed", SOCKET_PROTOCOL_ERROR);
+    await unchanged();
+    await expectSocketError(spectator, JSON.stringify({ type: "unknown-event" }), SOCKET_PROTOCOL_ERROR);
+    await unchanged();
+
+    const legacyHello = receiveSocketMessage(spectator);
+    spectator.send(JSON.stringify({ type: "hello", displayName: "Legacy display name" }));
+    const legacyWelcome = await legacyHello;
+    assert.equal(legacyWelcome.type, "snapshot");
+    assert.equal((legacyWelcome.game as JsonRecord).yourSeat, null, "a display-name-only hello must remain a spectator");
+    await unchanged();
+
+    await expectSocketError(spectator, JSON.stringify({
+      type: "play", tileId: "0-0", side: "left",
+    }), SOCKET_AUTHENTICATION_ERROR);
+    await unchanged();
+
+    const turnSeat = Number(baseline.turnSeat);
+    const playerToken = turnSeat === 0 ? created.reconnectToken : joined.reconnectToken;
+    player = await openRoomSocket(api.baseUrl, created.code);
+    const playerWelcomePromise = receiveSocketMessage(player);
+    player.send(JSON.stringify({ type: "hello", reconnectToken: playerToken }));
+    const playerWelcome = await playerWelcomePromise;
+    const playerGame = playerWelcome.game as JsonRecord;
+    assert.equal(playerGame.yourSeat, turnSeat);
+    const hand = playerGame.hand as JsonRecord[];
+    const openEnds = playerGame.openEnds as JsonRecord[];
+    assert.ok(hand.length > 0, "the active player should have a tile to try");
+    const unsupportedSide = ["right", "top", "bottom", "left"].find((side) =>
+      !openEnds.some((end) => end.id === side));
+    assert.ok(unsupportedSide, "the board should not have every possible end open");
+
+    await expectSocketError(player, JSON.stringify({
+      type: "play", tileId: hand[0].id, side: unsupportedSide,
+    }), "That tile cannot be played on that end");
+    await unchanged();
+  } finally {
+    spectator?.terminate();
+    player?.terminate();
     if (api) await stopRoomsProcess(api.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
