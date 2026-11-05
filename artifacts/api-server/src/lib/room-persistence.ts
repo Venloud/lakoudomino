@@ -29,10 +29,48 @@ export type PersistedRoomStore = {
   quarantineRoom: (quarantine: PersistedRoomQuarantine) => Promise<void>;
 };
 
+export type RoomRecoveryDiagnostics = {
+  checkedAt: string | null;
+  skippedRoomCount: number;
+  issueCounts: Array<{ fieldPath: string; occurrenceCount: number }>;
+};
+
+let roomRecoveryDiagnostics: RoomRecoveryDiagnostics = {
+  checkedAt: null,
+  skippedRoomCount: 0,
+  issueCounts: [],
+};
+
+export function getRoomRecoveryDiagnostics(): RoomRecoveryDiagnostics {
+  return {
+    ...roomRecoveryDiagnostics,
+    issueCounts: roomRecoveryDiagnostics.issueCounts.map((issue) => ({ ...issue })),
+  };
+}
+
+function recordRoomRecoveryDiagnostics(errors: readonly PersistedRoomRecoveryError[]): void {
+  const issueCounts = new Map<string, number>();
+  for (const error of errors) {
+    for (const issue of error.issues) {
+      const fieldPath = issue.path.replace(/[^a-zA-Z0-9_.[\]-]/g, "").slice(0, 120) || "unknown";
+      issueCounts.set(fieldPath, (issueCounts.get(fieldPath) ?? 0) + 1);
+    }
+  }
+
+  roomRecoveryDiagnostics = {
+    checkedAt: new Date().toISOString(),
+    skippedRoomCount: errors.length,
+    issueCounts: [...issueCounts.entries()]
+      .map(([fieldPath, occurrenceCount]) => ({ fieldPath, occurrenceCount }))
+      .sort((left, right) => left.fieldPath.localeCompare(right.fieldPath)),
+  };
+}
+
 export function restorePersistedRooms(
   rows: readonly unknown[],
 ): PersistedRoomState[] {
   const result = restoreRooms(rows);
+  recordRoomRecoveryDiagnostics(result.errors);
   result.errors.forEach((error) => {
     logger.error(
       {
@@ -102,6 +140,7 @@ export async function loadPersistedRooms(
 ): Promise<PersistedRoomState[]> {
   const rows = await store.loadActiveRooms();
   const result = restoreRooms(rows);
+  recordRoomRecoveryDiagnostics(result.errors);
 
   result.errors.forEach((error) => {
     logger.error(

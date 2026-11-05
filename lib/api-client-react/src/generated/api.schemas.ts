@@ -100,8 +100,27 @@ export type ArcadeRoomAccess = ArcadeRoom & {
   reconnectToken: string;
 };
 
+export type HealthStatusRoomRecoveryIssueCountsItem = {
+  /** @maxLength 120 */
+  fieldPath: string;
+  /** @minimum 1 */
+  occurrenceCount: number;
+};
+
+/**
+ * Safe summary of the most recent persisted Domino room recovery attempt.
+ */
+export type HealthStatusRoomRecovery = {
+  checkedAt: string | null;
+  /** @minimum 0 */
+  skippedRoomCount: number;
+  issueCounts: HealthStatusRoomRecoveryIssueCountsItem[];
+};
+
 export interface HealthStatus {
   status: string;
+  /** Safe summary of the most recent persisted Domino room recovery attempt. */
+  roomRecovery: HealthStatusRoomRecovery;
 }
 
 export type RoomMode = typeof RoomMode[keyof typeof RoomMode];
