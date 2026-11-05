@@ -1715,6 +1715,9 @@ body:has(.room-loading-page) { background: #141218; }
 .yard-mark-block { grid-template-columns: repeat(3, 7px); grid-template-rows: repeat(2, 7px); gap: 1px; }
 .yard-mark-block i { width: 7px; height: 7px; border: 1px solid #24164c; background: #976be0; }
 .yard-mark-block i:first-child { grid-column: 2; background: #e1bc48; }.yard-mark-block i:nth-child(2) { grid-column: 1; }.yard-mark-block i:nth-child(3) { grid-column: 2; }.yard-mark-block i:nth-child(4) { grid-column: 3; }
+.yard-game-mark { flex-basis: 40px; width: 40px; height: 40px; padding: 0; overflow: hidden; border: 1px solid #ffffff25; border-radius: 11px; background: #202522; box-shadow: inset 0 1px 0 #ffffff20, 0 3px 8px #0005; }
+.yard-game-mark svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.yard-game-mark.yard-mark-kay, .yard-game-mark.yard-mark-tic, .yard-game-mark.yard-mark-mopyon, .yard-game-mark.yard-mark-tile { padding: 0; border-radius: 11px; }
 .yard-games-queue { min-height: 44px; padding: 8px 12px; line-height: 1.45; text-align: center; }
 .yard-games-queue svg { flex: 0 0 auto; }
 .yard-home-status { display: flex; align-items: center; gap: clamp(14px, 3vw, 30px); min-height: 54px; margin-top: 18px; padding: 0 3px; border-top: 1px solid var(--yard-line); color: var(--yard-muted); font-size: 11px; }

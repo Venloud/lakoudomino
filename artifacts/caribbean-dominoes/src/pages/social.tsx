@@ -18,17 +18,78 @@ import { TicTacToeProfileResults } from './tic-tac-toe-profile';
 type Destination = 'home' | 'games' | 'friends' | 'leaderboard' | 'profile' | 'about';
 
 function GameMark({ game }: { game: string }) {
-  if (game === 'tic-tac-toe' || game === 'mopyon') return <span className={`yard-game-mark yard-mark-${game}`} aria-hidden="true"><i>X</i><i>O</i></span>;
-  if (game === 'box') return <span className="yard-game-mark yard-mark-box" aria-hidden="true"><i /><i /><i /><i /><b /></span>;
-  if (game === 'kay') return <span className="yard-game-mark yard-mark-kay" aria-hidden="true"><i /><i /><i /><i /></span>;
-  if (game === 'chess') return <span className="yard-game-mark yard-mark-chess" aria-hidden="true">♞</span>;
-  if (game === 'dame') return <span className="yard-game-mark yard-mark-dame" aria-hidden="true"><i /><b /></span>;
-  if (game === 'words' || game === 'scrabble') return <span className={`yard-game-mark yard-mark-tile ${game}`} aria-hidden="true"><b>{game === 'words' ? 'W' : 'A'}</b><small>{game === 'words' ? '4' : '1'}</small></span>;
-  if (game === 'barricade') return <span className="yard-game-mark yard-mark-barricade" aria-hidden="true"><i /><b /></span>;
-  if (game === 'four-in-a-row') return <span className="yard-game-mark yard-mark-connect" aria-hidden="true"><i /><i /><i /><i /></span>;
-  if (game === 'filler') return <span className="yard-game-mark yard-mark-filler" aria-hidden="true"><i /><i /><i /><i /></span>;
-  if (game === 'block-drop') return <span className="yard-game-mark yard-mark-block" aria-hidden="true"><i /><i /><i /><i /></span>;
-  return <span className="yard-game-mark yard-mark-tic" aria-hidden="true"><i>X</i><i>O</i></span>;
+  const color = game === 'four-in-a-row' ? '#236fb5'
+    : game === 'filler' ? '#27342d'
+    : game === 'block-drop' ? '#29263f'
+    : game === 'words' || game === 'scrabble' ? '#b69b68'
+    : '#29312b';
+  return <span className={`yard-game-mark yard-mark-${game}`} aria-hidden="true">
+    <svg viewBox="0 0 40 40" role="presentation">
+      <rect x="1" y="1" width="38" height="38" rx="10" fill={color} />
+      {game === 'tic-tac-toe' && <>
+        <path d="M14 8v24M26 8v24M8 14h24M8 26h24" stroke="#dfe7d5" strokeOpacity=".5" strokeWidth="1.5" />
+        <path d="m10 10 7 7m0-7-7 7" stroke="#a2e56e" strokeWidth="2.5" strokeLinecap="round" />
+        <circle cx="26" cy="26" r="4" fill="none" stroke="#f1d983" strokeWidth="2.5" />
+      </>}
+      {game === 'mopyon' && <>
+        <path d="M9 9h22M9 20h22M9 31h22M9 9v22M20 9v22M31 9v22" stroke="#dce6d3" strokeOpacity=".52" strokeWidth="1.5" />
+        <circle cx="9" cy="9" r="3" fill="#a2e56e" /><circle cx="20" cy="20" r="3" fill="#f1d983" />
+        <circle cx="31" cy="31" r="3" fill="#a2e56e" /><circle cx="31" cy="9" r="3" fill="#e67870" />
+      </>}
+      {game === 'box' && <>
+        <path d="M10 10h20v20H10z" fill="#d5a75c" fillOpacity=".24" stroke="#e8bc70" strokeWidth="2" />
+        <path d="M10 10h20M10 20h20M10 30h20M10 10v20M20 10v20M30 10v20" stroke="#e9eee2" strokeOpacity=".45" strokeWidth="1" />
+        <path d="M10 20h10M20 20v10" stroke="#8ecf62" strokeWidth="2.5" />
+        {[10, 20, 30].map((x) => [10, 20, 30].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.7" fill="#f3eee0" />))}
+      </>}
+      {game === 'kay' && <>
+        <rect x="6" y="10" width="28" height="20" rx="8" fill="none" stroke="#d8c28e" strokeWidth="1.5" />
+        {[11, 17, 23, 29].map((x) => <g key={x}><ellipse cx={x} cy="15" rx="2.4" ry="3" fill="#dfc27c" /><ellipse cx={x} cy="25" rx="2.4" ry="3" fill="#dfc27c" /></g>)}
+        <circle cx="8" cy="20" r="3" fill="#f0dfb6" /><circle cx="32" cy="20" r="3" fill="#f0dfb6" />
+      </>}
+      {game === 'chess' && <>
+        <path d="M8 8h12v12H8zM20 20h12v12H20z" fill="#d9d5c2" fillOpacity=".42" />
+        <path d="M22 31h11v-2l-3-2 1-4-3-3 1-4-4-7-7 2 1 5-3 4 2 3-2 4-3 2v2z" fill="#eee9da" stroke="#b5a778" strokeWidth="1.2" strokeLinejoin="round" />
+        <circle cx="25" cy="12" r="1" fill="#332f26" />
+      </>}
+      {game === 'dame' && <>
+        <path d="M8 8h12v12H8zM20 20h12v12H20z" fill="#d9d5c2" fillOpacity=".45" />
+        <circle cx="15" cy="25" r="7" fill="#b84947" stroke="#f2d5b5" strokeWidth="1.5" />
+        <circle cx="15" cy="25" r="4.5" fill="none" stroke="#e79585" strokeWidth="1" />
+        <circle cx="27" cy="13" r="5" fill="#f0e8d6" stroke="#b5a778" strokeWidth="1.5" />
+      </>}
+      {(game === 'words' || game === 'scrabble') && <>
+        <rect x="8" y="7" width="24" height="26" rx="3" fill={game === 'words' ? '#c7e2a5' : '#e8d7ac'} stroke="#fff4d2" strokeWidth="1.3" />
+        <text x="20" y="26" textAnchor="middle" fontFamily="Georgia,serif" fontSize="18" fontWeight="bold" fill="#302b20">{game === 'words' ? 'W' : 'A'}</text>
+        <text x="28" y="30" textAnchor="middle" fontFamily="sans-serif" fontSize="6" fontWeight="bold" fill="#302b20">{game === 'words' ? '4' : '1'}</text>
+      </>}
+      {game === 'barricade' && <>
+        <path d="M9 10h22M9 20h22M9 30h22M10 9v22M20 9v22M30 9v22" stroke="#d9e6ca" strokeOpacity=".48" strokeWidth="1" />
+        <circle cx="13" cy="26" r="4" fill="#9adb68" stroke="#e4f5cb" strokeWidth="1.4" />
+        <path d="m22 12 8 4-2 4-8-4z" fill="#e5c56f" stroke="#fff0b5" strokeWidth="1" />
+        <circle cx="27" cy="27" r="3" fill="#ed7770" />
+      </>}
+      {game === 'four-in-a-row' && <>
+        <rect x="5" y="7" width="30" height="26" rx="5" fill="#195e9e" stroke="#67a4d7" strokeWidth="1.4" />
+        {[10, 20, 30].map((x) => [12, 20, 28].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="3" fill="#112f57" />))}
+        <circle cx="10" cy="12" r="3" fill="#ef6465" /><circle cx="20" cy="20" r="3" fill="#ef6465" />
+        <circle cx="30" cy="28" r="3" fill="#f0ce58" />
+      </>}
+      {game === 'filler' && <>
+        <path d="M8 8h11v11H8z" fill="#78c856" /><path d="M21 8h11v11H21z" fill="#56a7dd" />
+        <path d="M8 21h11v11H8z" fill="#e6c656" /><path d="M21 21h11v11H21z" fill="#dc6b72" />
+        <path d="M13.5 13.5h13v13h-13z" fill="none" stroke="#f4f0e6" strokeWidth="1.5" strokeDasharray="2 2" />
+      </>}
+      {game === 'block-drop' && <>
+        <path d="M15 8h9v9h-9zM6 17h9v9H6zM15 17h9v9h-9zM24 17h9v9h-9zM15 26h9v8h-9z" fill="#a98ae9" stroke="#e2d6ff" strokeWidth="1" />
+        <path d="M17 10h5v2h-5zM8 19h5v2H8z" fill="#e6dcff" fillOpacity=".7" />
+      </>}
+      {!['tic-tac-toe', 'mopyon', 'box', 'kay', 'chess', 'dame', 'words', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop'].includes(game) && <>
+        <path d="M10 11h20v18H10z" fill="none" stroke="#dbe9d0" strokeWidth="2" />
+        <circle cx="15" cy="20" r="3" fill="#a2e56e" /><circle cx="25" cy="20" r="3" fill="#f1d983" />
+      </>}
+    </svg>
+  </span>;
 }
 
 const navItems: { label: string; href: string; key: Destination }[] = [
