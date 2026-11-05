@@ -8,6 +8,7 @@ import { loadWordDictionary, lookupWordDefinitions } from '../lib/word-yard-dict
 import type { WordDefinition } from '../lib/word-yard-dictionary';
 import { createFillerBoard, playFillerMove, type FillerPlayer } from '@/lib/filler';
 import { chooseChessBotMove } from '@/lib/chess-bot';
+import { playKayMove } from '@/lib/kay';
 import { getAutomaticChessDrawReason, hasAutomaticChessDraw } from '@/lib/chess-rules';
 import { clearSavedChessMatch, loadSavedChessMatch, saveChessMatch } from '@/lib/chess-persistence';
 import { createChessGame, type ChessGame, type ChessMove, type ChessPieceKind } from '@/lib/chess';
@@ -627,43 +628,23 @@ export default function ClassicGamesPage() {
       playBoxEdge(`e${index}`, []);
     } else if (id === 'kay') {
       if (kayAnimating) return;
-      const own = turn === 0 ? index < 6 : index >= 7 && index < 13;
-      if (!own || pits[index] === 0) return;
-      const next = [...pits]; let stones = next[index]; next[index] = 0; let pos = index;
-      const landings: { pit: number; pits: number[] }[] = [];
-      while (stones > 0) {
-        pos = (pos + 1) % 14;
-        if ((turn === 0 && pos === 13) || (turn === 1 && pos === 6)) continue;
-        next[pos]++; stones--;
-        landings.push({ pit: pos, pits: [...next] });
-      }
-      const ownSide = turn === 0 ? pos < 6 : pos > 6 && pos < 13;
-      const opposite = 12 - pos;
-      const extra = (turn === 0 && pos === 6) || (turn === 1 && pos === 13);
-      if (ownSide && next[pos] === 1 && next[opposite] > 0) { next[turn === 0 ? 6 : 13] += next[opposite] + 1; next[pos] = 0; next[opposite] = 0; }
-      const p0Empty = next.slice(0, 6).every((n) => n === 0), p1Empty = next.slice(7, 13).every((n) => n === 0);
-      const ended = p0Empty || p1Empty;
-      if (ended) {
-        next[6] += next.slice(0, 6).reduce((a, b) => a + b, 0);
-        next[13] += next.slice(7, 13).reduce((a, b) => a + b, 0);
-        for (let pit = 0; pit < 6; pit++) next[pit] = 0;
-        for (let pit = 7; pit < 13; pit++) next[pit] = 0;
-      }
+      const result = playKayMove(pits, turn, index);
+      if (!result) return;
       const finishMove = () => {
-        setPits(next); setKayAnimatedPits(null); setKayActivePit(null); setKayAnimating(false);
-        if (ended) setWinner(next[6] === next[13] ? 2 : next[6] > next[13] ? 0 : 1);
-        else if (!extra) setTurn(turn === 0 ? 1 : 0);
+        setPits(result.pits); setKayAnimatedPits(null); setKayActivePit(null); setKayAnimating(false);
+        if (result.ended) setWinner(result.winner);
+        else if (!result.extraTurn) setTurn(turn === 0 ? 1 : 0);
       };
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || landings.length === 0) finishMove();
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || result.frames.length === 0) finishMove();
       else {
         const start = [...pits]; start[index] = 0;
         setKayAnimatedPits(start); setKayAnimating(true);
         let step = 0;
-        const delay = Math.max(180, Math.min(260, 3200 / landings.length));
+        const delay = Math.max(180, Math.min(260, 3200 / result.frames.length));
         const sow = () => {
-          const landing = landings[step++];
+          const landing = result.frames[step++];
           setKayAnimatedPits(landing.pits); setKayActivePit(landing.pit);
-          if (step < landings.length) kayTimerRef.current = window.setTimeout(sow, delay);
+          if (step < result.frames.length) kayTimerRef.current = window.setTimeout(sow, delay);
           else kayTimerRef.current = window.setTimeout(finishMove, 180);
         };
         kayTimerRef.current = window.setTimeout(sow, 120);
