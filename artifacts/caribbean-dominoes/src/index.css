@@ -1637,11 +1637,30 @@ body:has(.room-loading-page) { background: #141218; }
 .yard-game-foundation-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
 .yard-games-all-link { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .yard-home-game-list { display: grid; gap: 7px; }
-.yard-game-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px; border: 1px solid #303136; border-radius: 8px; background: #17181c; color: var(--yard-text); text-decoration: none; transition: border-color .16s ease, background .16s ease; }
-.yard-game-card:hover { border-color: #52634d; background: #1b1d20; }
+.yard-game-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 0; padding: 8px 10px; border: 1px solid #303136; border-radius: 8px; background: #17181c; color: var(--yard-text); text-decoration: none; transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease; }
+.yard-game-card:hover { transform: translateY(-2px); border-color: #52634d; background: #1b1d20; box-shadow: 0 7px 18px #0003; }
+.yard-game-card:active { transform: translateY(0) scale(.985); }
+.yard-game-card:focus-visible { outline: 2px solid #83bb65; outline-offset: 2px; }
 .yard-game-card-mark { display: grid; place-items: center; width: 36px; height: 36px; overflow: hidden; border-radius: 8px; background: #202126; }
 .yard-game-card-mark > svg,.yard-game-card-mark .yard-game-mark { display: block; width: 34px; height: 34px; }
 .yard-game-card-mark > img { display: block; width: 34px; height: 34px; border-radius: 5px; object-fit: cover; }
+.yard-game-card-mark > svg,.yard-game-card-mark .yard-game-mark,.yard-game-card-mark > img { transition: transform .22s ease; }
+.yard-game-card:hover .yard-game-card-mark > svg,.yard-game-card:hover .yard-game-card-mark .yard-game-mark,.yard-game-card:hover .yard-game-card-mark > img { transform: scale(1.08) rotate(-3deg); }
+.yard-game-foundation-list .yard-game-card,.yard-home-game-list .yard-game-card { animation: yard-game-card-enter .32s ease-out both; }
+.yard-game-foundation-list .yard-game-card:nth-child(2),.yard-home-game-list .yard-game-card:nth-child(2) { animation-delay: 35ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(3),.yard-home-game-list .yard-game-card:nth-child(3) { animation-delay: 70ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(4),.yard-home-game-list .yard-game-card:nth-child(4) { animation-delay: 105ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(5) { animation-delay: 140ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(6) { animation-delay: 175ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(7) { animation-delay: 210ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(8) { animation-delay: 245ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(9) { animation-delay: 280ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(10) { animation-delay: 315ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(11) { animation-delay: 350ms; }
+.yard-game-foundation-list .yard-game-card:nth-child(12) { animation-delay: 385ms; }
+.yard-games-dashboard .yard-featured-game { animation: yard-game-card-enter .38s ease-out both; }
+.yard-games-dashboard > .yard-panel { animation: yard-game-card-enter .38s ease-out 70ms both; }
+@keyframes yard-game-card-enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
 .yard-game-card-copy { min-width: 0; }
 .yard-game-card-copy strong,.yard-game-card-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .yard-game-card-copy strong { font-size: 12px; }
@@ -1650,6 +1669,11 @@ body:has(.room-loading-page) { background: #141218; }
 .yard-game-badge.is-online { border-color: #415638; background: #1e291b; color: #9bc281; }
 .yard-game-foundation-list .yard-coming-soon { justify-content: flex-start; min-width: 0; margin: 0; padding: 0 11px; border-style: solid; color: var(--yard-text); text-decoration: none; }
 .yard-game-foundation-list .yard-coming-soon:hover { border-color: var(--yard-accent); background: #1d211e; }
+@media (prefers-reduced-motion: reduce) {
+  .yard-game-card,.yard-game-card-mark > svg,.yard-game-card-mark .yard-game-mark,.yard-game-card-mark > img { transition: none; }
+  .yard-game-card:hover,.yard-game-card:active,.yard-game-card:hover .yard-game-card-mark > svg,.yard-game-card:hover .yard-game-card-mark .yard-game-mark,.yard-game-card:hover .yard-game-card-mark > img { transform: none; }
+  .yard-game-foundation-list .yard-game-card,.yard-home-game-list .yard-game-card,.yard-games-dashboard .yard-featured-game,.yard-games-dashboard > .yard-panel { animation: none; }
+}
 .yard-game-foundation-list .yard-coming-soon span:nth-child(2) { flex: 1; }
 .yard-chess-tools { display: grid; gap: 10px; width: min(100%, 520px); min-width: 0; margin: 0 auto; }
 .yard-chess-modes { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
