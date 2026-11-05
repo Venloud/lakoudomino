@@ -8,9 +8,11 @@
 import type { Friend } from './friend';
 import type { FriendInviteNotification } from './friendInviteNotification';
 import type { FriendRequestView } from './friendRequestView';
+import type { SentFriendInviteNotification } from './sentFriendInviteNotification';
 
 export interface FriendsResponse {
   friends: Friend[];
   requests: FriendRequestView[];
   invites: FriendInviteNotification[];
+  sentInvites: SentFriendInviteNotification[];
 }

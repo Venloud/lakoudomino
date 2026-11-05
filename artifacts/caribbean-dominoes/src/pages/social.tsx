@@ -8,7 +8,7 @@ import {
 import {
   getGetAuthMeQueryKey, getGetLobbyQueryKey, getListFriendsQueryKey,
   getGetRecentMatchesQueryKey as getRecentMatchesQueryKey, getGetTicTacToeResultsQueryKey,
-  useAcceptFriendInvite, useAcceptFriendRequest, useCreateFriendInvite, useDismissFriendInvite,
+  useAcceptFriendInvite, useAcceptFriendRequest, useCreateFriendInvite, useDismissFriendInvite, useWithdrawFriendInvite,
   useCreateFriendRequest, useDeclineFriendRequest, useGetAuthMe, useGetLobby,
   useGetRecentMatches, useGetTicTacToeResults, useJoinRoom, useJoinTicTacToeRoom, useListFriends, useLogout,
 } from '@workspace/api-client-react';
@@ -237,6 +237,7 @@ export default function SocialPage({ page }: { page: Destination }) {
   const declineRequest = useDeclineFriendRequest();
   const acceptInvite = useAcceptFriendInvite();
   const dismissInvite = useDismissFriendInvite();
+  const withdrawInvite = useWithdrawFriendInvite();
   const createFriendInvite = useCreateFriendInvite();
   const joinRoom = useJoinRoom();
   const joinTicTacToeRoom = useJoinTicTacToeRoom();
@@ -261,7 +262,7 @@ export default function SocialPage({ page }: { page: Destination }) {
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as { type?: string };
-          if (message.type === 'roomInvite' || message.type === 'friendRequest' || message.type === 'friendRequestUpdated') {
+          if (message.type === 'roomInvite' || message.type === 'friendInviteUpdated' || message.type === 'friendRequest' || message.type === 'friendRequestUpdated') {
             void client.invalidateQueries({ queryKey: getListFriendsQueryKey() });
           }
         } catch {
@@ -422,6 +423,10 @@ export default function SocialPage({ page }: { page: Destination }) {
         <span className="yard-avatar">{initials(request.username)}</span><span style={{ flex: 1 }}><b>{request.username}</b><small>Wants to be friends</small></span>
         <span className="yard-list-actions"><button className="yard-small-button" onClick={() => acceptRequest.mutate({ id: request.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`accept-request-${request.id}`}>Accept</button><button className="yard-small-button" onClick={() => declineRequest.mutate({ id: request.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`decline-request-${request.id}`}>Decline</button></span>
       </div>)}</div> : null}
+      {friendData?.sentInvites.length ? <div className="yard-section-space"><p className="yard-kicker">Invites you sent · {friendData.sentInvites.length}</p>{friendData.sentInvites.map((invite) => {
+        const gameName = gameCatalog.find((game) => game.slug === invite.game || (game.slug === 'words' && invite.game === 'word-yard'))?.name ?? invite.game;
+        return <div className="yard-friend-row" key={invite.id} data-testid={`sent-friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviteeName)}</span><span style={{ flex: 1 }}><b>{invite.inviteeName}</b><small>Pending {gameName} invite · {invite.roomCode}</small></span><button className="yard-small-button" disabled={withdrawInvite.isPending} onClick={() => withdrawInvite.mutate({ id: invite.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }), onError: () => setNotice('Could not withdraw that pending invite.') })} data-testid={`withdraw-friend-invite-${invite.id}`}>Withdraw</button></div>;
+      })}</div> : null}
       {friendData?.invites.length ? <div className="yard-section-space"><p className="yard-kicker">Game invitations · {friendData.invites.length}</p>{friendData.invites.map((invite) => {
         const gameName = gameCatalog.find((game) => game.slug === invite.game || (game.slug === 'words' && invite.game === 'word-yard'))?.name ?? invite.game;
         return <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to {gameName} · {invite.roomCode}</small></span><span className="yard-list-actions"><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button><button className="yard-small-button" disabled={dismissInvite.isPending} onClick={() => dismissInvite.mutate({ id: invite.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`dismiss-invite-${invite.id}`}>Dismiss</button></span></div>;

@@ -140,7 +140,10 @@ export default function Home() {
               ? current
               : [...current, { id: message.id!, roomCode: message.roomCode! }]);
           }
-          if (message.type === 'presenceChanged' || message.type === 'friendRequest' || message.type === 'friendRequestUpdated' || message.type === 'roomInvite') {
+          if (message.type === 'friendInviteUpdated' && message.id) {
+            setLiveInvites((current) => current.filter((invite) => invite.id !== message.id));
+          }
+          if (message.type === 'presenceChanged' || message.type === 'friendRequest' || message.type === 'friendRequestUpdated' || message.type === 'roomInvite' || message.type === 'friendInviteUpdated') {
             void queryClient.invalidateQueries({ queryKey: getListFriendsQueryKey() });
           }
         } catch {

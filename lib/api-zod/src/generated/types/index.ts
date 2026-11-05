@@ -67,6 +67,8 @@ export * from './roomSeat';
 export * from './roomStatus';
 export * from './roomTwoPlayerVariant';
 export * from './seatStatus';
+export * from './sentFriendInviteNotification';
+export * from './sentFriendInviteNotificationStatus';
 export * from './ticTacToeMode';
 export * from './ticTacToeResult';
 export * from './ticTacToeResultMark';

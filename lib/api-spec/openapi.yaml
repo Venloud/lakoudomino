@@ -601,6 +601,13 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses: { "200": { description: Updated invite } }
+  /friends/invites/{id}/withdraw:
+    post:
+      operationId: withdrawFriendInvite
+      tags: [friends]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses: { "200": { description: Pending invite withdrawn } }
 components:
   parameters:
     RoomCode:
@@ -1288,6 +1295,16 @@ components:
         roomCode: { type: string }
         game: { $ref: "#/components/schemas/FriendInviteGame" }
         status: { type: string, enum: [pending] }
+    SentFriendInviteNotification:
+      type: object
+      required: [id, inviteeId, inviteeName, roomCode, game, status]
+      properties:
+        id: { type: string, format: uuid }
+        inviteeId: { type: string, format: uuid }
+        inviteeName: { type: string }
+        roomCode: { type: string }
+        game: { $ref: "#/components/schemas/FriendInviteGame" }
+        status: { type: string, enum: [pending] }
     FriendInviteAcceptResponse:
       type: object
       required: [roomCode, game]
@@ -1307,11 +1324,12 @@ components:
         isMe: { type: boolean }
     FriendsResponse:
       type: object
-      required: [friends, requests, invites]
+      required: [friends, requests, invites, sentInvites]
       properties:
         friends: { type: array, items: { $ref: "#/components/schemas/Friend" } }
         requests: { type: array, items: { $ref: "#/components/schemas/FriendRequestView" } }
         invites: { type: array, items: { $ref: "#/components/schemas/FriendInviteNotification" } }
+        sentInvites: { type: array, items: { $ref: "#/components/schemas/SentFriendInviteNotification" } }
     FriendRequestInput:
       type: object
       required: [username]
