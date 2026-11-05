@@ -4,6 +4,7 @@ import { Router } from "express";
 import { WebSocket } from "ws";
 import { CreateArcadeRoomBody, JoinArcadeRoomBody, QuickMatchArcadeRoomBody } from "@workspace/api-zod";
 import { pool, type ArcadeRoomRecord } from "@workspace/db";
+import { getIdentityFromRequest } from "../lib/auth-session";
 import { logger } from "../lib/logger";
 import {
   ARCADE_GAME_IDS,
@@ -19,7 +20,7 @@ const NOTIFY_CHANNEL = "arcade_room_updates";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const STORED_RESULT_KEY = "__509YardArcadeResult";
 
-type ArcadePlayer = { name: string; tokenHash: string; bot?: boolean };
+type ArcadePlayer = { name: string; tokenHash: string; userId?: string; bot?: boolean };
 type ArcadeResult = { winnerSeat: number; resignedSeat: number; endedAt: number };
 type ArcadeRoom = {
   code: string;
@@ -32,7 +33,7 @@ type ArcadeRoom = {
   updatedAt: number;
   result?: ArcadeResult | null;
 };
-type RoomInput = { game: string; name: string; capacity: number; isPrivate: boolean };
+type RoomInput = { game: string; name: string; capacity: number; isPrivate: boolean; userId?: string };
 type ArcadeJoinResult =
   | { error: "missing" | "full" }
   | { room: ArcadeRoom; seat: number; token: string };
@@ -93,6 +94,8 @@ function restoreRoom(record: ArcadeRoomRecord): ArcadeRoom | null {
     if (typeof player.name !== "string" || !player.name.trim() ||
         typeof player.tokenHash !== "string" || !/^[a-f0-9]{64}$/.test(player.tokenHash)) return null;
     if (player.bot !== undefined && typeof player.bot !== "boolean") return null;
+    if (player.userId !== undefined && (typeof player.userId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(player.userId))) return null;
     const savedResult = index === 0 ? player[STORED_RESULT_KEY] : undefined;
     if (savedResult && typeof savedResult === "object" && !Array.isArray(savedResult)) {
       const value = savedResult as Record<string, unknown>;
@@ -108,7 +111,12 @@ function restoreRoom(record: ArcadeRoomRecord): ArcadeRoom | null {
         };
       }
     }
-    players.push({ name: player.name, tokenHash: player.tokenHash, ...(player.bot ? { bot: true } : {}) });
+    players.push({
+      name: player.name,
+      tokenHash: player.tokenHash,
+      ...(typeof player.userId === "string" ? { userId: player.userId } : {}),
+      ...(player.bot ? { bot: true } : {}),
+    });
   }
   return {
     code: record.code,
@@ -229,6 +237,43 @@ function advanceBotTurns(room: ArcadeRoom): boolean {
     moved = true;
   }
   return moved;
+}
+
+async function persistArcadeMatchResult(client: SqlExecutor, room: ArcadeRoom): Promise<void> {
+  const state = room.state && typeof room.state === "object"
+    ? room.state as Record<string, unknown>
+    : null;
+  const winner = room.result?.winnerSeat ?? state?.winner;
+  const draw = winner === "draw";
+  if (!draw && (!Number.isInteger(winner) || (winner as number) < 0 || (winner as number) >= room.capacity)) return;
+
+  const players = new Map<string, { seat: number }>();
+  for (const [seat, player] of room.players.entries()) {
+    if (player.userId && !players.has(player.userId)) players.set(player.userId, { seat });
+  }
+  if (!players.size) return;
+
+  const matchId = randomUUID();
+  await client.query(
+    "INSERT INTO domino_matches (match_id, room_code, mode) VALUES ($1, $2, $3)",
+    [matchId, room.code, `arcade:${room.game}`],
+  );
+  for (const [userId, player] of players) {
+    const won = !draw && player.seat === winner;
+    const inserted = await client.query(
+      `INSERT INTO domino_match_results (match_id, user_id, rank, medal, crown_points, won)
+       VALUES ($1, $2, $3, $4, 0, $5)
+       ON CONFLICT (match_id, user_id) DO NOTHING
+       RETURNING user_id`,
+      [matchId, userId, won || draw ? 1 : 2, draw ? "draw" : won ? "win" : "loss", won],
+    );
+    if (inserted.rows.length) {
+      await client.query(
+        "UPDATE domino_users SET games = games + 1, wins = wins + $2 WHERE id = $1",
+        [userId, won ? 1 : 0],
+      );
+    }
+  }
 }
 
 async function broadcastRoomEvent(event: RoomEvent): Promise<void> {
@@ -390,7 +435,11 @@ function makeRoom(input: RoomInput): { room: ArcadeRoom; token: string } {
       game: input.game,
       capacity: input.capacity,
       isPrivate: input.isPrivate,
-      players: [{ name: input.name, tokenHash: hashToken(token) }],
+      players: [{
+        name: input.name,
+        tokenHash: hashToken(token),
+        ...(input.userId ? { userId: input.userId } : {}),
+      }],
       state: createArcadeInitialState(input.game as ArcadeGameId, input.capacity),
       turn: 0,
       updatedAt: Date.now(),
@@ -449,7 +498,11 @@ async function createOrJoinQuickMatch(input: RoomInput): Promise<{ room: ArcadeR
       if (!room) throw new Error("The waiting arcade room has invalid stored data.");
       const token = issueToken();
       const seat = room.players.length;
-      room.players.push({ name: input.name, tokenHash: hashToken(token) });
+       room.players.push({
+         name: input.name,
+         tokenHash: hashToken(token),
+         ...(input.userId ? { userId: input.userId } : {}),
+       });
       room.updatedAt = Date.now();
       await updateRoom(client, room);
       await notifyRoom(client, { code: room.code, type: "room" });
@@ -466,6 +519,8 @@ router.post("/arcade/rooms", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
   const input = parseCreate(parsed.data);
   if (!input) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
+  const identity = await getIdentityFromRequest(req);
+  input.userId = identity?.userId;
   let created: Awaited<ReturnType<typeof createPrivateRoom>>;
   try {
     created = await createPrivateRoom(input);
@@ -481,6 +536,8 @@ router.post("/arcade/quick-match", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
   const input = parseCreate(parsed.data);
   if (!input) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
+  const identity = await getIdentityFromRequest(req);
+  input.userId = identity?.userId;
   let joined: Awaited<ReturnType<typeof createOrJoinQuickMatch>>;
   try {
     joined = await createOrJoinQuickMatch(input);
@@ -497,6 +554,7 @@ router.post("/arcade/rooms/:code/join", async (req, res): Promise<void> => {
   const parsed = JoinArcadeRoomBody.safeParse(req.body);
   const name = parsed.success ? cleanName(parsed.data.displayName) : null;
   if (!name) { res.status(400).json({ error: "Enter a player name." }); return; }
+  const identity = await getIdentityFromRequest(req);
   let joined: ArcadeJoinResult;
   try {
     joined = await withTransaction(async (client) => {
@@ -508,12 +566,12 @@ router.post("/arcade/rooms/:code/join", async (req, res): Promise<void> => {
       if (room.players.length >= room.capacity) {
         seat = room.players.findIndex((player) => player.bot);
         if (seat < 0 || !isArcadeGameFinished(room)) return { error: "full" as const };
-        room.players[seat] = { name, tokenHash: hashToken(token) };
+        room.players[seat] = { name, tokenHash: hashToken(token), ...(identity ? { userId: identity.userId } : {}) };
         room.state = createArcadeInitialState(room.game as ArcadeGameId, room.capacity);
         room.turn = 0;
         room.result = null;
       } else {
-        room.players.push({ name, tokenHash: hashToken(token) });
+        room.players.push({ name, tokenHash: hashToken(token), ...(identity ? { userId: identity.userId } : {}) });
       }
       room.updatedAt = Date.now();
       await updateRoom(client, room);
@@ -590,9 +648,11 @@ export async function handleArcadeSocket(socket: WebSocket, request: IncomingMes
         if (!current || current.players[seat]?.tokenHash !== hashToken(token)) return { error: "missing" as const };
         if (event.type === "resign") {
           if (current.result) return { room: current, eventType: "room" as const };
+          if (isArcadeGameFinished(current)) return { room: current, eventType: "room" as const };
           if (current.capacity === 2 && current.players.length === 2) {
             current.result = { winnerSeat: 1 - seat, resignedSeat: seat, endedAt: Date.now() };
             current.updatedAt = current.result.endedAt;
+            await persistArcadeMatchResult(client, current);
             await updateRoom(client, current);
             await notifyRoom(client, { code: current.code, type: "room" });
             return { room: current, eventType: "room" as const };
@@ -601,10 +661,12 @@ export async function handleArcadeSocket(socket: WebSocket, request: IncomingMes
             current.players[seat] = {
               name: "Yard bot",
               tokenHash: hashToken(issueToken()),
+              ...(current.players[seat].userId ? { userId: current.players[seat].userId } : {}),
               bot: true,
             };
             const botMoved = advanceBotTurns(current);
             current.updatedAt = Date.now();
+            await persistArcadeMatchResult(client, current);
             await updateRoom(client, current);
             await notifyRoom(client, { code: current.code, type: botMoved ? "state" : "room" });
             return { room: current, eventType: botMoved ? "state" as const : "room" as const };
@@ -633,6 +695,7 @@ export async function handleArcadeSocket(socket: WebSocket, request: IncomingMes
         current.turn = result.turn;
         const botMoved = advanceBotTurns(current);
         current.updatedAt = Date.now();
+        await persistArcadeMatchResult(client, current);
         await updateRoom(client, current);
         await notifyRoom(client, { code: current.code, type: "state" });
         return { room: current, eventType: botMoved ? "state" as const : "state" as const };

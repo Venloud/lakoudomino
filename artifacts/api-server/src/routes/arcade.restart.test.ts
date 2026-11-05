@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -94,10 +94,11 @@ async function postRoom(
   baseUrl: string,
   path: string,
   body: JsonRecord,
+  cookie?: string,
 ): Promise<JsonRecord> {
   const response = await fetch(`${baseUrl}/api/arcade/${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
     body: JSON.stringify(body),
   });
   if (response.status !== 200 && response.status !== 201) {
@@ -450,6 +451,110 @@ test("arcade seats, concurrent joins, and room updates stay consistent across AP
   } finally {
     sockets.forEach((socket) => socket.close());
     if (processTwo) await stopArcadeProcess(processTwo.child);
+    if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("signed-in arcade results remain in profile history after room deletion and duplicate resigns", {
+  timeout: 30_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade match-history integration tests.");
+
+  const schema = `arcade_history_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let processOne: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY, game text NOT NULL, capacity integer NOT NULL,
+        is_private boolean NOT NULL, players jsonb NOT NULL, state jsonb,
+        turn integer NOT NULL DEFAULT 0, updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE ${quotedSchema}.domino_users (
+        id uuid PRIMARY KEY, username text NOT NULL, games integer NOT NULL DEFAULT 0,
+        wins integer NOT NULL DEFAULT 0
+      );
+      CREATE TABLE ${quotedSchema}.domino_sessions (
+        token_hash text PRIMARY KEY, user_id uuid NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL
+      );
+      CREATE TABLE ${quotedSchema}.domino_matches (
+        match_id uuid PRIMARY KEY, room_code text NOT NULL, mode text NOT NULL,
+        recorded_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE ${quotedSchema}.domino_match_results (
+        match_id uuid NOT NULL, user_id uuid NOT NULL, rank integer NOT NULL,
+        medal text NOT NULL, crown_points integer NOT NULL, won boolean NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(), UNIQUE (match_id, user_id)
+      );
+    `);
+
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    processOne = await startArcadeProcess(isolatedDatabaseUrl.toString());
+
+    const hostUser = randomUUID();
+    const guestUser = randomUUID();
+    const hostSession = randomUUID();
+    const guestSession = randomUUID();
+    const sessionHash = (token: string) => createHash("sha256").update(token).digest("hex");
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.domino_users (id, username) VALUES ($1, $2), ($3, $4)`,
+      [hostUser, "history_host", guestUser, "history_guest"],
+    );
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.domino_sessions (token_hash, user_id, expires_at)
+       VALUES ($1, $2, now() + interval '1 hour'), ($3, $4, now() + interval '1 hour')`,
+      [sessionHash(hostSession), hostUser, sessionHash(guestSession), guestUser],
+    );
+
+    const hostCookie = `lakou.sid=${hostSession}`;
+    const guestCookie = `lakou.sid=${guestSession}`;
+    const host = await postRoom(processOne.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "History host",
+      playerCount: 2,
+      isPrivate: true,
+    }, hostCookie);
+    const guest = await postRoom(processOne.baseUrl, `rooms/${String(host.code)}/join`, {
+      displayName: "History guest",
+    }, guestCookie);
+    const hostSocket = await connectArcadeSocket(processOne.baseUrl, String(host.code), String(host.reconnectToken));
+    const guestSocket = await connectArcadeSocket(processOne.baseUrl, String(host.code), String(guest.reconnectToken));
+    sockets.push(hostSocket.socket, guestSocket.socket);
+
+    const firstResult = nextSocketMessage(guestSocket.socket);
+    hostSocket.socket.send(JSON.stringify({ type: "resign" }));
+    assert.equal((await firstResult).type, "room");
+    const duplicateResult = nextSocketMessage(guestSocket.socket);
+    hostSocket.socket.send(JSON.stringify({ type: "resign" }));
+    assert.equal((await duplicateResult).type, "room");
+
+    await pool.query(`DELETE FROM ${quotedSchema}.arcade_rooms WHERE code = $1`, [host.code]);
+    const readHistory = async (cookie: string) => {
+      const response = await fetch(`${processOne!.baseUrl}/api/auth/recent-matches`, { headers: { cookie } });
+      assert.equal(response.status, 200);
+      return await response.json() as { matches: JsonRecord[] };
+    };
+    const [hostHistory, guestHistory] = await Promise.all([
+      readHistory(hostCookie),
+      readHistory(guestCookie),
+    ]);
+    assert.equal(hostHistory.matches.length, 1);
+    assert.equal(guestHistory.matches.length, 1);
+    assert.equal(hostHistory.matches[0].mode, "arcade:mopyon");
+    assert.equal(hostHistory.matches[0].medal, "loss");
+    assert.equal(hostHistory.matches[0].won, false);
+    assert.equal(guestHistory.matches[0].medal, "win");
+    assert.equal(guestHistory.matches[0].won, true);
+    assert.equal(hostHistory.matches[0].matchId, guestHistory.matches[0].matchId);
+  } finally {
+    sockets.forEach((socket) => socket.close());
     if (processOne) await stopArcadeProcess(processOne.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }

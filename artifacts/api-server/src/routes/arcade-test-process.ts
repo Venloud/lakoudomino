@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import express from "express";
 import { WebSocketServer } from "ws";
+import authRouter from "./auth.ts";
 import arcadeRouter, {
   handleArcadeSocket,
   initializeArcadeRooms,
@@ -43,6 +44,7 @@ app.post("/__test/maintain-rooms", async (request, response) => {
   if (!respondedAfterRefresh) response.json({ maintained: true });
 });
 app.use("/api", arcadeRouter);
+app.use("/api", authRouter);
 
 const server = createServer(app);
 const webSocketServer = new WebSocketServer({ noServer: true });

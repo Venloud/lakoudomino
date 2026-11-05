@@ -399,6 +399,11 @@ export default function SocialPage({ page }: { page: Destination }) {
     { name: 'Block Drop', slug: 'block-drop', description: 'Live race · Score challenge', online: true },
   ];
    const goGames = () => setLocation('/games/domino');
+  const recentMatchLabel = (mode: string) => {
+    if (!mode.startsWith('arcade:')) return mode === 'points' ? 'Points' : 'Regular';
+    const slug = mode.slice('arcade:'.length);
+    return `${gameCatalog.find((game) => game.slug === slug)?.name ?? slug} · Online`;
+  };
   const renderHistory = () => {
      if (!signedIn) return <div className="yard-empty" data-testid="empty-history-sign-in"><strong>Sign in to see your match history</strong><p>Recorded results belong to your 509 Yard account. Sign in to see your recent games and standings.</p><Link href="/sign-in" className="yard-button primary" data-testid="link-history-sign-in">Sign in</Link></div>;
     if (recent.isLoading) return <div className="yard-loading" data-testid="loading-recent-matches"><i className="yard-skeleton" /><i className="yard-skeleton" /><i className="yard-skeleton" /></div>;
@@ -406,7 +411,7 @@ export default function SocialPage({ page }: { page: Destination }) {
     if (!recentMatches.length) return <EmptyHistory onGames={goGames} />;
     return <div className="yard-history-list">{recentMatches.slice(0, 6).map((match) => <div className="yard-history-row" key={match.matchId} data-testid={`match-${match.matchId}`}>
       <span className="yard-result-mark">{match.rank ? `#${match.rank}` : '—'}</span>
-      <span><b>{match.won ? 'Victory' : `${match.medal || 'Match'} finish`}</b><small>{match.mode === 'points' ? 'Points' : 'Regular'} · Table {match.roomCode} · {new Date(match.recordedAt).toLocaleDateString()}</small></span>
+       <span><b>{match.won ? 'Victory' : `${match.medal || 'Match'} finish`}</b><small>{recentMatchLabel(match.mode)} · Table {match.roomCode} · {new Date(match.recordedAt).toLocaleDateString()}</small></span>
       <strong className="yard-history-points">{match.crownPoints > 0 ? `+${match.crownPoints}` : match.crownPoints} CP</strong>
     </div>)}</div>;
   };
