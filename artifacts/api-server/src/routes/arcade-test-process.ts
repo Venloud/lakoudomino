@@ -33,15 +33,25 @@ app.post("/__test/resume-notification-listener", (_request, response) => {
 });
 app.post("/__test/maintain-rooms", async (request, response) => {
   const pauseAfterRefreshMs = Number(request.query.pauseAfterRefreshMs ?? 0);
+  const failAfterRefresh = request.query.failAfterRefresh === "true";
   let respondedAfterRefresh = false;
-  await maintainArcadeRoomsForTest(async () => {
-    if (Number.isFinite(pauseAfterRefreshMs) && pauseAfterRefreshMs > 0) {
-      response.json({ refreshed: true });
-      respondedAfterRefresh = true;
-      await new Promise<void>((resolvePause) => setTimeout(resolvePause, Math.min(pauseAfterRefreshMs, 1_000)));
+  try {
+    await maintainArcadeRoomsForTest(async () => {
+      if (failAfterRefresh) throw new Error("Injected maintenance failure after room refresh.");
+      if (Number.isFinite(pauseAfterRefreshMs) && pauseAfterRefreshMs > 0) {
+        response.json({ refreshed: true });
+        respondedAfterRefresh = true;
+        await new Promise<void>((resolvePause) => setTimeout(resolvePause, Math.min(pauseAfterRefreshMs, 1_000)));
+      }
+    });
+    if (!respondedAfterRefresh) response.json({ maintained: true });
+  } catch (error) {
+    if (failAfterRefresh) {
+      response.status(500).json({ error: "Maintenance failed." });
+      return;
     }
-  });
-  if (!respondedAfterRefresh) response.json({ maintained: true });
+    throw error;
+  }
 });
 app.use("/api", arcadeRouter);
 app.use("/api", authRouter);
