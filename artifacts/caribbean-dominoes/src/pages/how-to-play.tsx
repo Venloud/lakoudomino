@@ -136,9 +136,11 @@ const gameGuides: GameGuide[] = [
       'Player 1 starts by placing a word across the center star. Each new play must connect to tiles already on the board.',
       'Choose across or down, select a starting square, and make a word using your rack.',
       'New tiles on double- or triple-letter and word squares earn bonuses. The rack refills from the tile bag.',
+      'A play stays provisional until the next player accepts it or challenges it. If any formed word is missing from the bundled game word list, the play is removed, the tiles return, and the player who played loses that turn. If all words are accepted, the challenger loses their turn.',
+      'Use Word lookup to check an accepted game word and review its definitions.',
       'Pass turns when needed; after four consecutive passes, remaining rack values are subtracted and the higher score wins.',
     ],
-    note: 'This local version uses a starter dictionary and pass-and-play. Tile exchange and the full official dictionary are not included yet.',
+    note: 'This local version uses a bundled accepted-word list and pass-and-play. Definitions and challenges need an internet connection; tile exchange and the full official dictionary are not included yet.',
   },
   {
     name: 'Barricade',
