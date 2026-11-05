@@ -292,6 +292,13 @@ export function interruptArcadeNotificationListenerForTest(): boolean {
   return true;
 }
 
+export function disconnectArcadeNotificationListenerForTest(): boolean {
+  const client = listenerClient;
+  if (!client) return false;
+  handleListenerDisconnect(client);
+  return listenerRetry !== undefined;
+}
+
 export function resumeArcadeNotificationListenerForTest(): void {
   listenerRetryPausedForTest = false;
   if (listenerRetry) {

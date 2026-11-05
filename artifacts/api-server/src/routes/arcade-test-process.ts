@@ -4,6 +4,7 @@ import { WebSocketServer } from "ws";
 import arcadeRouter, {
   handleArcadeSocket,
   initializeArcadeRooms,
+  disconnectArcadeNotificationListenerForTest,
   interruptArcadeNotificationListenerForTest,
   maintainArcadeRoomsForTest,
   resumeArcadeNotificationListenerForTest,
@@ -20,6 +21,10 @@ app.get("/healthz", (_request, response) => response.json({ status: "ok" }));
 app.post("/__test/interrupt-notification-listener", (_request, response) => {
   const interrupted = interruptArcadeNotificationListenerForTest();
   response.status(interrupted ? 200 : 409).json({ interrupted });
+});
+app.post("/__test/disconnect-notification-listener", (_request, response) => {
+  const disconnected = disconnectArcadeNotificationListenerForTest();
+  response.status(disconnected ? 200 : 409).json({ disconnected });
 });
 app.post("/__test/resume-notification-listener", (_request, response) => {
   resumeArcadeNotificationListenerForTest();
