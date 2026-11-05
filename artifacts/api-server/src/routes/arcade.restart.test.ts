@@ -728,7 +728,7 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
     await socketClosed;
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const staleTimestamp = new Date(Date.now() - 6 * 60 * 60 * 1000 - 10_000);
+      const staleTimestamp = new Date(Date.now() - ARCADE_ROOM_RETENTION_MS - 10_000);
       await pool.query(
         `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
         [room.code, staleTimestamp],
@@ -747,7 +747,7 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
       assert.equal(activeRoom.status, 200, `the active match should survive refresh/cleanup race ${attempt + 1}`);
     }
 
-    const expiredTimestamp = new Date(Date.now() - 6 * 60 * 60 * 1000 - 10_000);
+    const expiredTimestamp = new Date(Date.now() - ARCADE_ROOM_RETENTION_MS - 10_000);
     await pool.query(
       `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
       [disconnectedRoom.code, expiredTimestamp],
@@ -762,6 +762,91 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
   } finally {
     sockets.forEach((socket) => socket.close());
     if (processTwo) await stopArcadeProcess(processTwo.child);
+    if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("maintenance rolls back activity refresh after a failure and can later expire stale rooms", {
+  timeout: 30_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade maintenance integration tests.");
+
+  const schema = `arcade_maintenance_failure_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let processOne: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY, game text NOT NULL, capacity integer NOT NULL,
+        is_private boolean NOT NULL, players jsonb NOT NULL, state jsonb,
+        turn integer NOT NULL DEFAULT 0, updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    processOne = await startArcadeProcess(isolatedDatabaseUrl.toString());
+
+    const activeHost = await postRoom(processOne.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "Active host",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    await postRoom(processOne.baseUrl, `rooms/${String(activeHost.code)}/join`, {
+      displayName: "Active guest",
+    });
+    const activeConnection = await connectArcadeSocket(
+      processOne.baseUrl,
+      String(activeHost.code),
+      String(activeHost.reconnectToken),
+    );
+    sockets.push(activeConnection.socket);
+    assert.equal((activeConnection.firstMessage.room as JsonRecord).status, "playing");
+
+    const staleRoom = await postRoom(processOne.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "Stale host",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    const staleTimestamp = new Date(Date.now() - ARCADE_ROOM_RETENTION_MS - 10_000);
+    await pool.query(
+      `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = ANY($1::text[])`,
+      [[activeHost.code, staleRoom.code], staleTimestamp],
+    );
+
+    const failedMaintenance = await fetch(
+      `${processOne.baseUrl}/__test/maintain-rooms?failAfterRefresh=true`,
+      { method: "POST" },
+    );
+    assert.equal(failedMaintenance.status, 500);
+    const health = await fetch(`${processOne.baseUrl}/healthz`);
+    assert.equal(health.status, 200, "the API should remain usable after the maintenance failure");
+
+    const rolledBackActive = await pool.query(
+      `SELECT updated_at FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
+      [activeHost.code],
+    );
+    assert.equal(new Date(rolledBackActive.rows[0].updated_at).getTime(), staleTimestamp.getTime());
+    assert.equal((await fetch(`${processOne.baseUrl}/api/arcade/rooms/${String(staleRoom.code)}`)).status, 200);
+
+    const socketClosed = once(activeConnection.socket, "close");
+    activeConnection.socket.close();
+    await socketClosed;
+    const successfulMaintenance = await fetch(
+      `${processOne.baseUrl}/__test/maintain-rooms`,
+      { method: "POST" },
+    );
+    assert.equal(successfulMaintenance.status, 200);
+    assert.equal((await fetch(`${processOne.baseUrl}/api/arcade/rooms/${String(staleRoom.code)}`)).status, 404);
+    assert.equal((await fetch(`${processOne.baseUrl}/api/arcade/rooms/${String(activeHost.code)}`)).status, 404);
+  } finally {
+    sockets.forEach((socket) => socket.close());
     if (processOne) await stopArcadeProcess(processOne.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
