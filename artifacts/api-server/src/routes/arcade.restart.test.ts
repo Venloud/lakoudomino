@@ -658,3 +658,83 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });
+
+test("notification listener retries automatically and resyncs connected room snapshots", {
+  timeout: 30_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade automatic listener recovery tests.");
+
+  const schema = `arcade_listener_retry_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let processOne: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  let processTwo: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY,
+        game text NOT NULL,
+        capacity integer NOT NULL,
+        is_private boolean NOT NULL,
+        players jsonb NOT NULL,
+        state jsonb,
+        turn integer NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    [processOne, processTwo] = await Promise.all([
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+    ]);
+
+    const host = await postRoom(processOne.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "Retry host",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    const guest = await postRoom(processOne.baseUrl, `rooms/${String(host.code)}/join`, {
+      displayName: "Retry guest",
+    });
+    const writer = await connectArcadeSocket(processOne.baseUrl, String(host.code), String(host.reconnectToken));
+    const observer = await connectArcadeSocket(processTwo.baseUrl, String(host.code), String(guest.reconnectToken));
+    sockets.push(writer.socket, observer.socket);
+    assert.equal(observer.firstMessage.type, "room");
+
+    const disconnected = await fetch(`${processTwo.baseUrl}/__test/disconnect-notification-listener`, {
+      method: "POST",
+    });
+    assert.equal(disconnected.status, 200);
+    assert.deepEqual(await disconnected.json(), { disconnected: true });
+
+    const initialRoom = observer.firstMessage.room as JsonRecord;
+    const initialState = initialRoom.state as JsonRecord;
+    const board = [...initialState.board as unknown[]];
+    board[0] = "X";
+    const latestState = { ...initialState, board, currentPlayer: "O", lastMove: 0 };
+    const recoveredSnapshot = nextSocketMessage(observer.socket);
+    await pool.query(
+      `UPDATE ${quotedSchema}.arcade_rooms
+       SET state = $2::jsonb, turn = $3, updated_at = now()
+       WHERE code = $1`,
+      [host.code, JSON.stringify(latestState), 1],
+    );
+
+    const recovered = await recoveredSnapshot;
+    assert.equal(recovered.type, "room", JSON.stringify(recovered));
+    const recoveredRoom = recovered.room as JsonRecord;
+    assert.equal(recoveredRoom.turn, 1);
+    assert.equal(((recoveredRoom.state as JsonRecord).board as unknown[])[0], "X");
+    assert.equal(observer.socket.readyState, WebSocket.OPEN);
+  } finally {
+    sockets.forEach((socket) => socket.close());
+    if (processTwo) await stopArcadeProcess(processTwo.child);
+    if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
