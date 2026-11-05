@@ -102,6 +102,7 @@ function GameIcon({ slug }: { slug: string }) {
   if (slug === 'kay') return <img src="/kay-logo.webp" alt="" />;
   if (slug === 'chess') return <img src="/chess-logo.webp" alt="" />;
   if (slug === 'dame') return <img src="/dame-logo.webp" alt="" />;
+  if (slug === 'words' || slug === 'word-yard') return <img src="/word-yard-logo.webp" alt="" />;
   if (slug === 'tic-tac-toe') return <img src="/tic-tac-toe-logo.webp" alt="" />;
   return <GameMark game={slug} />;
 }
