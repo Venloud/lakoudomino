@@ -7,6 +7,7 @@ import {
   loadSavedWordGame,
   passWordTurn,
   playWordTurn,
+  resolveWordChallenge,
   saveWordGame,
   WORD_GAME_STORAGE_KEY,
   WORD_CENTER,
@@ -79,6 +80,22 @@ test('scores a cross-word and rejects any invalid cross-word', () => {
   if (!rejected.ok) assert.match(rejected.reason, /CAT/);
 });
 
+test('allows a provisional word so the opponent can challenge it', () => {
+  const initial = createWordGame(() => 0.5);
+  const state: WordGameState = {
+    ...initial,
+    racks: [['Z', 'Z', 'A', 'B', 'C', 'D', 'E'], initial.racks[1]],
+  };
+  const placements = [
+    { index: WORD_CENTER, rackIndex: 0, letter: 'Z' },
+    { index: WORD_CENTER + 1, rackIndex: 1, letter: 'Z' },
+  ];
+  assert.equal(playWordTurn(state, placements, 'horizontal', dictionary).ok, false);
+  const provisional = playWordTurn(state, placements, 'horizontal', dictionary, () => 0, true);
+  assert.equal(provisional.ok, true);
+  if (provisional.ok) assert.deepEqual(provisional.words, ['ZZ']);
+});
+
 test('applies a letter premium and the seven-tile bonus', () => {
   const board = blankBoard();
   board[position(0, 2)] = tile('C');
@@ -146,6 +163,26 @@ test('draws replacement tiles and ends after two passes with leftover tile deduc
   assert.equal(ended.endReason, 'passes');
   assert.deepEqual(ended.scores, [9, 9]);
   assert.equal(ended.winner, 2);
+});
+
+test('successful challenges restore the play and give the challenged turn away', () => {
+  const beforePlay = { ...createWordGame(() => 0.5), turn: 0 as const, scores: [0, 0] as [number, number] };
+  const playedState = { ...beforePlay, turn: 1 as const, scores: [8, 0] as [number, number] };
+  const result = resolveWordChallenge(beforePlay, playedState, true);
+  assert.deepEqual(result.board, beforePlay.board);
+  assert.deepEqual(result.racks, beforePlay.racks);
+  assert.deepEqual(result.scores, beforePlay.scores);
+  assert.equal(result.turn, 1);
+  assert.equal(result.consecutivePasses, 0);
+});
+
+test('failed challenges keep the word and make the challenger lose their turn', () => {
+  const beforePlay = { ...createWordGame(() => 0.5), turn: 0 as const, scores: [0, 0] as [number, number] };
+  const playedState = { ...beforePlay, turn: 1 as const, scores: [8, 0] as [number, number] };
+  const result = resolveWordChallenge(beforePlay, playedState, false);
+  assert.equal(result.board, playedState.board);
+  assert.deepEqual(result.scores, playedState.scores);
+  assert.equal(result.turn, 0);
 });
 
 test('saves and restores the complete in-progress match state', () => {

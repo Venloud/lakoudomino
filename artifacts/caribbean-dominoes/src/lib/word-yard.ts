@@ -197,6 +197,7 @@ export function evaluateWordPlay(
   direction: WordDirection,
   dictionary: ReadonlySet<string>,
   player: WordPlayer = 0,
+  allowUnlistedWords = false,
 ): WordPlayResult {
   if (!placements.length) return { ok: false, reason: 'Place at least one tile before playing.' };
   const usedRack = placements.map(({ rackIndex }) => rackIndex);
@@ -250,7 +251,7 @@ export function evaluateWordPlay(
   const tileAt = (index: number) => overlay.get(index) ?? board[index]!;
   const mainWord = lineIndices.map((index) => tileAt(index).letter).join('');
   if (mainWord.length < 2) return { ok: false, reason: 'A play must form a word of at least two letters.' };
-  if (!dictionary.has(mainWord)) return { ok: false, reason: `${mainWord} is not in the game dictionary.` };
+  if (!allowUnlistedWords && !dictionary.has(mainWord)) return { ok: false, reason: `${mainWord} is not in the game dictionary.` };
 
   const boardIsEmpty = board.every((tile) => tile === null);
   if (boardIsEmpty) {
@@ -291,7 +292,7 @@ export function evaluateWordPlay(
 
     const crossIndices = Array.from({ length: crossEnd - crossStart + 1 }, (_, offset) => at(crossStart + offset));
     const crossWord = crossIndices.map((index) => tileAt(index).letter).join('');
-    if (!dictionary.has(crossWord)) return { ok: false, reason: `${crossWord} is not in the game dictionary.` };
+    if (!allowUnlistedWords && !dictionary.has(crossWord)) return { ok: false, reason: `${crossWord} is not in the game dictionary.` };
     words.push(crossWord);
     let crossLetterTotal = 0;
     let crossWordMultiplier = 1;
@@ -329,9 +330,10 @@ export function playWordTurn(
   direction: WordDirection,
   dictionary: ReadonlySet<string>,
   random: () => number = Math.random,
+  allowUnlistedWords = false,
 ): { ok: true; state: WordGameState; score: number; words: string[] } | { ok: false; reason: string } {
   if (state.status !== 'playing') return { ok: false, reason: 'This game has ended. Start a new game to play again.' };
-  const result = evaluateWordPlay(state.board, state.racks[state.turn], placements, direction, dictionary, state.turn);
+  const result = evaluateWordPlay(state.board, state.racks[state.turn], placements, direction, dictionary, state.turn, allowUnlistedWords);
   if (!result.ok) return result;
 
   const nextRack = [...state.racks[state.turn]];
@@ -376,4 +378,16 @@ export function passWordTurn(state: WordGameState): WordGameState {
     state.scores[1] - rackPoints(state.racks[1]),
   ];
   return finishGame({ ...state, consecutivePasses: 2 }, scores, 'passes');
+}
+
+export function resolveWordChallenge(
+  beforePlay: WordGameState,
+  playedState: WordGameState,
+  challengedWordRejected: boolean,
+): WordGameState {
+  if (challengedWordRejected) {
+    return { ...beforePlay, turn: beforePlay.turn === 0 ? 1 : 0, consecutivePasses: 0 };
+  }
+  if (playedState.status === 'finished') return playedState;
+  return { ...playedState, turn: beforePlay.turn, consecutivePasses: 0 };
 }

@@ -377,6 +377,25 @@
   color: #c6d2a2;
 }
 
+.word-yard .wy-challenge-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(224, 189, 127, .42);
+  border-radius: 10px;
+  background: rgba(224, 189, 127, .08);
+}
+
+.word-yard .wy-challenge-panel > p {
+  margin: 0 0 10px;
+  color: var(--wy-bone);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.word-yard [data-testid="result-word-lookup"] p {
+  margin: 7px 0 0;
+}
+
 @media (max-width: 760px) {
   .word-yard .wy-layout {
     grid-template-columns: minmax(0, 1fr);

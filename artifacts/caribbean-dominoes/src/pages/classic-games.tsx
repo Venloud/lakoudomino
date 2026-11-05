@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as R
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Chess, type Square } from 'chess.js';
-import { LETTER_POINTS, WORD_BONUSES, WORD_BOARD_SIZE, clearSavedWordGame, createWordGame, loadSavedWordGame, passWordTurn, playWordTurn, saveWordGame } from '../lib/word-yard';
-import type { WordDirection, WordPlacement } from '../lib/word-yard';
-import { loadWordDictionary } from '../lib/word-yard-dictionary';
+import { LETTER_POINTS, WORD_BONUSES, WORD_BOARD_SIZE, clearSavedWordGame, createWordGame, loadSavedWordGame, passWordTurn, playWordTurn, resolveWordChallenge, saveWordGame } from '../lib/word-yard';
+import type { WordDirection, WordGameState, WordPlacement, WordPlayer } from '../lib/word-yard';
+import { loadWordDictionary, lookupWordDefinitions } from '../lib/word-yard-dictionary';
+import type { WordDefinition } from '../lib/word-yard-dictionary';
 import { createFillerBoard, playFillerMove, type FillerPlayer } from '@/lib/filler';
 import { chooseChessBotMove } from '@/lib/chess-bot';
 import { canClaimChessDraw, hasAutomaticChessDraw } from '@/lib/chess-rules';
@@ -15,6 +16,7 @@ import { ArcadeOnlinePanel } from '@/components/arcade-online-panel';
 import './word-yard.css';
 
 type GameId = 'box' | 'kay' | 'chess' | 'dame' | 'words' | 'four-in-a-row' | 'filler';
+type PendingWordChallenge = { before: WordGameState; played: WordGameState; words: string[]; playedBy: WordPlayer };
 const CHESS_CLOCK_START_MS = 10 * 60 * 1000;
 const CHESS_CLOCK_PRESETS = [
   { id: 'bullet-1', label: 'Bullet · 1+0', seconds: 60, increment: 0 },
@@ -36,7 +38,7 @@ const GAME_INFO: Record<GameId, { name: string; intro: string }> = {
   kay: { name: 'Kay', intro: 'Sow stones around the pits. Capture stones and finish with the larger store.' },
   chess: { name: 'Chess', intro: 'Play by full chess rules. Choose a friend or challenge the Yard bot.' },
   dame: { name: 'Dame', intro: 'Move diagonally, jump opponents, and crown a piece at the far edge.' },
-  words: { name: 'Word Yard', intro: 'Build connected words on the shared board, score bonus squares, and use every tile in the bag.' },
+  words: { name: 'Scrabble', intro: 'Build connected words on a shared board, score premium squares, and challenge questionable plays.' },
   'four-in-a-row': { name: 'Four in a Row', intro: 'Drop a piece into a column and connect four in any direction.' },
   filler: { name: 'Filler', intro: 'Choose colors to absorb connected tiles and claim the largest territory in a 2–4 player match.' },
 };
@@ -218,6 +220,13 @@ export default function ClassicGamesPage() {
   const [selected, setSelected] = useState<number | null>(null);
   const [wordGame, setWordGame] = useState(initialWordGame);
   const [wordDictionary, setWordDictionary] = useState<ReadonlySet<string> | null>(null);
+  const [pendingWordChallenge, setPendingWordChallenge] = useState<PendingWordChallenge | null>(null);
+  const [challengeBusy, setChallengeBusy] = useState(false);
+  const [wordLookupQuery, setWordLookupQuery] = useState('');
+  const [wordLookupResult, setWordLookupResult] = useState<{ word: string; definitions: WordDefinition[] } | null>(null);
+  const [wordLookupError, setWordLookupError] = useState('');
+  const [wordLookupBusy, setWordLookupBusy] = useState(false);
+  const wordDefinitionCache = useRef(new Map<string, WordDefinition[] | null>());
   const [wordPlacements, setWordPlacements] = useState<WordPlacement[]>([]);
   const [selectedRackIndex, setSelectedRackIndex] = useState<number | null>(null);
   const [wordDirection, setWordDirection] = useState<WordDirection>('horizontal');
@@ -288,6 +297,7 @@ export default function ClassicGamesPage() {
       setWordGame(createWordGame());
       setWordPlacements([]);
       setSelectedRackIndex(null);
+      setPendingWordChallenge(null);
       setWordDirection('horizontal');
       setBlankLetter('A');
       setWordFeedback('New game started. Select a rack tile, then choose an empty board square.');
@@ -322,6 +332,9 @@ export default function ClassicGamesPage() {
     fillerBoard.colors[fillerBoard.owners.findIndex((owner) => owner === player)]);
   const kayBoardPits = kayAnimatedPits ?? pits;
   const gameOver = id === 'words' ? wordGame.status === 'finished' : id === 'filler' ? fillerWinner !== null : winner !== null;
+  const wordInteractionBlocked = gameOver || pendingWordChallenge !== null;
+  const wordDefinitionSource = wordLookupResult?.definitions.find((item) => item.sourceUrl)?.sourceUrl;
+  const safeWordDefinitionSource = wordDefinitionSource?.startsWith('https://') ? wordDefinitionSource : undefined;
   const chessGame = chessRef.current;
   const chessHistoryMoves = chessGame.history({ verbose: true });
   const displayChessGame = reviewPly === null ? chessGame : (() => {
@@ -729,7 +742,7 @@ export default function ClassicGamesPage() {
   }, [id, playVsBot, activeTurn, gameOver, kayAnimating, four, fillerBoard, fillerCurrentColors, pits, dots, claimed, pieces, selected]);
 
   const placeWordTile = (index: number) => {
-    if (wordGame.status !== 'playing') return;
+    if (wordGame.status !== 'playing' || pendingWordChallenge) return;
     const alreadyPlaced = wordPlacements.find((placement) => placement.index === index);
     if (alreadyPlaced) {
       setWordPlacements((current) => current.filter((placement) => placement.index !== index));
@@ -746,26 +759,82 @@ export default function ClassicGamesPage() {
     setWordFeedback('Tile placed. Add more tiles or play your word.');
   };
   const submitWord = () => {
-    if (!canOnlineAct) return;
+    if (!canOnlineAct || pendingWordChallenge) return;
     if (!wordDictionary) {
       setWordFeedback('The word list is still loading. Try again in a moment.');
       return;
     }
-    const result = playWordTurn(wordGame, wordPlacements, wordDirection, wordDictionary);
+    const result = playWordTurn(wordGame, wordPlacements, wordDirection, wordDictionary, Math.random, true);
     if (!result.ok) {
       setWordFeedback(result.reason);
       return;
     }
     setWordGame(result.state);
+    setPendingWordChallenge({ before: wordGame, played: result.state, words: [...new Set(result.words)], playedBy: wordGame.turn });
     setWordPlacements([]);
     setSelectedRackIndex(null);
-    const ending = result.state.status === 'finished'
-      ? result.state.winner === 2 ? ' The game is a draw.' : ` Player ${(result.state.winner ?? 0) + 1} wins.`
+    setWordFeedback(`Player ${wordGame.turn + 1} played ${result.words.join(' · ')} for ${result.score} points. Player ${result.state.turn + 1} may accept or challenge before continuing.`);
+  };
+  const getWordDefinitions = async (word: string) => {
+    const cache = wordDefinitionCache.current;
+    if (cache.has(word)) return cache.get(word) ?? null;
+    const definitions = await lookupWordDefinitions(word);
+    cache.set(word, definitions);
+    return definitions;
+  };
+  const lookupWord = async () => {
+    const word = wordLookupQuery.trim().toUpperCase();
+    setWordLookupResult(null);
+    setWordLookupError('');
+    if (!word || !/^[A-Z]+$/.test(word)) {
+      setWordLookupError('Enter a word using letters A–Z.');
+      return;
+    }
+    setWordLookupBusy(true);
+    try {
+      const definitions = await getWordDefinitions(word);
+      if (!definitions) {
+        setWordLookupError(`No definition was found for ${word}.`);
+        return;
+      }
+      setWordLookupResult({ word, definitions });
+    } catch {
+      setWordLookupError('Definitions are temporarily unavailable. Try again while connected to the internet.');
+    } finally {
+      setWordLookupBusy(false);
+    }
+  };
+  const challengeLastWord = async () => {
+    if (!pendingWordChallenge || challengeBusy || !wordDictionary) return;
+    setChallengeBusy(true);
+    try {
+      const missingWord = pendingWordChallenge.words.find((word) => !wordDictionary?.has(word));
+      const next = resolveWordChallenge(
+        pendingWordChallenge.before,
+        pendingWordChallenge.played,
+        Boolean(missingWord),
+      );
+      setWordGame(next);
+      setPendingWordChallenge(null);
+      setWordFeedback(missingWord
+        ? `Challenge upheld: ${missingWord} is not in the game word list. The play was removed and Player ${pendingWordChallenge.playedBy + 1} loses this turn.`
+        : `Challenge unsuccessful: all played words are accepted by the game. Player ${pendingWordChallenge.playedBy + 1} keeps the play; Player ${next.turn + 1} loses this turn.`);
+    } catch {
+      setWordFeedback('The dictionary could not verify this challenge. The play is still open; try again.');
+    } finally {
+      setChallengeBusy(false);
+    }
+  };
+  const acceptWordPlay = () => {
+    if (!pendingWordChallenge) return;
+    setPendingWordChallenge(null);
+    const ending = pendingWordChallenge.played.status === 'finished'
+      ? pendingWordChallenge.played.winner === 2 ? ' The game is a draw.' : ` Player ${(pendingWordChallenge.played.winner ?? 0) + 1} wins.`
       : '';
-    setWordFeedback(`${result.words.join(' · ')} scored ${result.score} points.${ending}`);
+    setWordFeedback(`Play accepted. ${ending}`);
   };
   const passWordTurnHandler = () => {
-    if (!canOnlineAct) return;
+    if (!canOnlineAct || pendingWordChallenge) return;
     const next = passWordTurn(wordGame);
     setWordGame(next);
     setWordPlacements([]);
@@ -1037,7 +1106,7 @@ export default function ClassicGamesPage() {
                     const bonusLabels = { 'double-letter': '2L', 'triple-letter': '3L', 'double-word': '2W', 'triple-word': '3W', center: '★' };
                     const row = Math.floor(index / WORD_BOARD_SIZE) + 1;
                     const col = index % WORD_BOARD_SIZE + 1;
-                    const isPlayableCell = !gameOver && (!boardTile || !!pendingTile);
+                    const isPlayableCell = !wordInteractionBlocked && (!boardTile || !!pendingTile);
                     return <button
                       key={index}
                       type="button"
@@ -1061,7 +1130,7 @@ export default function ClassicGamesPage() {
                 {wordDictionary ? ` Dictionary: ${wordDictionary.size.toLocaleString()} words.` : ' Loading dictionary…'}
               </p>
             </div>
-            <aside className="wy-sidebar" aria-label="Word Yard game controls">
+            <aside className="wy-sidebar" aria-label="Scrabble game controls">
               <section className="wy-rack-panel" aria-label={`Player ${wordGame.turn + 1} rack`}>
                 <h2 className="wy-panel-heading"><span>Player {wordGame.turn + 1} rack</span><small>{wordGame.racks[wordGame.turn].length} tiles</small></h2>
                 <div className="wy-rack" role="group" aria-label="Choose a tile from your rack">
@@ -1072,7 +1141,7 @@ export default function ClassicGamesPage() {
                     aria-label={`Select ${letter === '?' ? 'blank tile' : `letter ${letter}, ${LETTER_POINTS[letter]} points`}`}
                     aria-pressed={selectedRackIndex === index}
                     data-testid={`word-rack-tile-${index}`}
-                    disabled={gameOver || wordPlacements.some((placement) => placement.rackIndex === index)}
+                    disabled={wordInteractionBlocked || wordPlacements.some((placement) => placement.rackIndex === index)}
                     onClick={() => {
                       setSelectedRackIndex((current) => current === index ? null : index);
                       if (letter === '?') setBlankLetter('A');
@@ -1089,6 +1158,33 @@ export default function ClassicGamesPage() {
                   {selectedRackIndex === null ? 'Select a tile, then tap a square.' : 'Now choose an empty square on the board.'}
                 </p>
               </section>
+              <section className="wy-rack-panel" aria-label="Word definition lookup">
+                <h2 className="wy-panel-heading">Word lookup</h2>
+                <form onSubmit={(event) => { event.preventDefault(); void lookupWord(); }}>
+                  <label className="wy-word-entry">
+                    Word to look up
+                    <input
+                      type="search"
+                      value={wordLookupQuery}
+                      onChange={(event) => setWordLookupQuery(event.target.value)}
+                      maxLength={15}
+                      placeholder="Enter a word"
+                      aria-label="Word to look up"
+                      data-testid="input-word-lookup"
+                    />
+                  </label>
+                  <button className="wy-action" type="submit" disabled={wordLookupBusy || !wordDictionary} data-testid="button-word-lookup">
+                    {wordLookupBusy ? 'Looking up…' : 'Look up definition'}
+                  </button>
+                </form>
+                {wordLookupError && <p className="wy-message" role="status" data-testid="status-word-lookup">{wordLookupError}</p>}
+                {wordLookupResult && <div className="wy-message" role="status" data-testid="result-word-lookup">
+                  <strong>{wordLookupResult.word}</strong>
+                  {wordLookupResult.definitions.map((item, index) => <p key={`${item.partOfSpeech}-${index}`}><em>{item.partOfSpeech}</em> — {item.definition}</p>)}
+                  {safeWordDefinitionSource && <p>Source: <a href={safeWordDefinitionSource} target="_blank" rel="noreferrer">Wiktionary</a></p>}
+                </div>}
+                <p className="wy-caption">Definitions load from an online English dictionary.</p>
+              </section>
               <section className="wy-score-panel" aria-label="Player scores">
                 <span className={`wy-score-label${wordGame.turn === 0 && !gameOver ? ' is-active' : ''}`}>Player 1</span>
                 <span className={`wy-score-value${wordGame.turn === 0 && !gameOver ? ' is-active' : ''}`} data-testid="word-score-player-1">{wordGame.scores[0]}</span>
@@ -1097,14 +1193,23 @@ export default function ClassicGamesPage() {
               </section>
               <section className="wy-rack-panel" aria-label="Play controls">
                 <div className="wy-play-row" style={{ marginTop: 0 }}>
-                  <button className="wy-action" type="button" aria-pressed={wordDirection === 'horizontal'} disabled={gameOver} onClick={() => setWordDirection('horizontal')}>Across</button>
-                  <button className="wy-action" type="button" aria-pressed={wordDirection === 'vertical'} disabled={gameOver} onClick={() => setWordDirection('vertical')}>Down</button>
+                  <button className="wy-action" type="button" aria-pressed={wordDirection === 'horizontal'} disabled={wordInteractionBlocked} onClick={() => setWordDirection('horizontal')}>Across</button>
+                  <button className="wy-action" type="button" aria-pressed={wordDirection === 'vertical'} disabled={wordInteractionBlocked} onClick={() => setWordDirection('vertical')}>Down</button>
                 </div>
                 <div className="wy-play-row">
-                  <button className="wy-action wy-action-primary" type="button" data-testid="button-play-word" onClick={submitWord} disabled={gameOver || !wordDictionary || wordPlacements.length === 0}>Play word</button>
-                  <button className="wy-action" type="button" data-testid="button-pass-word" onClick={passWordTurnHandler} disabled={gameOver}>Pass</button>
-                  <button className="wy-action" type="button" data-testid="button-clear-word" onClick={() => { setWordPlacements([]); setSelectedRackIndex(null); setWordFeedback('Draft cleared.'); }} disabled={gameOver || (!wordPlacements.length && selectedRackIndex === null)}>Clear</button>
+                  <button className="wy-action wy-action-primary" type="button" data-testid="button-play-word" onClick={submitWord} disabled={wordInteractionBlocked || !wordDictionary || wordPlacements.length === 0}>Play word</button>
+                  <button className="wy-action" type="button" data-testid="button-pass-word" onClick={passWordTurnHandler} disabled={wordInteractionBlocked}>Pass</button>
+                  <button className="wy-action" type="button" data-testid="button-clear-word" onClick={() => { setWordPlacements([]); setSelectedRackIndex(null); setWordFeedback('Draft cleared.'); }} disabled={wordInteractionBlocked || (!wordPlacements.length && selectedRackIndex === null)}>Clear</button>
                 </div>
+                {pendingWordChallenge && <div className="wy-challenge-panel" role="group" aria-label="Challenge the last play" data-testid="word-challenge-panel">
+                  <p><strong>Player {pendingWordChallenge.playedBy + 1}</strong> played {pendingWordChallenge.words.join(' · ')}. Player {pendingWordChallenge.played.turn + 1}, accept or challenge before continuing.</p>
+                  <div className="wy-play-row">
+                    <button className="wy-action wy-action-primary" type="button" onClick={() => void challengeLastWord()} disabled={challengeBusy} data-testid="button-challenge-word">
+                      {challengeBusy ? 'Checking…' : 'Challenge'}
+                    </button>
+                    <button className="wy-action" type="button" onClick={acceptWordPlay} disabled={challengeBusy} data-testid="button-accept-word">Accept play</button>
+                  </div>
+                </div>}
                 <p className="wy-message" data-state={wordFeedback.includes('scored') ? 'success' : wordFeedback.includes('not ') || wordFeedback.includes('must') || wordFeedback.includes('Place') ? 'error' : undefined} role="status" aria-live="polite" data-testid="status-word-feedback">{wordFeedback}</p>
               </section>
             </aside>
