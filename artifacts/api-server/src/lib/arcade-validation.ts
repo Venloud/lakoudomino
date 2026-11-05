@@ -976,3 +976,55 @@ export function validateArcadeTransition(
   if (submittedTurn !== result.turn) return reject("The submitted turn does not match the legal move.");
   return result;
 }
+
+export function getArcadeBotTransition(
+  game: ArcadeGameId,
+  current: unknown,
+  seat: number,
+  capacity: number,
+): { state: unknown; turn: number } | null {
+  if (game === "filler" && isRecord(current) && isRecord(current.fillerBoard)) {
+    for (let color = 0; color < 6; color += 1) {
+      const board = fillerMove(current.fillerBoard, seat, color);
+      if (!board) continue;
+      return {
+        state: {
+          turn: board.turn,
+          winner: board.draw ? "draw" : board.winner,
+          fillerPlayerCount: capacity,
+          fillerBoard: board,
+        },
+        turn: Number(board.turn),
+      };
+    }
+    return null;
+  }
+  if (game !== "scrabble" || !isRecord(current) ||
+      !Array.isArray(current.racks) || !Array.isArray(current.bag) ||
+      !Array.isArray(current.scores) || !Array.isArray(current.racks[seat]) ||
+      typeof current.passes !== "number") return null;
+
+  const nextTurn = nextPlayer(seat, capacity);
+  const passes = current.passes + 1;
+  let scores = current.scores as number[];
+  let winner: number | "draw" | null = null;
+  if (passes >= capacity * 2) {
+    scores = scores.map((score, player) =>
+      score - ((current.racks as string[][])[player] ?? []).reduce(
+        (sum, letter) => sum + (SCRABBLE_LETTER_POINTS[letter] ?? 0), 0));
+    const high = Math.max(...scores);
+    const leaders = scores.flatMap((score, player) => score === high ? [player] : []);
+    winner = leaders.length === 1 ? leaders[0] : "draw";
+  }
+  const proposed = {
+    ...current,
+    turn: nextTurn,
+    passes,
+    scores,
+    winner,
+    racks: (current.racks as string[][]).map((rack, player) => player === seat ? [...rack] : []),
+    bag: (current.bag as string[]).map(() => ""),
+  };
+  const result = validateScrabble(current, proposed, seat, capacity);
+  return result.ok ? { state: result.state, turn: result.turn } : null;
+}

@@ -738,3 +738,91 @@ test("notification listener retries automatically and resyncs connected room sna
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });
+
+test("resigned Scrabble and Filler seats become bots, then reopen for the next match", {
+  timeout: 45_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade resignation integration tests.");
+
+  const schema = `arcade_bot_seats_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let processOne: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  let processTwo: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY,
+        game text NOT NULL,
+        capacity integer NOT NULL,
+        is_private boolean NOT NULL,
+        players jsonb NOT NULL,
+        state jsonb,
+        turn integer NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    [processOne, processTwo] = await Promise.all([
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+    ]);
+
+    for (const game of ["scrabble", "filler"] as const) {
+      const host = await postRoom(processOne.baseUrl, "rooms", {
+        game,
+        displayName: `${game} host`,
+        playerCount: 3,
+        isPrivate: true,
+      });
+      const second = await postRoom(processOne.baseUrl, `rooms/${String(host.code)}/join`, {
+        displayName: `${game} player two`,
+      });
+      await postRoom(processOne.baseUrl, `rooms/${String(host.code)}/join`, {
+        displayName: `${game} player three`,
+      });
+      const hostConnection = await connectArcadeSocket(
+        processOne.baseUrl, String(host.code), String(host.reconnectToken),
+      );
+      const observer = await connectArcadeSocket(
+        processTwo.baseUrl, String(host.code), String(second.reconnectToken),
+      );
+      sockets.push(hostConnection.socket, observer.socket);
+
+      const takeoverMessage = nextSocketMessage(observer.socket);
+      hostConnection.socket.send(JSON.stringify({ type: "resign" }));
+      const takeover = await takeoverMessage;
+      assert.ok(takeover.type === "state" || takeover.type === "room", `${game}: ${JSON.stringify(takeover)}`);
+      const botRoom = takeover.room as JsonRecord;
+      assert.equal((botRoom.players as JsonRecord[])[0].isBot, true, `${game} should mark the resigned seat as a bot`);
+      assert.equal(botRoom.turn, 1, `${game} bot should take its turn immediately`);
+      if (game === "scrabble") assert.equal((botRoom.state as JsonRecord).passes, 1);
+      else assert.equal(((botRoom.state as JsonRecord).fillerBoard as JsonRecord).turn, 1);
+
+      await pool.query(
+        `UPDATE ${quotedSchema}.arcade_rooms
+         SET state = jsonb_set(state, '{winner}', '1'::jsonb), updated_at = now()
+         WHERE code = $1`,
+        [host.code],
+      );
+      const replacement = await postRoom(processOne.baseUrl, `rooms/${String(host.code)}/join`, {
+        displayName: `${game} replacement`,
+      });
+      assert.equal(replacement.seat, 0);
+      const nextRoom = replacement;
+      assert.equal(((nextRoom.players as JsonRecord[])[0]).name, `${game} replacement`);
+      assert.equal(((nextRoom.players as JsonRecord[])[0]).isBot, undefined);
+      assert.equal(nextRoom.turn, 0);
+      assert.equal((nextRoom.state as JsonRecord).winner, null);
+    }
+  } finally {
+    sockets.forEach((socket) => socket.close());
+    if (processTwo) await stopArcadeProcess(processTwo.child);
+    if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
