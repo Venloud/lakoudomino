@@ -23,6 +23,10 @@
 .yard-tic-player b { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 6px; background: #2b2d32; color: var(--yard-text); }
 .yard-tic-player.is-active b { background: var(--yard-accent); color: #11170f; }
 .yard-tic-note { display: block; margin-top: 16px; color: #85868b; font-size: 10px; line-height: 1.5; }
+.yard-tic-spectator-result { max-width: 1080px; margin: 14px auto 0; padding: 18px 22px; border: 1px solid #3e6742; border-radius: 10px; background: linear-gradient(120deg, #202820, #1b1c20); text-align: center; }
+.yard-tic-spectator-result span { color: var(--yard-accent); font-size: 10px; font-weight: 700; letter-spacing: .12em; }
+.yard-tic-spectator-result h2 { margin: 7px 0 4px; color: var(--yard-text); font-size: 20px; }
+.yard-tic-spectator-result p { margin: 0; color: var(--yard-muted); font-size: 12px; }
 .yard-tic-mode-picker { display: flex; gap: 8px; margin: 0 0 16px; }
 .yard-tic-mode-picker button { display: grid; gap: 4px; min-width: 142px; padding: 10px 13px; border: 1px solid var(--yard-line); border-radius: 8px; background: #1a1b1f; color: var(--yard-muted); text-align: left; cursor: pointer; }
 .yard-tic-mode-picker button b { color: var(--yard-text); font-size: 12px; }
