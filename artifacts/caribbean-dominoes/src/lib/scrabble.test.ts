@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createScrabbleGame, passScrabbleTurn, playScrabbleWord, SCRABBLE_SIZE, type ScrabbleGame } from './scrabble';
+import { createScrabbleGame, exchangeScrabbleTiles, passScrabbleTurn, playScrabbleWord, SCRABBLE_SIZE, type ScrabbleGame } from './scrabble';
 
 const fixture = (overrides: Partial<ScrabbleGame> = {}): ScrabbleGame => ({
   board: Array(SCRABBLE_SIZE * SCRABBLE_SIZE).fill(null),
@@ -8,6 +8,7 @@ const fixture = (overrides: Partial<ScrabbleGame> = {}): ScrabbleGame => ({
   bag: [],
   scores: [0, 0],
   turn: 0,
+  playerCount: 2,
   passes: 0,
   winner: null,
   ...overrides,
@@ -19,6 +20,29 @@ describe('Scrabble foundation', () => {
     assert.equal(game.racks[0].length, 7);
     assert.equal(game.racks[1].length, 7);
     assert.equal(game.bag.length, 86);
+  });
+
+  it('supports a four-player deal and cycles turns around all seats', () => {
+    let game = createScrabbleGame(() => 0.5, 4);
+    assert.equal(game.racks.length, 4);
+    assert.equal(game.racks.every((rack) => rack.length === 7), true);
+    assert.equal(game.bag.length, 72);
+    game = passScrabbleTurn(game);
+    game = passScrabbleTurn(game);
+    game = passScrabbleTurn(game);
+    assert.equal(game.turn, 3);
+    game = passScrabbleTurn(game);
+    assert.equal(game.turn, 0);
+  });
+
+  it('exchanges selected tiles only when at least seven tiles remain', () => {
+    const game = createScrabbleGame(() => 0.5);
+    const exchanged = exchangeScrabbleTiles(game, [game.racks[0][0]], () => 0.5);
+    assert.ok(exchanged.game);
+    assert.equal(exchanged.game.racks[0].length, 7);
+    assert.equal(exchanged.game.bag.length, 86);
+    assert.equal(exchanged.game.turn, 1);
+    assert.match(exchangeScrabbleTiles({ ...game, bag: [] }, ['A']).error ?? '', /at least 7/);
   });
 
   it('requires the first word to cover the center and scores its double-word square', () => {

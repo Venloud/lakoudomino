@@ -33,6 +33,7 @@ type RoomSnapshot = {
   players: RoomPlayer[];
   state: TicTacToeGameState;
   myMark: 'X' | 'O';
+  resignedSeat: 0 | 1 | null;
 };
 
 const reconnectKey = (code: string) => `tic-tac-toe-reconnect-${code}`;
@@ -79,6 +80,7 @@ export default function TicTacToePage() {
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting');
   const [joiningFromLink, setJoiningFromLink] = useState(false);
+  const [resigning, setResigning] = useState(false);
   const socket = useRef<WebSocket | null>(null);
   const linkJoinAttempt = useRef<Promise<string> | null>(null);
   const linkJoinCode = useRef<string | null>(null);
@@ -86,6 +88,15 @@ export default function TicTacToePage() {
   useEffect(() => {
     if (user?.username) setName(user.username);
   }, [user?.username]);
+
+  useEffect(() => {
+    if (!resigning || !code || snapshot?.status !== 'finished' || snapshot.resignedSeat === null) return;
+    const mySeat = snapshot.myMark === 'X' ? 0 : 1;
+    if (snapshot.resignedSeat !== mySeat) return;
+    sessionStorage.removeItem(reconnectKey(code));
+    sessionStorage.removeItem(displayNameKey(code));
+    setLocation('/games/tic-tac-toe');
+  }, [code, resigning, setLocation, snapshot]);
 
   useEffect(() => {
     if (!code) {
@@ -217,6 +228,16 @@ export default function TicTacToePage() {
     socket.current.send(JSON.stringify({ type: 'move', ...move }));
   };
 
+  const resign = () => {
+    if (!code || socket.current?.readyState !== WebSocket.OPEN) {
+      setNotice('Reconnect before resigning so the result is recorded.');
+      return;
+    }
+    if (!window.confirm('Resign this round? Your opponent will win, and this will be recorded as a loss.')) return;
+    setResigning(true);
+    socket.current.send(JSON.stringify({ type: 'resign' }));
+  };
+
   const copyInvite = async () => {
     if (!code) return;
     try {
@@ -267,6 +288,7 @@ export default function TicTacToePage() {
       onCopyInvite={() => void copyInvite()}
       onInviteFriend={sendFriendInvite}
       onMove={sendMove}
+      onResign={resign}
       onNewRound={() => socket.current?.readyState === WebSocket.OPEN && socket.current.send(JSON.stringify({ type: 'newRound' }))}
     />;
   }
@@ -323,6 +345,7 @@ function OnlineGame(props: {
   onCopyInvite: () => void;
   onInviteFriend: (id: string) => void;
   onMove: (move: Record<string, unknown>) => void;
+  onResign: () => void;
   onNewRound: () => void;
 }) {
   const { code, snapshot, connection, notice } = props;
@@ -333,20 +356,34 @@ function OnlineGame(props: {
   const roundWinner = game.winner ? snapshot.players.find((player) => player.mark === game.winner)?.name ?? otherPlayer?.name : undefined;
   return <div className="yard-app">
     <YardHeader active="games" username={props.username} notifications={0} onLogout={() => {}} />
-      {finished && <GameEndSequence gameName={snapshot.mode === 'yard' ? 'Yard Mode' : 'Tic-Tac-Toe'} perspective={!game.winner ? 'draw' : game.winner === snapshot.myMark ? 'winner' : 'opponent'} winnerName={roundWinner ?? 'Your opponent'} opponentName={otherPlayer?.name ?? 'Your friend'} onPlayAgain={props.onNewRound} />}
+      {finished && <GameEndSequence
+        gameName={snapshot.mode === 'yard' ? 'Yard Mode' : 'Tic-Tac-Toe'}
+        perspective={!game.winner ? 'draw' : game.winner === snapshot.myMark ? 'winner' : 'opponent'}
+        winnerName={roundWinner ?? 'Your opponent'}
+        opponentName={otherPlayer?.name ?? 'Your friend'}
+        detail={snapshot.resignedSeat !== null && snapshot.resignedSeat !== (snapshot.myMark === 'X' ? 0 : 1)
+          ? 'Your opponent resigned. Their loss is recorded. Share the invite to let someone take their seat next round.'
+          : undefined}
+        onPlayAgain={snapshot.resignedSeat === null ? props.onNewRound : props.onCopyInvite}
+        playAgainLabel={snapshot.resignedSeat === null ? undefined : 'Invite a new player'}
+      />}
     <main className={`yard-main yard-tic-main${snapshot.mode === 'yard' ? ' is-yard-mode' : ''}`}>
       <Link href="/games/tic-tac-toe" className="yard-tic-back"><ArrowLeft size={14} /> Tic-Tac-Toe rooms</Link>
       <div className="yard-heading yard-tic-room-heading">
         <div><p className="yard-kicker">509 YARD / ROOM {code}</p><h1>{snapshot.mode === 'regular' ? 'Regular' : 'Yard Mode'}</h1><p className="yard-subtitle">{connection === 'connected' ? 'Match connected' : 'Reconnecting to your match…'}</p></div>
-        <button type="button" className="yard-button" onClick={props.onCopyInvite}><Copy size={14} /> Copy invite link</button>
+         <div className="yard-tic-room-actions">
+           <button type="button" className="yard-button" onClick={props.onCopyInvite}><Copy size={14} /> Copy invite link</button>
+           {snapshot.status === 'playing' && <button type="button" className="yard-button" onClick={props.onResign}>Resign &amp; leave</button>}
+         </div>
       </div>
       <div className="yard-tic-layout">
         <section className="yard-tic-board-card" aria-label="Online Tic-Tac-Toe game">
           <p className="yard-tic-status" role="status" aria-live="polite">
-            {finished ? game.winner ? <><strong>{game.winner}</strong> wins this round</> : "It's a draw" :
+             {finished ? game.winner ? <><strong>{game.winner}</strong> wins this round</> : "It's a draw" :
               snapshot.status === 'waiting' ? 'Waiting for your friend to join…' :
                 myTurn ? <><strong>Your turn</strong> · You are {snapshot.myMark}</> :
                   <><strong>{otherPlayer?.name ?? 'Your friend'}</strong> is taking a turn</>}
+            {snapshot.resignedSeat !== null && <> · The open seat can be filled from this invite link for the next round.</>}
             {snapshot.mode === 'yard' && !finished && snapshot.status === 'playing' && 'nextBoard' in game &&
               <span>{game.nextBoard === null ? ' · Choose any open grid' : ` · Play in grid ${game.nextBoard + 1}`}</span>}
           </p>

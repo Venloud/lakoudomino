@@ -23,6 +23,7 @@ type TicTacToePlayer = {
   name: string;
   reconnectTokenHash: string;
   userId?: string | null;
+  resigned?: boolean;
 };
 
 type RoomStatus = "waiting" | "playing" | "finished";
@@ -90,6 +91,7 @@ function restoreRoom(record: {
   if (players.length < 1 || players.length > 2 || players.some((player, index) =>
     !player || player.seat !== index || player.mark !== (index === 0 ? "X" : "O") ||
      typeof player.name !== "string" || typeof player.reconnectTokenHash !== "string" ||
+     (player.resigned !== undefined && typeof player.resigned !== "boolean") ||
      (player.userId !== undefined && player.userId !== null && typeof player.userId !== "string"))) return null;
   return {
     code: record.code,
@@ -120,7 +122,7 @@ async function persistRoom(room: TicTacToeRoom): Promise<void> {
     code: room.code,
     mode: room.mode,
     status: room.status,
-    players: room.players.map(({ seat, mark, name, reconnectTokenHash, userId }) => ({ seat, mark, name, reconnectTokenHash, userId: userId ?? null })),
+    players: room.players.map(({ seat, mark, name, reconnectTokenHash, userId, resigned }) => ({ seat, mark, name, reconnectTokenHash, userId: userId ?? null, resigned: resigned ?? false })),
     state: room.state,
     roundNumber: room.roundNumber,
     updatedAt: new Date(),
@@ -202,23 +204,33 @@ router.post("/tic-tac-toe/rooms/:code/join", async (req, res) => {
   if (!params.success) return res.status(400).json({ error: "Enter a player name." });
   const room = getRoom(req.params.code);
   if (!room) return res.status(404).json({ error: "Tic-Tac-Toe room not found." });
-  if (room.status !== "waiting" || room.players.length !== 1) {
+  const resignedPlayer = room.players.find((player) => player.resigned);
+  const isReplacementJoin = room.status === "finished" && Boolean(resignedPlayer) && room.players.length === 2;
+  if (!isReplacementJoin && (room.status !== "waiting" || room.players.length !== 1)) {
     return res.status(409).json({ error: "This room has already started or is full." });
   }
   const displayName = params.data.displayName.trim().slice(0, 24);
   if (!displayName) return res.status(400).json({ error: "Enter a player name." });
-  if (room.players.some((player) => player.name.toLowerCase() === displayName.toLowerCase())) {
+  if (room.players.some((player) => !player.resigned && player.name.toLowerCase() === displayName.toLowerCase())) {
     return res.status(409).json({ error: "Choose a different name from the other player." });
   }
   const reconnectToken = issueReconnectToken();
   const identity = await getIdentityFromRequest(req);
-  room.players.push({
-    seat: 1,
-    mark: "O",
+  const newPlayer: TicTacToePlayer = {
+    seat: resignedPlayer?.seat ?? 1,
+    mark: resignedPlayer?.mark ?? "O",
     name: displayName,
     reconnectTokenHash: tokenHash(reconnectToken),
     userId: identity?.userId ?? null,
-  });
+    resigned: false,
+  };
+  if (resignedPlayer) {
+    room.players[resignedPlayer.seat] = newPlayer;
+    room.state = room.mode === "regular" ? createTicTacToeState() : createYardTicTacToeState();
+    room.roundNumber += 1;
+  } else {
+    room.players.push(newPlayer);
+  }
   room.status = "playing";
   await persistRoom(room);
   broadcastRoom(room);
@@ -235,6 +247,7 @@ function sendSnapshot(socket: WebSocket, room: TicTacToeRoom, seat: 0 | 1): void
     players: room.players.map(({ seat: playerSeat, mark, name }) => ({ seat: playerSeat, mark, name })),
     state: room.state,
     myMark: room.players[seat]?.mark ?? null,
+    resignedSeat: room.players.find((player) => player.resigned)?.seat ?? null,
   }));
 }
 
@@ -283,8 +296,9 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
       }
       const hash = tokenHash(event.reconnectToken);
       const player = room.players.find((candidate) => candidate.reconnectTokenHash === hash);
-      if (!player) {
-        sendSocketError(socket, "That reconnect token is not valid for this room.");
+      if (!player || player.resigned) {
+        sendSocketError(socket, "That seat has been released. Join again for the next round.");
+        socket.close(1008, "Seat released");
         return;
       }
       seat = player.seat;
@@ -296,6 +310,24 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
     }
     if (seat === undefined) {
       sendSocketError(socket, "Reconnect to this room before playing.");
+      return;
+    }
+    if (event.type === "resign") {
+      if (room.status !== "playing") {
+        sendSocketError(socket, "There is no active round to resign from.");
+        return;
+      }
+      const player = room.players.find((candidate) => candidate.seat === seat);
+      const opponent = room.players.find((candidate) => candidate.seat !== seat && !candidate.resigned);
+      if (!player || !opponent) {
+        sendSocketError(socket, "The opponent seat is not available.");
+        return;
+      }
+      room.players[seat] = { ...player, resigned: true };
+      room.state = { ...room.state, winner: opponent.mark, isDraw: false } as TicTacToeGameState;
+      room.status = "finished";
+      await persistRoom(room);
+      broadcastRoom(room);
       return;
     }
     if (event.type === "move") {
@@ -325,6 +357,10 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
       return;
     }
     if (event.type === "newRound") {
+      if (room.players.some((player) => player.resigned)) {
+        sendSocketError(socket, "Waiting for a new opponent to take the open seat.");
+        return;
+      }
       if (room.status !== "finished") {
         sendSocketError(socket, "The round must finish before starting another.");
         return;
@@ -346,5 +382,7 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
     if (!sockets?.size) room.connections.delete(seat);
   });
 }
+
+/* original route functions continued below */
 
 export default router;

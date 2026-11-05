@@ -3,19 +3,29 @@ import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link } from 'wouter';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
-import { createScrabbleGame, passScrabbleTurn, playScrabbleWord, premiumAt, SCRABBLE_SIZE, type ScrabbleDirection } from '@/lib/scrabble';
+import { createScrabbleGame, exchangeScrabbleTiles, passScrabbleTurn, playScrabbleWord, premiumAt, SCRABBLE_SIZE, type ScrabbleDirection } from '@/lib/scrabble';
 
 const premiumColors = { TW: '#733c35', DW: '#754951', TL: '#355a72', DL: '#3c6252' };
 
 export default function ScrabblePage() {
-  const [game, setGame] = useState(createScrabbleGame);
+  const [playerCount, setPlayerCount] = useState<2 | 3 | 4>(2);
+  const [game, setGame] = useState(() => createScrabbleGame());
   const [word, setWord] = useState('');
   const [start, setStart] = useState(7 * SCRABBLE_SIZE + 7);
   const [direction, setDirection] = useState<ScrabbleDirection>('horizontal');
   const [message, setMessage] = useState('Start at the center star. Words must connect to the tiles already played.');
+  const [selectedRackTiles, setSelectedRackTiles] = useState<number[]>([]);
   const preview = word.trim().toUpperCase();
-  const playerScore = (player: 0 | 1) => game.scores[player];
-  const turnLabel = game.winner === null ? `Player ${game.turn + 1} to move` : game.winner === 2 ? 'Draw game' : `Player ${game.winner + 1} wins`;
+  const turnLabel = game.winner === null ? `Player ${game.turn + 1} to move` : game.winner === 'draw' ? 'Draw game' : `Player ${game.winner + 1} wins`;
+  const newGame = (count = playerCount) => {
+    setPlayerCount(count as 2 | 3 | 4);
+    setGame(createScrabbleGame(Math.random, count as 2 | 3 | 4));
+    setWord('');
+    setStart(7 * SCRABBLE_SIZE + 7);
+    setDirection('horizontal');
+    setSelectedRackTiles([]);
+    setMessage('Start at the center star. Words must connect to the tiles already played.');
+  };
 
   const handlePlay = () => {
     const result = playScrabbleWord(game, {
@@ -28,29 +38,42 @@ export default function ScrabblePage() {
     const gained = result.game.scores[game.turn] - game.scores[game.turn];
     setGame(result.game);
     setWord('');
+    setSelectedRackTiles([]);
     setMessage(`Word played for ${gained} points.`);
   };
 
   const handlePass = () => {
     setGame((current) => passScrabbleTurn(current));
+    setSelectedRackTiles([]);
     setMessage('Turn passed.');
+  };
+  const handleExchange = () => {
+    const tiles = selectedRackTiles.map((index) => game.racks[game.turn][index]).filter(Boolean);
+    const result = exchangeScrabbleTiles(game, tiles);
+    if (!result.game) { setMessage(result.error); return; }
+    setGame(result.game);
+    setSelectedRackTiles([]);
+    setMessage(`${tiles.length} tile${tiles.length === 1 ? '' : 's'} exchanged. Turn passed.`);
   };
 
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
-    {game.winner !== null && <GameEndSequence gameName="Scrabble" perspective={game.winner === 2 ? 'draw' : 'local'} winnerName={`Player ${game.winner + 1}`} opponentName={`Player ${game.winner === 0 ? 2 : 1}`} score={`Player 1 ${game.scores[0]} · Player 2 ${game.scores[1]}`} onPlayAgain={() => { setGame(createScrabbleGame()); setWord(''); setStart(7 * SCRABBLE_SIZE + 7); setDirection('horizontal'); setMessage('Start at the center star. Words must connect to the tiles already played.'); }} />}
+    {game.winner !== null && <GameEndSequence gameName="Scrabble" perspective={game.winner === 'draw' ? 'draw' : 'local'} winnerName={game.winner === 'draw' ? 'Draw game' : `Player ${game.winner + 1}`} opponentName="Your opponents" score={game.scores.map((score, index) => `Player ${index + 1} ${score}`).join(' · ')} onPlayAgain={() => newGame()} />}
     <main className="yard-main" style={{ maxWidth: 1050 }}>
       <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
       <header className="yard-heading" style={{ marginTop: 16 }}>
-        <div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>Scrabble</h1><p className="yard-subtitle">Place connected words, score letter and board bonuses, and outscore your opponent.</p></div>
+         <div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>Scrabble</h1><p className="yard-subtitle">Play connected words for 2–4 players, score bonuses, exchange tiles, and finish with the highest score.</p></div>
       </header>
       <section className="yard-panel" style={{ padding: 16, marginTop: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
           <strong role="status">{turnLabel}</strong>
-          <button className="yard-button" type="button" onClick={() => { setGame(createScrabbleGame()); setWord(''); setStart(112); setDirection('horizontal'); setMessage('Start at the center star. Words must connect to the tiles already played.'); }}><RotateCcw size={14} /> New game</button>
+           <button className="yard-button" type="button" onClick={() => newGame()}><RotateCcw size={14} /> New game</button>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 22, marginBottom: 12, fontSize: 13 }}>
-          <span>Player 1 <b>{playerScore(0)}</b></span><span>Player 2 <b>{playerScore(1)}</b></span><span>Tiles left <b>{game.bag.length}</b></span>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12, fontSize: 13 }}>
+          <span>Players</span>{([2, 3, 4] as const).map((count) => <button key={count} type="button" className="yard-button" aria-pressed={playerCount === count} onClick={() => newGame(count)}>{count}</button>)}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 18, marginBottom: 12, fontSize: 13 }}>
+          {game.scores.map((score, index) => <span key={index} aria-current={game.turn === index ? 'step' : undefined}>Player {index + 1} <b>{score}</b></span>)}<span>Tiles left <b>{game.bag.length}</b></span>
         </div>
         <div role="grid" aria-label="Scrabble board" className="yard-scrabble-board" style={{ display: 'grid', gridTemplateColumns: `repeat(${SCRABBLE_SIZE}, minmax(0,1fr))`, gap: 2, width: 'min(100%, 660px)', margin: '0 auto', padding: 5, borderRadius: 8, background: '#0e1112' }}>
           {game.board.map((tile, index) => {
@@ -81,12 +104,13 @@ export default function ScrabblePage() {
           })}
         </div>
         <div style={{ maxWidth: 660, margin: '14px auto 0', display: 'grid', gap: 12 }}>
-          <p style={{ margin: 0, textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>Player {game.turn + 1} rack: {game.racks[game.turn].map((letter, i) => <b key={`${letter}-${i}`} style={{ display: 'inline-grid', placeItems: 'center', width: 27, height: 30, margin: '0 2px', borderRadius: 4, background: '#e5dfd1', color: '#202124' }}>{letter === '?' ? '☆' : letter}<small style={{ fontSize: 8 }}>{letter === '?' ? 0 : undefined}</small></b>)}</p>
+          <div style={{ margin: 0, textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>Player {game.turn + 1} rack: {game.racks[game.turn].map((letter, i) => <button type="button" key={`${letter}-${i}`} aria-pressed={selectedRackTiles.includes(i)} onClick={() => setSelectedRackTiles((current) => current.includes(i) ? current.filter((index) => index !== i) : [...current, i])} style={{ display: 'inline-grid', placeItems: 'center', width: 32, height: 36, margin: '0 2px', borderRadius: 4, border: selectedRackTiles.includes(i) ? '2px solid #75d64b' : '1px solid #9e947f', background: '#e5dfd1', color: '#202124' }}>{letter === '?' ? '☆' : letter}<small style={{ fontSize: 8 }}>{letter === '?' ? 0 : undefined}</small></button>)}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>Word <input className="yard-input" value={word} onChange={(event) => setWord(event.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} maxLength={15} placeholder="e.g. WORD" style={{ width: 150 }} disabled={game.winner !== null} /></label>
             <button type="button" className="yard-button" aria-pressed={direction === 'horizontal'} onClick={() => setDirection('horizontal')}>Across</button>
             <button type="button" className="yard-button" aria-pressed={direction === 'vertical'} onClick={() => setDirection('vertical')}>Down</button>
             <button type="button" className="yard-button primary" onClick={handlePlay} disabled={game.winner !== null}>Play word</button>
+            <button type="button" className="yard-button" onClick={handleExchange} disabled={game.winner !== null || selectedRackTiles.length === 0 || game.bag.length < 7}>Exchange selected</button>
             <button type="button" className="yard-button" onClick={handlePass} disabled={game.winner !== null}>Pass</button>
           </div>
           <p role="status" style={{ minHeight: 18, margin: 0, textAlign: 'center', color: '#b7b8b9', fontSize: 12 }}>{message}</p>

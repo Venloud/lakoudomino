@@ -12,6 +12,7 @@ type GameEndSequenceProps = {
   detail?: string;
   score?: string;
   onPlayAgain: () => void;
+  playAgainLabel?: string;
   returnHref?: string;
 };
 
@@ -23,6 +24,7 @@ export function GameEndSequence({
   detail,
   score,
   onPlayAgain,
+  playAgainLabel = 'Play again',
   returnHref = '/games',
 }: GameEndSequenceProps) {
   const isLocal = perspective === 'local';
@@ -52,7 +54,7 @@ export function GameEndSequence({
       {isDraw && <div className="yard-end-draw-note">Both players held their ground.</div>}
       <div className="yard-end-actions">
         <Link href={returnHref} className="yard-end-secondary">Back to games</Link>
-        <button type="button" className="yard-end-primary" onClick={onPlayAgain}><RotateCcw size={15} /> Play again</button>
+        <button type="button" className="yard-end-primary" onClick={onPlayAgain}><RotateCcw size={15} /> {playAgainLabel}</button>
       </div>
     </section>
   </div>;

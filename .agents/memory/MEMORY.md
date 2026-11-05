@@ -11,3 +11,4 @@
 - [GitHub connector upload pacing](github-connector-upload-throttling.md) — large blob uploads through the GitHub connector need paced, low-concurrency requests.
 - [Protected GitHub main](github-main-protection.md) — main requires PRs; sync changes on a branch and preserve remote commits.
 - [509 Yard social-club direction](509-yard-social-club.md) — use a consistent Caribbean club look across lobby, auth, rules, waiting room, and table.
+- [Online resignation behavior](online-resignation.md) — leaving an active 1v1 is a loss; in larger rooms a bot takes over until the next match.

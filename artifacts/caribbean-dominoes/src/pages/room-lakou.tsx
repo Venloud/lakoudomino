@@ -295,7 +295,9 @@ export default function RoomPage() {
   };
 
   const confirmLeave = () => {
-    if (window.confirm('Leave this table?')) void leaveWaitingRoom();
+    if (window.confirm('Leave this table? If a match is active, a bot will take over your seat and your result will count as a loss.')) {
+      void leaveWaitingRoom();
+    }
   };
 
   const changeSettings = (settings: { mode: 'regular' | 'points'; rowBoxes: number; turnSeconds: number; isPrivate: boolean }) => {

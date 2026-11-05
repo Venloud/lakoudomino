@@ -21,6 +21,16 @@ test("finished online rounds create matching win/loss results for signed-in play
   ]);
 });
 
+test("a resigned player receives a loss and the remaining player receives a win", () => {
+  const resignedRound = {
+    ...baseRoom,
+    state: { winner: "O" as const, isDraw: false },
+  };
+  const results = buildTicTacToeResultInserts(resignedRound);
+  assert.equal(results.find((result) => result.userId === "user-x")?.outcome, "loss");
+  assert.equal(results.find((result) => result.userId === "user-o")?.outcome, "win");
+});
+
 test("Yard draws are stored for each signed-in player, while guests get no result row", () => {
   const room = {
     ...baseRoom,

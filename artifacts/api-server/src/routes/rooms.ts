@@ -310,6 +310,12 @@ async function applyAfterGame(room: RoomState): Promise<boolean> {
           mode: room.mode,
           match: room.engineState,
           participants: room.matchParticipants ?? [],
+          forfeitSeats: room.seats
+            .filter((candidate) => candidate.status === "bot" &&
+              candidate.name?.endsWith(" (resigned)") &&
+              (room.matchParticipants ?? []).some((participant) =>
+                participant.seat === candidate.seat && participant.userId))
+            .map((candidate) => candidate.seat),
         });
         room.statsRecorded = true;
       } catch (error) {
@@ -1439,22 +1445,24 @@ router.post("/rooms/:code", async (req, res) => {
   const identity = await getIdentityFromRequest(req);
   const room = requireRoom(params.code, res);
   if (!room) return;
-  if (room.status !== "waiting") {
+  const replacingResignedPlayer = room.status === "finished" && room.engineState?.over === true;
+  if (room.status !== "waiting" && !replacingResignedPlayer) {
     res.status(409).json({ error: "This room has already started; join the waitlist instead" });
     return;
   }
   const displayName = input.displayName.trim();
   const existing = room.seats.find(
-    (seat) => seat.name?.toLowerCase() === displayName.toLowerCase(),
+    (seat) => seat.status !== "bot" && seat.name?.toLowerCase() === displayName.toLowerCase(),
   );
   if (existing) {
     res.status(409).json({ error: "That display name is already in the room" });
     return;
   }
   const capacity = room.playerCount ?? 4;
-  const seat = room.seats.find(
-    (candidate) => candidate.seat < capacity && candidate.status === "open",
-  );
+  const seat = room.seats.find((candidate) =>
+    candidate.seat < capacity && (replacingResignedPlayer
+      ? candidate.status === "bot" && candidate.name?.endsWith(" (resigned)")
+      : candidate.status === "open"));
   if (!seat) {
     res.status(409).json({ error: "This room is full" });
     return;
@@ -1462,6 +1470,7 @@ router.post("/rooms/:code", async (req, res) => {
   seat.status = "waiting";
   seat.name = displayName;
   seat.userId = identity?.userId ?? null;
+  delete seat.botLevel;
   const reconnectToken = issueReconnectToken();
   seat.reconnectTokenHash = hashReconnectToken(reconnectToken);
   await persistRoom(room);
@@ -1695,6 +1704,56 @@ router.post("/rooms/:code/leave", async (req, res) => {
     await broadcastRoom(room);
     res.json({ events: [], room: publicRoom(room) });
     return;
+  }
+  if (room.engineState && !room.engineState.over) {
+    const playerName = seat.name ?? `Seat ${seat.seat + 1}`;
+    for (const socket of room.connections.get(seat.seat) ?? []) {
+      clearPresence(socket);
+      if (socket.readyState === WebSocket.OPEN) socket.close(1000, "Player resigned");
+    }
+    room.connections.delete(seat.seat);
+    room.seats[seat.seat] = {
+      ...seat,
+      status: "bot",
+      botLevel: "easy",
+      name: `${playerName} (resigned)`,
+      userId: null,
+      reconnectTokenHash: null,
+    };
+    room.lastAction = `${playerName} resigned; a bot took over the seat`;
+    cancelGameTimer(room);
+    room.status = room.engineState.hand.over ? "finished" : "playing";
+    if (room.engineState.hand.over) scheduleNextHand(room);
+    else scheduleNextGameStep(room);
+    await persistRoom(room);
+    await broadcastRoom(room);
+    broadcastLobbyUpdate();
+    return res.json({ events: [], room: publicRoom(room) });
+  }
+  if (room.engineState && !room.engineState.over) {
+    const playerName = seat.name ?? `Seat ${seat.seat + 1}`;
+    for (const socket of room.connections.get(seat.seat) ?? []) {
+      clearPresence(socket);
+      if (socket.readyState === WebSocket.OPEN) socket.close(1000, "Player resigned");
+    }
+    room.connections.delete(seat.seat);
+    room.seats[seat.seat] = {
+      ...seat,
+      status: "bot",
+      botLevel: "easy",
+      name: `${playerName} (resigned)`,
+      userId: null,
+      reconnectTokenHash: null,
+    };
+    room.lastAction = `${playerName} resigned; a bot took over the seat`;
+    cancelGameTimer(room);
+    room.status = room.engineState.hand.over ? "finished" : "playing";
+    if (room.engineState.hand.over) scheduleNextHand(room);
+    else scheduleNextGameStep(room);
+    await persistRoom(room);
+    await broadcastRoom(room);
+    broadcastLobbyUpdate();
+    return res.json({ events: [], room: publicRoom(room) });
   }
   if (!room.engineState?.over && !room.engineState?.hand.over) {
     return res.status(409).json({ error: "A seat can be released only after the hand ends" });

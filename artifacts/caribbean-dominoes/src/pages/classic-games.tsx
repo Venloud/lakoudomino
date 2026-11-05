@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Chess, type Square } from 'chess.js';
@@ -13,6 +13,12 @@ import { GameEndSequence } from '@/components/game-end-sequence';
 import './word-yard.css';
 
 type GameId = 'box' | 'kay' | 'chess' | 'dame' | 'words' | 'four-in-a-row' | 'filler';
+const CHESS_CLOCK_START_MS = 10 * 60 * 1000;
+
+function formatChessClock(ms: number) {
+  const totalSeconds = Math.ceil(ms / 1000);
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
 type Piece = { side: 0 | 1; kind: string } | null;
 const GAME_INFO: Record<GameId, { name: string; intro: string }> = {
   box: { name: 'Box', intro: 'Take turns drawing edges. Complete a square to claim it and play again.' },
@@ -137,6 +143,10 @@ export default function ClassicGamesPage() {
   const [chessVersion, setChessVersion] = useState(0);
   const [playVsBot, setPlayVsBot] = useState(false);
   const [chessState, setChessState] = useState<ChessGame>(createChessGame);
+  const [chessClockMs, setChessClockMs] = useState<[number, number]>([CHESS_CLOCK_START_MS, CHESS_CLOCK_START_MS]);
+  const chessClockRef = useRef<[number, number]>([CHESS_CLOCK_START_MS, CHESS_CLOCK_START_MS]);
+  const chessTurnRef = useRef<0 | 1>(0);
+  const chessClockUpdatedAtRef = useRef(Date.now());
   const [promotionMove, setPromotionMove] = useState<ChessMove | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [wordGame, setWordGame] = useState(createWordGame);
@@ -159,10 +169,36 @@ export default function ClassicGamesPage() {
   }, [id]);
   useEffect(() => () => { if (kayTimerRef.current !== null) window.clearTimeout(kayTimerRef.current); }, []);
 
+  const advanceChessClock = useCallback(() => {
+    const now = Date.now();
+    const activeSide = chessTurnRef.current;
+    const next: [number, number] = [...chessClockRef.current];
+    next[activeSide] = Math.max(0, next[activeSide] - (now - chessClockUpdatedAtRef.current));
+    chessClockUpdatedAtRef.current = now;
+    chessClockRef.current = next;
+    setChessClockMs(next);
+    if (next[activeSide] === 0) {
+      setWinner(activeSide === 0 ? 1 : 0);
+      return false;
+    }
+    return true;
+  }, []);
+
+  useEffect(() => {
+    if (id !== 'chess' || winner !== null) return;
+    chessClockUpdatedAtRef.current = Date.now();
+    const timer = window.setInterval(advanceChessClock, 250);
+    return () => window.clearInterval(timer);
+  }, [advanceChessClock, id, winner]);
+
   const reset = () => {
     if (id === 'chess') {
       chessRef.current = new Chess();
       setChessState(createChessGame());
+      chessClockRef.current = [CHESS_CLOCK_START_MS, CHESS_CLOCK_START_MS];
+      chessTurnRef.current = 0;
+      chessClockUpdatedAtRef.current = Date.now();
+      setChessClockMs([CHESS_CLOCK_START_MS, CHESS_CLOCK_START_MS]);
       setPromotionMove(null);
       setPieces(chessPieces(chessRef.current));
       setTurn(0); setWinner(null); setSelected(null); setChessVersion((version) => version + 1);
@@ -219,6 +255,7 @@ export default function ClassicGamesPage() {
     } else if (!scored) setTurn(turn === 0 ? 1 : 0);
   };
   const finishChessMove = (move: ChessMove, promotion: ChessPieceKind = 'Q') => {
+    if (!advanceChessClock()) return;
     const next = playChessMove(chessState, move, promotion);
     if (!next) return;
     const moving = chessState.board[move.from];
@@ -231,6 +268,8 @@ export default function ClassicGamesPage() {
     });
     setChessState(next);
     setPieces(chessPieces(chessGame));
+    chessTurnRef.current = next.turn;
+    chessClockUpdatedAtRef.current = Date.now();
     setTurn(next.turn);
     setSelected(null);
     setPromotionMove(null);
@@ -427,6 +466,14 @@ export default function ClassicGamesPage() {
           <div className="yard-chess-modes" role="group" aria-label="Choose opponent">
             <button className={`yard-button${playVsBot ? '' : ' primary'}`} type="button" aria-pressed={!playVsBot} onClick={() => setPlayVsBot(false)} disabled={chessGame.history().length > 0}>Two players</button>
             <button className={`yard-button${playVsBot ? ' primary' : ''}`} type="button" aria-pressed={playVsBot} onClick={() => setPlayVsBot(true)} disabled={chessGame.history().length > 0}>Play the bot</button>
+          </div>
+          <div className="yard-chess-clocks" role="group" aria-label="10-minute chess clocks">
+            <div className={`yard-chess-clock${turn === 0 && winner === null ? ' active' : ''}${chessClockMs[0] <= 30_000 ? ' low' : ''}`} aria-label={`White ${formatChessClock(chessClockMs[0])}`}>
+              <span>White</span><strong>{formatChessClock(chessClockMs[0])}</strong>
+            </div>
+            <div className={`yard-chess-clock${turn === 1 && winner === null ? ' active' : ''}${chessClockMs[1] <= 30_000 ? ' low' : ''}`} aria-label={`Black ${formatChessClock(chessClockMs[1])}`}>
+              <span>Black</span><strong>{formatChessClock(chessClockMs[1])}</strong>
+            </div>
           </div>
           <p>{playVsBot ? 'You are White. The Yard bot is Black.' : 'White moves first. Select a piece to show its legal moves.'}</p>
           <div className="yard-chess-board" role="grid" aria-label="Chess board">

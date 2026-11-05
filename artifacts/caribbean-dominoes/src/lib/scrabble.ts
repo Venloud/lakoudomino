@@ -1,17 +1,18 @@
 import { LETTER_POINTS, WORDS } from './word-game-data';
 
 export const SCRABBLE_SIZE = 15;
-export type ScrabblePlayer = 0 | 1;
+export type ScrabblePlayer = 0 | 1 | 2 | 3;
 export type ScrabbleDirection = 'horizontal' | 'vertical';
 export type ScrabbleTile = { letter: string; points: number };
 export type ScrabbleGame = {
   board: (ScrabbleTile | null)[];
-  racks: [string[], string[]];
+  racks: string[][];
   bag: string[];
-  scores: [number, number];
+  scores: number[];
   turn: ScrabblePlayer;
+  playerCount: 2 | 3 | 4;
   passes: number;
-  winner: ScrabblePlayer | 2 | null;
+  winner: ScrabblePlayer | 'draw' | null;
 };
 export type ScrabbleMove = { row: number; col: number; direction: ScrabbleDirection; word: string };
 export type ScrabbleResult = { game: ScrabbleGame; error?: never } | { game?: never; error: string };
@@ -47,11 +48,16 @@ function drawTiles(bag: string[], count: number): { drawn: string[]; bag: string
   return { drawn, bag: bag.slice(drawn.length) };
 }
 
-export function createScrabbleGame(random: () => number = Math.random): ScrabbleGame {
+export function createScrabbleGame(random: () => number = Math.random, playerCount: 2 | 3 | 4 = 2): ScrabbleGame {
+  if (![2, 3, 4].includes(playerCount)) throw new RangeError('Scrabble supports 2–4 players.');
   const bag = shuffle(Object.entries(TILE_COUNTS).flatMap(([letter, count]) => Array(count).fill(letter)), random);
-  const p1 = drawTiles(bag, 7);
-  const p2 = drawTiles(p1.bag, 7);
-  return { board: Array(SCRABBLE_SIZE * SCRABBLE_SIZE).fill(null), racks: [p1.drawn, p2.drawn], bag: p2.bag, scores: [0, 0], turn: 0, passes: 0, winner: null };
+  let remaining = bag;
+  const racks = Array.from({ length: playerCount }, () => {
+    const draw = drawTiles(remaining, 7);
+    remaining = draw.bag;
+    return draw.drawn;
+  });
+  return { board: Array(SCRABBLE_SIZE * SCRABBLE_SIZE).fill(null), racks, bag: remaining, scores: Array(playerCount).fill(0), turn: 0, playerCount, passes: 0, winner: null };
 }
 
 function adjacentIndexes(index: number): number[] {
@@ -90,8 +96,14 @@ function scoreWord(board: (ScrabbleTile | null)[], indexes: number[], newIndexes
   return total * wordMultiplier;
 }
 
-function finish(game: ScrabbleGame, scores: [number, number]): ScrabbleGame {
-  return { ...game, scores, winner: scores[0] === scores[1] ? 2 : scores[0] > scores[1] ? 0 : 1 };
+function finish(game: ScrabbleGame, scores: number[]): ScrabbleGame {
+  const highScore = Math.max(...scores);
+  const leaders = scores.flatMap((score, index) => score === highScore ? [index] : []);
+  return { ...game, scores, winner: leaders.length === 1 ? leaders[0] as ScrabblePlayer : 'draw' };
+}
+
+function nextPlayer(game: ScrabbleGame): ScrabblePlayer {
+  return ((game.turn + 1) % game.playerCount) as ScrabblePlayer;
 }
 
 export function playScrabbleWord(game: ScrabbleGame, move: ScrabbleMove): ScrabbleResult {
@@ -143,30 +155,48 @@ export function playScrabbleWord(game: ScrabbleGame, move: ScrabbleMove): Scrabb
   }
   let points = words.reduce((sum, formed) => sum + scoreWord(board, formed.indexes, newIndexes), 0);
   if (newIndexes.size === 7) points += 50;
-  const scores: [number, number] = [...game.scores] as [number, number];
+  const scores = [...game.scores];
   scores[player] += points;
   const refill = drawTiles(game.bag, Math.min(7 - rack.length, game.bag.length));
-  const racks: [string[], string[]] = [...game.racks] as [string[], string[]];
+  const racks = game.racks.map((tiles) => [...tiles]);
   racks[player] = [...rack, ...refill.drawn];
-  const next: ScrabbleGame = { ...game, board, racks, bag: refill.bag, scores, turn: player === 0 ? 1 : 0, passes: 0 };
+  const next: ScrabbleGame = { ...game, board, racks, bag: refill.bag, scores, turn: nextPlayer(game), passes: 0 };
   const emptied = next.bag.length === 0 && racks[player].length === 0;
   if (emptied) {
-    const other = player === 0 ? 1 : 0;
-    const leftover = racks[other].reduce((sum, letter) => sum + (LETTER_POINTS[letter] ?? 0), 0);
-    scores[player] += leftover;
-    scores[other] -= leftover;
+    let opponentLeftover = 0;
+    racks.forEach((tiles, index) => {
+      if (index === player) return;
+      const leftover = tiles.reduce((sum, letter) => sum + (LETTER_POINTS[letter] ?? 0), 0);
+      scores[index] -= leftover;
+      opponentLeftover += leftover;
+    });
+    scores[player] += opponentLeftover;
   }
   return { game: emptied ? finish(next, scores) : next };
 }
 
+export function exchangeScrabbleTiles(game: ScrabbleGame, tiles: string[], random: () => number = Math.random): ScrabbleResult {
+  if (game.winner !== null) return { error: 'This game is already over.' };
+  if (game.bag.length < 7) return { error: 'You need at least 7 tiles in the bag to exchange.' };
+  if (tiles.length === 0) return { error: 'Select at least one tile to exchange.' };
+  const rack = [...game.racks[game.turn]];
+  for (const tile of tiles) {
+    const index = rack.indexOf(tile);
+    if (index < 0) return { error: 'One or more selected tiles are not in your rack.' };
+    rack.splice(index, 1);
+  }
+  const draw = drawTiles(game.bag, tiles.length);
+  const bag = shuffle([...draw.bag, ...tiles], random);
+  const racks = game.racks.map((current, index) => index === game.turn ? [...rack, ...draw.drawn] : [...current]);
+  return { game: { ...game, racks, bag, turn: nextPlayer(game), passes: 0 } };
+}
+
 export function passScrabbleTurn(game: ScrabbleGame): ScrabbleGame {
   if (game.winner !== null) return game;
-  const next = { ...game, turn: game.turn === 0 ? 1 as const : 0 as const, passes: game.passes + 1 };
-  if (next.passes < 4) return next;
-  const scores: [number, number] = [
-    game.scores[0] - game.racks[0].reduce((sum, letter) => sum + (LETTER_POINTS[letter] ?? 0), 0),
-    game.scores[1] - game.racks[1].reduce((sum, letter) => sum + (LETTER_POINTS[letter] ?? 0), 0),
-  ];
+  const next = { ...game, turn: nextPlayer(game), passes: game.passes + 1 };
+  if (next.passes < game.playerCount * 2) return next;
+  const scores = game.scores.map((score, player) =>
+    score - game.racks[player].reduce((sum, letter) => sum + (LETTER_POINTS[letter] ?? 0), 0));
   return finish(next, scores);
 }
 

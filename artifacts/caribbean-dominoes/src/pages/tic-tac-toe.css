@@ -49,7 +49,7 @@
 .yard-tic-lobby { max-width: 720px; }
 .yard-tic-name-field { display: grid; gap: 7px; max-width: 340px; color: var(--yard-muted); font-size: 12px; }
 .yard-tic-name-field .yard-input, .yard-tic-join-form .yard-input, .yard-tic-friend-invites .yard-input { width: 100%; box-sizing: border-box; }
-.yard-tic-room-actions { display: grid; justify-items: start; gap: 14px; margin-top: 24px; }
+.yard-tic-room-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 0; }
 .yard-tic-or { color: var(--yard-muted); font-size: 11px; }
 .yard-tic-join-form { display: flex; width: min(100%, 440px); gap: 8px; }
 .yard-tic-join-form .yard-input { min-width: 0; }

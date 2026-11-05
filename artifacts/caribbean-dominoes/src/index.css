@@ -1638,12 +1638,18 @@ body:has(.room-loading-page) { background: #141218; }
 .yard-game-foundation-list .yard-coming-soon { justify-content: flex-start; min-width: 0; margin: 0; padding: 0 11px; border-style: solid; color: var(--yard-text); text-decoration: none; }
 .yard-game-foundation-list .yard-coming-soon:hover { border-color: var(--yard-accent); background: #1d211e; }
 .yard-game-foundation-list .yard-coming-soon span:nth-child(2) { flex: 1; }
-.yard-chess-tools { display: grid; gap: 10px; width: min(100%, 520px); margin: 0 auto; }
+.yard-chess-tools { display: grid; gap: 10px; width: min(100%, 520px); min-width: 0; margin: 0 auto; }
 .yard-chess-modes { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.yard-chess-clocks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.yard-chess-clock { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 8px 12px; border: 1px solid #3b423b; border-radius: 8px; background: #151916; color: #aeb4aa; font-size: 12px; }
+.yard-chess-clock strong { color: #f2f0e7; font-size: 18px; font-variant-numeric: tabular-nums; }
+.yard-chess-clock.active { border-color: #79c94d; box-shadow: inset 0 0 0 1px #79c94d55; }
+.yard-chess-clock.active strong { color: #a2e77a; }
+.yard-chess-clock.low strong { color: #ff8d72; }
 .yard-chess-tools > p { margin: 0; text-align: center; color: #b5b8b2; font-size: 12px; }
-.yard-chess-board { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); width: 100%; aspect-ratio: 1; overflow: hidden; border: 3px solid #536052; border-radius: 5px; box-shadow: 0 12px 35px #0008; }
-.yard-chess-board button { position: relative; display: grid; place-items: center; min-width: 0; aspect-ratio: 1; padding: 0; border: 1px solid #20231f; font-family: Georgia, serif; font-size: clamp(23px, 6vw, 48px); line-height: 1; cursor: pointer; }
-.yard-chess-sprite { width: 83%; height: 90%; object-fit: contain; pointer-events: none; user-select: none; }
+.yard-chess-board { display: grid; grid-template: repeat(8, minmax(0, 1fr)) / repeat(8, minmax(0, 1fr)); width: 100%; aspect-ratio: 1 / 1; box-sizing: border-box; overflow: hidden; margin-inline: auto; border: 3px solid #536052; border-radius: 5px; box-shadow: 0 12px 35px #0008; }
+.yard-chess-board button { position: relative; display: grid; place-items: center; width: 100%; height: 100%; min-width: 0; min-height: 0; box-sizing: border-box; overflow: hidden; padding: 0; border: 1px solid #20231f; font-family: Georgia, serif; font-size: clamp(23px, 6vw, 48px); line-height: 1; cursor: pointer; }
+.yard-chess-sprite { display: block; width: 84%; height: 84%; min-width: 0; min-height: 0; max-width: 100%; max-height: 100%; object-fit: contain; object-position: center; pointer-events: none; user-select: none; }
 .yard-chess-board button.light { background: #d5d0bc; color: #f8f5e9; text-shadow: 0 1px 2px #171915, 1px 0 2px #171915, -1px 0 2px #171915, 0 -1px 2px #171915; }
 .yard-chess-board button.dark { background: #465247; color: #f8f5e9; text-shadow: 0 1px 2px #171915, 1px 0 2px #171915, -1px 0 2px #171915, 0 -1px 2px #171915; }
 .yard-chess-board button.last-move { box-shadow: inset 0 0 0 999px #e5c65b30; }
