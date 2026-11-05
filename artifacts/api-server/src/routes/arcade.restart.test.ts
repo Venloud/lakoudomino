@@ -299,3 +299,117 @@ test("arcade private, matchmaking, and Block Drop rooms survive an API process r
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });
+
+test("arcade seats, concurrent joins, and room updates stay consistent across API instances", {
+  timeout: 60_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade multi-instance integration tests.");
+
+  const schema = `arcade_multi_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let processOne: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  let processTwo: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY,
+        game text NOT NULL,
+        capacity integer NOT NULL,
+        is_private boolean NOT NULL,
+        players jsonb NOT NULL,
+        state jsonb,
+        turn integer NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    [processOne, processTwo] = await Promise.all([
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+    ]);
+
+    const [matchOne, matchTwo] = await Promise.all([
+      postRoom(processOne.baseUrl, "quick-match", {
+        game: "mopyon",
+        displayName: "Match one",
+        playerCount: 2,
+      }),
+      postRoom(processTwo.baseUrl, "quick-match", {
+        game: "mopyon",
+        displayName: "Match two",
+        playerCount: 2,
+      }),
+    ]);
+    assert.equal(matchOne.code, matchTwo.code, "simultaneous matchmaking should use one waiting room");
+    assert.deepEqual([matchOne.seat, matchTwo.seat].sort(), [0, 1]);
+
+    const roomFromOne = await fetch(`${processOne.baseUrl}/api/arcade/rooms/${String(matchOne.code)}`);
+    const roomFromTwo = await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${String(matchOne.code)}`);
+    assert.equal(roomFromOne.status, 200);
+    assert.equal(roomFromTwo.status, 200);
+    const firstSnapshot = await roomFromOne.json() as JsonRecord;
+    const secondSnapshot = await roomFromTwo.json() as JsonRecord;
+    assert.deepEqual(firstSnapshot.players, secondSnapshot.players);
+    assert.equal((firstSnapshot.players as unknown[]).length, 2);
+
+    const seatZero = matchOne.seat === 0
+      ? { baseUrl: processOne.baseUrl, room: matchOne }
+      : { baseUrl: processTwo.baseUrl, room: matchTwo };
+    const seatOne = matchOne.seat === 1
+      ? { baseUrl: processOne.baseUrl, room: matchOne }
+      : { baseUrl: processTwo.baseUrl, room: matchTwo };
+    const [firstConnection, secondConnection] = await Promise.all([
+      connectArcadeSocket(seatZero.baseUrl, String(seatZero.room.code), String(seatZero.room.reconnectToken)),
+      connectArcadeSocket(seatOne.baseUrl, String(seatOne.room.code), String(seatOne.room.reconnectToken)),
+    ]);
+    sockets.push(firstConnection.socket, secondConnection.socket);
+    assert.equal(firstConnection.firstMessage.type, "room");
+    assert.equal(secondConnection.firstMessage.type, "room");
+
+    const firstMove = Promise.resolve().then(() => {
+      const initialState = seatZero.room.state as JsonRecord;
+      const board = [...initialState.board as unknown[]];
+      board[0] = "X";
+      firstConnection.socket.send(JSON.stringify({
+        type: "state",
+        state: { ...initialState, board, currentPlayer: "O", lastMove: 0 },
+        turn: 1,
+      }));
+    });
+    const crossInstanceUpdate = nextSocketMessage(secondConnection.socket);
+    await firstMove;
+    const stateMessage = await crossInstanceUpdate;
+    assert.equal(stateMessage.type, "state", JSON.stringify(stateMessage));
+    assert.equal((stateMessage.room as JsonRecord).turn, 1);
+
+    const privateRoom = await postRoom(processOne.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "Private host",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    const concurrentJoin = (baseUrl: string, displayName: string) => fetch(
+      `${baseUrl}/api/arcade/rooms/${String(privateRoom.code)}/join`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ displayName }),
+      },
+    );
+    const joinResults = await Promise.all([
+      concurrentJoin(processOne.baseUrl, "Joiner one"),
+      concurrentJoin(processTwo.baseUrl, "Joiner two"),
+    ]);
+    assert.deepEqual(joinResults.map((response) => response.status).sort(), [200, 409]);
+  } finally {
+    sockets.forEach((socket) => socket.close());
+    if (processTwo) await stopArcadeProcess(processTwo.child);
+    if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});

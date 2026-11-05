@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const arcadeRooms = pgTable("arcade_rooms", {
   code: text("code").primaryKey(),
@@ -9,6 +9,9 @@ export const arcadeRooms = pgTable("arcade_rooms", {
   state: jsonb("state"),
   turn: integer("turn").notNull().default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("arcade_rooms_matchmaking_idx").on(table.isPrivate, table.game, table.capacity, table.updatedAt),
+  index("arcade_rooms_updated_at_idx").on(table.updatedAt),
+]);
 
 export type ArcadeRoomRecord = typeof arcadeRooms.$inferSelect;
