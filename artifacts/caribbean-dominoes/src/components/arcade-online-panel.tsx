@@ -5,7 +5,7 @@ type PublicRoom = {
   game: string;
   capacity: number;
   status: "waiting" | "playing" | "finished";
-  players: { name: string; seat: number }[];
+  players: { name: string; seat: number; isBot?: boolean }[];
   state: unknown;
   turn: number;
   result?: { winnerSeat: number; resignedSeat: number; endedAt: number } | null;
@@ -163,7 +163,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
   };
 
   const leaveRoom = () => {
-    if (room?.result) {
+    if (room?.result || room?.status === "finished") {
       socketRef.current?.close();
       sessionStorage.removeItem(storageKey(game));
       setAccess(null);
@@ -201,9 +201,13 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
         <strong>Room {access.code}</strong>
         <span role="status">{room?.result
           ? room.result.resignedSeat === access.seat ? "Match ended · Loss recorded" : "Match ended · Win recorded"
-          : connected ? room?.status === "playing" ? "Opponent connected" : "Waiting for players" : "Connecting…"}</span>
+          : room?.status === "finished" ? "Match finished"
+          : connected ? room?.players.some((player) => player.isBot && player.seat === room.turn)
+            ? "Yard bot is taking its turn"
+            : room?.status === "playing" ? "Match in progress" : "Waiting for players"
+          : "Connecting…"}</span>
         <button className="yard-button" type="button" disabled={leaving} onClick={leaveRoom}>
-          {leaving ? "Recording result…" : room?.result ? "Return to games" : "Resign & leave"}
+          {leaving ? "Recording result…" : room?.result || room?.status === "finished" ? "Return to games" : "Resign & leave"}
         </button>
       </div>
       {room?.result && <p role="status" style={{ margin: "10px 0 0", color: room.result.resignedSeat === access.seat ? "#ef9b8d" : "#9be27d", fontWeight: 700 }}>
@@ -212,9 +216,14 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
           : "Your opponent resigned. This match is recorded as a win."}
       </p>}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, color: "#a6a6aa", fontSize: 12 }}>
-        {room?.players.map((player) => <span key={player.seat}>{player.seat === access.seat ? "You" : player.name} · Player {player.seat + 1}</span>)}
+        {room?.players.map((player) => <span key={player.seat}>
+          {player.seat === access.seat ? "You" : player.name} · Player {player.seat + 1}{player.isBot ? " · Bot" : ""}
+        </span>)}
       </div>
-      {room?.status === "waiting" && <p style={{ margin: "8px 0 0", color: "#a6a6aa", fontSize: 12 }}>Share this room code with a friend: <b>{access.code}</b></p>}
+      {(room?.status === "waiting" || (room?.status === "finished" && room.players.some((player) => player.isBot))) &&
+        <p style={{ margin: "8px 0 0", color: "#a6a6aa", fontSize: 12 }}>
+          Share this room code with a friend{room.status === "finished" ? " to fill a bot seat for the next match" : ""}: <b>{access.code}</b>
+        </p>}
     </> : <>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "end", justifyContent: "center", gap: 8 }}>
         <label style={{ display: "grid", gap: 4, fontSize: 12 }}>Your name
