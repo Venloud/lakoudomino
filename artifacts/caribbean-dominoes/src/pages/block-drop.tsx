@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pause, Play, RotateCcw, Zap } from 'lucide-react';
 import { Link } from 'wouter';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
+import { ArcadeOnlinePanel } from '@/components/arcade-online-panel';
 import {
   BLOCK_DROP_COLUMNS,
   BLOCK_DROP_ROWS,
@@ -84,11 +85,24 @@ export default function BlockDropPage() {
   const [game, setGame] = useState(createBlockDropState);
   const [botGame, setBotGame] = useState(createBlockDropState);
   const [practiceBot, setPracticeBot] = useState(false);
+  const [onlineSession, setOnlineSession] = useState<{ seat: number; connected: boolean; turn: number | null } | null>(null);
+  const [opponentOnlineGame, setOpponentOnlineGame] = useState<BlockDropState | null>(null);
+  const applyOnlineRace = useCallback((state: unknown) => {
+    if (!Array.isArray(state)) return;
+    const opponent = state.find((entry, seat) => seat !== onlineSession?.seat && entry && typeof entry === 'object') as BlockDropState | undefined;
+    if (opponent && Array.isArray(opponent.board)) setOpponentOnlineGame(opponent);
+  }, [onlineSession?.seat]);
+  const handleRoomChange = useCallback((session: { seat: number; connected: boolean; turn: number | null } | null) => {
+    setOnlineSession(session);
+    if (session) setPracticeBot(false);
+  }, []);
   const visibleBoard = useMemo(() => getVisibleBoard(game), [game]);
   const botVisibleBoard = useMemo(() => getVisibleBoard(botGame), [botGame]);
   const nextShape = getBlockDropShape({ type: game.nextPiece, rotation: 0 });
-  const matchOver = game.status === 'gameover' || (practiceBot && botGame.status === 'gameover');
+  const onlineMatchOver = Boolean(onlineSession?.connected && game.status === 'gameover' && opponentOnlineGame?.status === 'gameover');
+  const matchOver = game.status === 'gameover' || (practiceBot && botGame.status === 'gameover') || onlineMatchOver;
   const practiceWinner = game.score === botGame.score ? 'draw' : game.score > botGame.score ? 'You' : 'Yard bot';
+  const onlineWinner = !opponentOnlineGame || game.score === opponentOnlineGame.score ? 'draw' : game.score > opponentOnlineGame.score ? 'You' : 'Opponent';
 
   useEffect(() => {
     if (game.status !== 'playing') return;
@@ -138,13 +152,15 @@ export default function BlockDropPage() {
 
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
-    {matchOver && <GameEndSequence gameName="Block Drop" perspective={practiceBot ? practiceWinner === 'draw' ? 'draw' : practiceWinner === 'You' ? 'winner' : 'opponent' : 'solo-loss'} winnerName={practiceBot ? practiceWinner === 'draw' ? 'Draw game' : practiceWinner : undefined} opponentName={practiceBot ? practiceWinner === 'You' ? 'Yard bot' : 'You' : undefined} score={practiceBot ? `You ${game.score.toLocaleString()} · Yard bot ${botGame.score.toLocaleString()}` : `${game.score.toLocaleString()} points · ${game.lines} lines`} detail={practiceBot ? 'The first stack to top out ends the practice round.' : 'Your stack reached the top. Take a breath, then try for a new high score.'} onPlayAgain={freshGame} />}
+    {matchOver && <GameEndSequence gameName="Block Drop" perspective={onlineMatchOver ? onlineWinner === 'draw' ? 'draw' : onlineWinner === 'You' ? 'winner' : 'opponent' : practiceBot ? practiceWinner === 'draw' ? 'draw' : practiceWinner === 'You' ? 'winner' : 'opponent' : 'solo-loss'} winnerName={onlineMatchOver ? onlineWinner === 'draw' ? 'Draw game' : onlineWinner : practiceBot ? practiceWinner === 'draw' ? 'Draw game' : practiceWinner : undefined} opponentName={onlineMatchOver ? onlineWinner === 'You' ? 'Opponent' : 'You' : practiceBot ? practiceWinner === 'You' ? 'Yard bot' : 'You' : undefined} score={onlineMatchOver ? `You ${game.score.toLocaleString()} · Opponent ${opponentOnlineGame?.score.toLocaleString() ?? 0}` : practiceBot ? `You ${game.score.toLocaleString()} · Yard bot ${botGame.score.toLocaleString()}` : `${game.score.toLocaleString()} points · ${game.lines} lines`} detail={onlineMatchOver ? 'Both score challenge runs are complete.' : practiceBot ? 'The first stack to top out ends the practice round.' : 'Your stack reached the top. Take a breath, then try for a new high score.'} onPlayAgain={freshGame} />}
     <main className="yard-main yard-block-drop-main">
       <Link href="/games" className="yard-mopyon-back"><ArrowLeft size={14} /> All games</Link>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 8, margin: '0 0 14px' }} role="group" aria-label="Choose opponent">
-        <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} onClick={() => chooseOpponent(false)}>Solo practice</button>
-        <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} onClick={() => chooseOpponent(true)}>Race the Yard bot</button>
+        <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} disabled={onlineSession !== null} onClick={() => chooseOpponent(false)}>Solo practice</button>
+        <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} disabled={onlineSession !== null} onClick={() => chooseOpponent(true)}>Race the Yard bot</button>
       </div>
+      <ArcadeOnlinePanel game="block-drop" turn={0} state={game} onRemoteState={applyOnlineRace} onRoomChange={handleRoomChange} />
+      {onlineSession && <p role="status" style={{ textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>Quick Match is a live race. A private room code also works as a score challenge: each player can finish their run separately.</p>}
       {practiceBot && <p role="status" style={{ textAlign: 'center', margin: '0 0 14px', color: '#a6a6aa', fontSize: 12 }}>Yard bot: {botGame.score.toLocaleString()} points · {botGame.lines} lines · level {botGame.level}</p>}
       <div className="yard-heading">
         <div>
@@ -191,6 +207,10 @@ export default function BlockDropPage() {
               {botVisibleBoard.flatMap((row, rowIndex) => row.map((cell, columnIndex) => <i key={`${rowIndex}-${columnIndex}`} className={`yard-block-drop-cell${cell ? ` ${PIECE_COLORS[cell]}` : ' is-empty'}`} />))}
             </div>
             <small>{botGame.lines} lines · level {botGame.level}</small>
+          </div>}
+          {onlineSession?.connected && <div style={{ gridColumn: '1 / -1', display: 'grid', justifyItems: 'center', gap: 6 }}>
+            <strong style={{ fontSize: 12 }}>Opponent · {opponentOnlineGame?.score.toLocaleString() ?? 'waiting'} points</strong>
+            {opponentOnlineGame && <small>{opponentOnlineGame.lines} lines · level {opponentOnlineGame.level} · {opponentOnlineGame.status === 'gameover' ? 'finished' : 'playing'}</small>}
           </div>}
           <div className="yard-block-drop-next">
             <span>Next piece</span>

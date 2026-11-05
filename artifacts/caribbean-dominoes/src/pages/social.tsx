@@ -101,6 +101,7 @@ function GameIcon({ slug }: { slug: string }) {
   if (slug === 'box') return <img src="/box-logo.webp" alt="" />;
   if (slug === 'kay') return <img src="/kay-logo.webp" alt="" />;
   if (slug === 'chess') return <img src="/chess-logo.webp" alt="" />;
+  if (slug === 'tic-tac-toe') return <img src="/tic-tac-toe-logo.webp" alt="" />;
   return <GameMark game={slug} />;
 }
 
@@ -245,23 +246,23 @@ export default function SocialPage({ page }: { page: Destination }) {
     onError: () => setNotice('That invite is no longer available.'),
   });
   const title = page === 'home' ? 'Meet at the table.' : page === 'games' ? 'Games' : page === 'friends' ? 'Friends' : page === 'leaderboard' ? 'Leaderboard' : 'Your profile';
-  const subtitle = page === 'home' ? 'Find your crew, jump into a match, and see who takes the points.' : page === 'games' ? 'Play local foundations now. Domino, Tic-Tac-Toe, and Word Yard also support online rooms.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Domino record and recent results.';
+  const subtitle = page === 'home' ? 'Find your crew, jump into a match, and see who takes the points.' : page === 'games' ? 'Find a live match or create a private room for any game.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Domino record and recent results.';
   const recentMatches = recent.data?.matches ?? [];
   const friendRows = friendData?.friends ?? [];
   const gameCatalog = [
     { name: 'Domino', slug: 'domino', description: 'Live tables · Regular and Points', online: true },
     { name: 'Tic-Tac-Toe', slug: 'tic-tac-toe', description: 'Regular and Yard Mode', online: true },
-    { name: 'Mòpyon', slug: 'mopyon', description: 'Five in a row', online: false },
-    { name: 'Box', slug: 'box', description: 'Dots and Boxes', online: false },
-    { name: 'Kay', slug: 'kay', description: 'Mancala-style seed game', online: false },
-    { name: 'Chess', slug: 'chess', description: 'Classic chess', online: false },
-    { name: 'Dame', slug: 'dame', description: 'Checkers', online: false },
+    { name: 'Mòpyon', slug: 'mopyon', description: 'Five in a row', online: true },
+    { name: 'Box', slug: 'box', description: 'Dots and Boxes', online: true },
+    { name: 'Kay', slug: 'kay', description: 'Mancala-style seed game', online: true },
+    { name: 'Chess', slug: 'chess', description: 'Classic chess', online: true },
+    { name: 'Dame', slug: 'dame', description: 'Checkers', online: true },
     { name: 'Word Yard', slug: 'words', description: 'Multiplayer word game', online: true },
-    { name: 'Scrabble', slug: 'scrabble', description: 'Build words on a shared board', online: false },
-    { name: 'Barricade', slug: 'barricade', description: 'Race and block the path', online: false },
-    { name: 'Four in a Row', slug: 'four-in-a-row', description: 'Connect four pieces', online: false },
-    { name: 'Filler', slug: 'filler', description: 'Claim more of the board', online: false },
-    { name: 'Block Drop', slug: 'block-drop', description: 'Falling-block puzzle', online: false },
+    { name: 'Scrabble', slug: 'scrabble', description: 'Build words · 2–4 players', online: true },
+    { name: 'Barricade', slug: 'barricade', description: 'Race and block the path', online: true },
+    { name: 'Four in a Row', slug: 'four-in-a-row', description: 'Connect four pieces', online: true },
+    { name: 'Filler', slug: 'filler', description: 'Claim more of the board', online: true },
+    { name: 'Block Drop', slug: 'block-drop', description: 'Live race · Score challenge', online: true },
   ];
    const goGames = () => setLocation('/games/domino');
   const renderHistory = () => {

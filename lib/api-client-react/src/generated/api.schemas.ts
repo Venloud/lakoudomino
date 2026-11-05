@@ -5,6 +5,101 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type ArcadeGameId = typeof ArcadeGameId[keyof typeof ArcadeGameId];
+
+
+export const ArcadeGameId = {
+  mopyon: 'mopyon',
+  box: 'box',
+  kay: 'kay',
+  chess: 'chess',
+  dame: 'dame',
+  scrabble: 'scrabble',
+  barricade: 'barricade',
+  'four-in-a-row': 'four-in-a-row',
+  filler: 'filler',
+  'block-drop': 'block-drop',
+} as const;
+
+export type ArcadeRoomInputPlayerCount = typeof ArcadeRoomInputPlayerCount[keyof typeof ArcadeRoomInputPlayerCount];
+
+
+export const ArcadeRoomInputPlayerCount = {
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+  NUMBER_4: 4,
+} as const;
+
+export interface ArcadeRoomInput {
+  game: ArcadeGameId;
+  /**
+     * @minLength 1
+     * @maxLength 24
+     */
+  displayName: string;
+  playerCount?: ArcadeRoomInputPlayerCount;
+  isPrivate?: boolean;
+}
+
+export interface ArcadeRoomJoinInput {
+  /**
+     * @minLength 1
+     * @maxLength 24
+     */
+  displayName: string;
+}
+
+export interface ArcadeRoomPlayer {
+  name: string;
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  seat: number;
+}
+
+export type ArcadeRoomCapacity = typeof ArcadeRoomCapacity[keyof typeof ArcadeRoomCapacity];
+
+
+export const ArcadeRoomCapacity = {
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+  NUMBER_4: 4,
+} as const;
+
+export type ArcadeRoomStatus = typeof ArcadeRoomStatus[keyof typeof ArcadeRoomStatus];
+
+
+export const ArcadeRoomStatus = {
+  waiting: 'waiting',
+  playing: 'playing',
+} as const;
+
+export type ArcadeRoomState = { [key: string]: unknown } | unknown[] | null;
+
+export interface ArcadeRoom {
+  code: string;
+  game: ArcadeGameId;
+  capacity: ArcadeRoomCapacity;
+  status: ArcadeRoomStatus;
+  players: ArcadeRoomPlayer[];
+  state: ArcadeRoomState;
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  turn: number;
+}
+
+export type ArcadeRoomAccess = ArcadeRoom & {
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  seat: number;
+  reconnectToken: string;
+};
+
 export interface HealthStatus {
   status: string;
 }

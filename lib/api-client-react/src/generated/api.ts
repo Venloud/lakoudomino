@@ -20,6 +20,10 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ArcadeRoom,
+  ArcadeRoomAccess,
+  ArcadeRoomInput,
+  ArcadeRoomJoinInput,
   AuthCredentials,
   AuthMe,
   AuthResponse,
@@ -919,6 +923,336 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getSubmitWordYardGuessMutationOptions(options));
     }
+
+export const getCreateArcadeRoomUrl = () => {
+
+
+
+
+  return `/api/arcade/rooms`
+}
+
+/**
+ * @summary Create a private room for a supported game
+ */
+export const createArcadeRoom = async (arcadeRoomInput: ArcadeRoomInput, options?: Parameters<typeof customFetch>[1]): Promise<ArcadeRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ArcadeRoomAccess>(getCreateArcadeRoomUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(arcadeRoomInput)
+  }
+);}
+
+
+
+
+
+export const getCreateArcadeRoomMutationKey = () => ['createArcadeRoom'] as const;
+
+export const getCreateArcadeRoomMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createArcadeRoom>>, TError,CreateArcadeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createArcadeRoom>>, TError,CreateArcadeRoomMutationVariables, TContext> => {
+
+const mutationKey = getCreateArcadeRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createArcadeRoom>>, CreateArcadeRoomMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createArcadeRoom(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateArcadeRoomMutationResult = NonNullable<Awaited<ReturnType<typeof createArcadeRoom>>>
+    export type CreateArcadeRoomMutationBody = BodyType<ArcadeRoomInput>
+    export type CreateArcadeRoomMutationError = ErrorType<unknown>
+    export type CreateArcadeRoomMutationVariables = {data: BodyType<ArcadeRoomInput>}
+
+    /**
+ * @summary Create a private room for a supported game
+ */
+export const useCreateArcadeRoom = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createArcadeRoom>>, TError,CreateArcadeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createArcadeRoom>>,
+        TError,
+        CreateArcadeRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateArcadeRoomMutationOptions(options));
+    }
+
+export const getQuickMatchArcadeRoomUrl = () => {
+
+
+
+
+  return `/api/arcade/quick-match`
+}
+
+/**
+ * @summary Join or create a compatible room
+ */
+export const quickMatchArcadeRoom = async (arcadeRoomInput: ArcadeRoomInput, options?: Parameters<typeof customFetch>[1]): Promise<ArcadeRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ArcadeRoomAccess>(getQuickMatchArcadeRoomUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(arcadeRoomInput)
+  }
+);}
+
+
+
+
+
+export const getQuickMatchArcadeRoomMutationKey = () => ['quickMatchArcadeRoom'] as const;
+
+export const getQuickMatchArcadeRoomMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quickMatchArcadeRoom>>, TError,QuickMatchArcadeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof quickMatchArcadeRoom>>, TError,QuickMatchArcadeRoomMutationVariables, TContext> => {
+
+const mutationKey = getQuickMatchArcadeRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof quickMatchArcadeRoom>>, QuickMatchArcadeRoomMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  quickMatchArcadeRoom(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QuickMatchArcadeRoomMutationResult = NonNullable<Awaited<ReturnType<typeof quickMatchArcadeRoom>>>
+    export type QuickMatchArcadeRoomMutationBody = BodyType<ArcadeRoomInput>
+    export type QuickMatchArcadeRoomMutationError = ErrorType<unknown>
+    export type QuickMatchArcadeRoomMutationVariables = {data: BodyType<ArcadeRoomInput>}
+
+    /**
+ * @summary Join or create a compatible room
+ */
+export const useQuickMatchArcadeRoom = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quickMatchArcadeRoom>>, TError,QuickMatchArcadeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof quickMatchArcadeRoom>>,
+        TError,
+        QuickMatchArcadeRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getQuickMatchArcadeRoomMutationOptions(options));
+    }
+
+export const getJoinArcadeRoomUrl = (code: string,) => {
+
+
+
+
+  return `/api/arcade/rooms/${code}/join`
+}
+
+export const joinArcadeRoom = async (code: string,
+    arcadeRoomJoinInput: ArcadeRoomJoinInput, options?: Parameters<typeof customFetch>[1]): Promise<ArcadeRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ArcadeRoomAccess>(getJoinArcadeRoomUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(arcadeRoomJoinInput)
+  }
+);}
+
+
+
+
+
+export const getJoinArcadeRoomMutationKey = () => ['joinArcadeRoom'] as const;
+
+export const getJoinArcadeRoomMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinArcadeRoom>>, TError,JoinArcadeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof joinArcadeRoom>>, TError,JoinArcadeRoomMutationVariables, TContext> => {
+
+const mutationKey = getJoinArcadeRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof joinArcadeRoom>>, JoinArcadeRoomMutationVariables> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  joinArcadeRoom(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type JoinArcadeRoomMutationResult = NonNullable<Awaited<ReturnType<typeof joinArcadeRoom>>>
+    export type JoinArcadeRoomMutationBody = BodyType<ArcadeRoomJoinInput>
+    export type JoinArcadeRoomMutationError = ErrorType<void>
+    export type JoinArcadeRoomMutationVariables = {code: string;data: BodyType<ArcadeRoomJoinInput>}
+
+    export const useJoinArcadeRoom = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinArcadeRoom>>, TError,JoinArcadeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof joinArcadeRoom>>,
+        TError,
+        JoinArcadeRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getJoinArcadeRoomMutationOptions(options));
+    }
+
+export const getGetArcadeRoomUrl = (code: string,) => {
+
+
+
+
+  return `/api/arcade/rooms/${code}`
+}
+
+export const getArcadeRoom = async (code: string, options?: Parameters<typeof customFetch>[1]): Promise<ArcadeRoom> => {
+
+  return customFetch<ArcadeRoom>(getGetArcadeRoomUrl(code),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetArcadeRoomQueryKey = (code: string,) => {
+    return [
+    `/api/arcade/rooms/${code}`
+    ] as const;
+    }
+
+
+export const getGetArcadeRoomQueryOptions = <TData = Awaited<ReturnType<typeof getArcadeRoom>>, TError = ErrorType<void>>(code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getArcadeRoom>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetArcadeRoomQueryKey(code);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getArcadeRoom>>> = ({ signal }) => getArcadeRoom(code, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: code !== null && code !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getArcadeRoom>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetArcadeRoomQueryResult = NonNullable<Awaited<ReturnType<typeof getArcadeRoom>>>
+export type GetArcadeRoomQueryError = ErrorType<void>
+
+
+
+export function useGetArcadeRoom<TData = Awaited<ReturnType<typeof getArcadeRoom>>, TError = ErrorType<void>>(
+ code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getArcadeRoom>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetArcadeRoomQueryOptions(code,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetLobbyUrl = () => {
 

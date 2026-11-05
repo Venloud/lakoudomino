@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Chess, type Square } from 'chess.js';
@@ -11,6 +11,7 @@ import { canClaimChessDraw, hasAutomaticChessDraw } from '@/lib/chess-rules';
 import { createChessGame, type ChessGame, type ChessMove, type ChessPieceKind } from '@/lib/chess';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
+import { ArcadeOnlinePanel } from '@/components/arcade-online-panel';
 import './word-yard.css';
 
 type GameId = 'box' | 'kay' | 'chess' | 'dame' | 'words' | 'four-in-a-row' | 'filler';
@@ -171,6 +172,11 @@ export default function ClassicGamesPage() {
   const chessRef = useRef(new Chess());
   const [chessVersion, setChessVersion] = useState(0);
   const [playVsBot, setPlayVsBot] = useState(false);
+  const [onlineSession, setOnlineSession] = useState<{ seat: number; connected: boolean; turn: number | null } | null>(null);
+  const handleArcadeRoomChange = useCallback((session: { seat: number; connected: boolean; turn: number | null } | null) => {
+    setOnlineSession(session);
+    if (session) setPlayVsBot(false);
+  }, []);
   const [chessBotDifficulty, setChessBotDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [humanChessColor, setHumanChessColor] = useState<'w' | 'b'>('w');
   const [chessState, setChessState] = useState<ChessGame>(createChessGame);
@@ -276,6 +282,7 @@ export default function ClassicGamesPage() {
     window.location.reload();
   };
   const activeTurn = id === 'words' ? wordGame.turn : id === 'filler' ? fillerTurn : turn;
+  const canOnlineAct = onlineSession === null || (onlineSession.connected && onlineSession.seat === activeTurn);
   const fillerCurrentColors = Array.from({ length: fillerPlayerCount }, (_, player) =>
     fillerBoard.colors[fillerBoard.owners.findIndex((owner) => owner === player)]);
   const kayBoardPits = kayAnimatedPits ?? pits;
@@ -299,6 +306,55 @@ export default function ClassicGamesPage() {
   const chessStatus = id === 'chess'
     ? chessGame.isCheckmate() ? 'checkmate' : chessGame.isStalemate() ? 'stalemate' : chessGame.isCheck() ? 'check' : 'playing'
     : null;
+  const arcadeSnapshot = useMemo(() => {
+    if (id === 'chess') return { fen: chessGame.fen(), turn, winner, clocks: chessClockRef.current };
+    if (id === 'box') return { turn, winner, dots: [...dots], edgeOwners: [...edgeOwners], claimed };
+    if (id === 'kay') return { turn, winner, pits };
+    if (id === 'dame') return { turn, winner, pieces };
+    if (id === 'four-in-a-row') return { turn, winner, four };
+    if (id === 'filler') return { turn: fillerTurn, winner: fillerWinner, fillerBoard, fillerPlayerCount };
+    if (id === 'words') return { wordGame };
+    return {};
+  }, [id, chessVersion, turn, winner, dots, edgeOwners, claimed, pits, pieces, four, fillerTurn, fillerWinner, fillerBoard, fillerPlayerCount, wordGame]);
+  const applyArcadeSnapshot = useCallback((value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    const snapshot = value as Record<string, unknown>;
+    if (id === 'chess' && typeof snapshot.fen === 'string') {
+      try {
+        chessRef.current.load(snapshot.fen);
+        const next = chessStateFromEngine(chessRef.current);
+        setChessState(next); setPieces(chessPieces(chessRef.current)); setTurn(next.turn);
+        chessTurnRef.current = next.turn;
+        if (Array.isArray(snapshot.clocks) && snapshot.clocks.length === 2) {
+          const clocks = snapshot.clocks as [number, number];
+          chessClockRef.current = clocks; setChessClockMs(clocks);
+        }
+        setWinner(typeof snapshot.winner === 'number' ? snapshot.winner : null);
+        setChessVersion((version) => version + 1);
+      } catch { /* Ignore malformed remote positions. */ }
+      return;
+    }
+    if (id === 'box' && Array.isArray(snapshot.dots) && Array.isArray(snapshot.claimed) && Array.isArray(snapshot.edgeOwners)) {
+      setDots(new Set(snapshot.dots as string[]));
+      setClaimed(snapshot.claimed as (number | null)[]);
+      setEdgeOwners(new Map(snapshot.edgeOwners as [string, number][]));
+    } else if (id === 'kay' && Array.isArray(snapshot.pits)) {
+      setPits(snapshot.pits as number[]);
+    } else if ((id === 'dame') && Array.isArray(snapshot.pieces)) {
+      setPieces(snapshot.pieces as Piece[]);
+    } else if (id === 'four-in-a-row' && Array.isArray(snapshot.four)) {
+      setFour(snapshot.four as (number | null)[]);
+    } else if (id === 'filler' && snapshot.fillerBoard && typeof snapshot.fillerBoard === 'object') {
+      setFillerBoard(snapshot.fillerBoard as typeof fillerBoard);
+      if (typeof snapshot.fillerPlayerCount === 'number') setFillerPlayerCount(snapshot.fillerPlayerCount as 2 | 3 | 4);
+      setFillerTurn(snapshot.turn as FillerPlayer);
+      setFillerWinner(snapshot.winner as FillerPlayer | 'draw' | null);
+    } else if (id === 'words' && snapshot.wordGame && typeof snapshot.wordGame === 'object') {
+      setWordGame(snapshot.wordGame as typeof wordGame);
+    }
+    if (typeof snapshot.turn === 'number' && id !== 'filler' && id !== 'words') setTurn(snapshot.turn as 0 | 1);
+    if (typeof snapshot.winner === 'number' || snapshot.winner === null) setWinner(snapshot.winner as number | null);
+  }, [id, fillerBoard, wordGame]);
   const turnLabel = id === 'filler'
     ? fillerWinner === 'draw' ? 'Draw game' : fillerWinner !== null ? `Player ${fillerWinner + 1} wins` : playVsBot && fillerTurn === 1 ? 'Yard bot to move' : `Player ${fillerTurn + 1} to move`
     : id === 'kay' && kayAnimating
@@ -314,7 +370,7 @@ export default function ClassicGamesPage() {
         : gameOver ? winner === 2 ? 'Draw' : `Player ${(winner ?? 0) + 1} wins`
         : playVsBot && activeTurn === 1 ? 'Yard bot to move' : `Player ${activeTurn + 1} to move`;
   const playBoxEdge = (key: string, adjacentBoxes: number[], botMove = false) => {
-    if ((playVsBot && turn === 1 && !botMove) || winner !== null || dots.has(key)) return;
+    if (!canOnlineAct || (playVsBot && turn === 1 && !botMove) || winner !== null || dots.has(key)) return;
     const nextEdges = new Set(dots);
     nextEdges.add(key);
     setEdgeOwners((old) => new Map(old).set(key, turn));
@@ -452,7 +508,7 @@ export default function ClassicGamesPage() {
   }, [id, winner, playVsBot, chessVersion]);
 
   const makeMove = (index: number, botMove = false) => {
-    if ((playVsBot && (id === 'chess' ? turn !== humanChessSide : turn === 1) && !botMove) || winner !== null) return;
+    if (!canOnlineAct || (playVsBot && (id === 'chess' ? turn !== humanChessSide : turn === 1) && !botMove) || winner !== null) return;
     if (id === 'chess') {
       if (playVsBot && turn !== humanChessSide && !botMove) return;
       if (promotionMove) return;
@@ -655,6 +711,7 @@ export default function ClassicGamesPage() {
     setWordFeedback('Tile placed. Add more tiles or play your word.');
   };
   const submitWord = () => {
+    if (!canOnlineAct) return;
     if (!wordDictionary) {
       setWordFeedback('The word list is still loading. Try again in a moment.');
       return;
@@ -673,6 +730,7 @@ export default function ClassicGamesPage() {
     setWordFeedback(`${result.words.join(' · ')} scored ${result.score} points.${ending}`);
   };
   const passWordTurnHandler = () => {
+    if (!canOnlineAct) return;
     const next = passWordTurn(wordGame);
     setWordGame(next);
     setWordPlacements([]);
@@ -690,6 +748,7 @@ export default function ClassicGamesPage() {
       <header className="yard-heading" style={{ marginTop: 16 }}>
         <div><p className="yard-kicker">509 YARD / CHESS</p><h1>Chess</h1><p className="yard-subtitle">Full legal moves, check, checkmate, and a bot opponent.</p></div>
       </header>
+      <ArcadeOnlinePanel game="chess" turn={turn} state={arcadeSnapshot} onRemoteState={applyArcadeSnapshot} onRoomChange={handleArcadeRoomChange} />
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}>
           <strong role="status">{reviewPly === null ? turnLabel : `Reviewing position after move ${reviewPly}`}</strong>
@@ -697,8 +756,8 @@ export default function ClassicGamesPage() {
         </div>
         <div className="yard-chess-tools">
           <div className="yard-chess-modes" role="group" aria-label="Choose opponent">
-            <button className={`yard-button${playVsBot ? '' : ' primary'}`} type="button" aria-pressed={!playVsBot} onClick={() => setPlayVsBot(false)} disabled={chessGame.history().length > 0}>Two players</button>
-            <button className={`yard-button${playVsBot ? ' primary' : ''}`} type="button" aria-pressed={playVsBot} onClick={() => setPlayVsBot(true)} disabled={chessGame.history().length > 0}>Play the bot</button>
+             <button className={`yard-button${playVsBot ? '' : ' primary'}`} type="button" aria-pressed={!playVsBot} onClick={() => setPlayVsBot(false)} disabled={chessGame.history().length > 0 || onlineSession !== null}>Two players</button>
+            <button className={`yard-button${playVsBot ? ' primary' : ''}`} type="button" aria-pressed={playVsBot} onClick={() => setPlayVsBot(true)} disabled={chessGame.history().length > 0 || onlineSession !== null}>Play the bot</button>
             {playVsBot && <label>Bot strength <select className="yard-button" value={chessBotDifficulty} onChange={(event) => setChessBotDifficulty(event.target.value as 'easy' | 'medium' | 'hard')} disabled={chessGame.history().length > 0}>
               <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
             </select></label>}
@@ -849,11 +908,12 @@ export default function ClassicGamesPage() {
     <main className="yard-main" style={{ maxWidth: 980 }}>
       <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
       <header className="yard-heading" style={{ marginTop: 16 }}><div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>{title}</h1><p className="yard-subtitle">{info.intro}</p></div></header>
+      {id !== 'words' && <ArcadeOnlinePanel game={id} playerCount={2} turn={activeTurn} state={arcadeSnapshot} onRemoteState={applyArcadeSnapshot} onRoomChange={handleArcadeRoomChange} />}
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}><strong role="status" data-testid="status-current-turn" style={id === 'box' && winner === null ? { color: BOX_PLAYER_COLORS[turn] } : id === 'four-in-a-row' && winner === null ? { color: CONNECT_PLAYER_COLORS[turn] } : undefined}>{id === 'words' ? `${turnLabel} · ${wordGame.scores[0]}–${wordGame.scores[1]}` : turnLabel}</strong><button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button></div>
         {id !== 'chess' && id !== 'words' && <div role="group" aria-label="Choose opponent" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 14 }}>
-          <button className={`yard-button${playVsBot ? '' : ' primary'}`} type="button" aria-pressed={!playVsBot} onClick={() => setPlayVsBot(false)}>Two players</button>
-          <button className={`yard-button${playVsBot ? ' primary' : ''}`} type="button" aria-pressed={playVsBot} onClick={() => { setPlayVsBot(true); if (id === 'filler' && fillerPlayerCount !== 2) { setFillerPlayerCount(2); setFillerBoard(createFillerBoard(Math.random, 2)); setFillerTurn(0); setFillerWinner(null); } }}>Practice vs bot</button>
+           <button className={`yard-button${playVsBot ? '' : ' primary'}`} type="button" aria-pressed={!playVsBot} disabled={onlineSession !== null} onClick={() => setPlayVsBot(false)}>Two players</button>
+           <button className={`yard-button${playVsBot ? ' primary' : ''}`} type="button" aria-pressed={playVsBot} disabled={onlineSession !== null} onClick={() => { setPlayVsBot(true); if (id === 'filler' && fillerPlayerCount !== 2) { setFillerPlayerCount(2); setFillerBoard(createFillerBoard(Math.random, 2)); setFillerTurn(0); setFillerWinner(null); } }}>Practice vs bot</button>
         </div>}
         {id === 'box' && <><div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 8, fontSize: 12 }}><span style={{ color: BOX_PLAYER_COLORS[0] }}>● Player 1 · Blue</span><span style={{ color: BOX_PLAYER_COLORS[1] }}>● Player 2 · Red</span></div><p style={{ textAlign: 'center' }}>Boxes claimed: Player 1 {claimed.filter((owner) => owner === 0).length} · Player 2 {claimed.filter((owner) => owner === 1).length}</p></>}
         {id === 'four-in-a-row' && <div className="yard-connect-four">

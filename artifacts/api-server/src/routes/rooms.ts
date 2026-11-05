@@ -24,6 +24,7 @@ import {
 import type { Seat } from "../lib/room-types";
 import { handleTicTacToeSocket } from "./tic-tac-toe";
 import { handleWordYardSocket } from "./word-yard";
+import { handleArcadeSocket } from "./arcade";
 import { getIdentityFromCookieHeader, getIdentityFromRequest } from "../lib/auth-session";
 import { getLeaderboard } from "../lib/leaderboard";
 import {
@@ -1364,6 +1365,8 @@ export function attachRoomWebSocket(server: HttpServer) {
         void handleWordYardSocket(client, request);
       } else if (upgradedUrl.searchParams.has("ticCode")) {
         void handleTicTacToeSocket(client, request);
+      } else if (upgradedUrl.searchParams.has("arcadeCode")) {
+        handleArcadeSocket(client, request);
       } else if (upgradedUrl.searchParams.get("lobby") === "1") {
         void handleLobbySocket(client, request);
       } else {

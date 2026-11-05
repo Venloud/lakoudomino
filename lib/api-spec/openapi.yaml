@@ -199,6 +199,86 @@ paths:
                 $ref: "#/components/schemas/WordYardRoomActionResponse"
         "400":
           description: Invalid or duplicate guess
+  /arcade/rooms:
+    post:
+      operationId: createArcadeRoom
+      tags: [rooms]
+      summary: Create a private room for a supported game
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcadeRoomInput"
+      responses:
+        "201":
+          description: Private room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoomAccess"
+  /arcade/quick-match:
+    post:
+      operationId: quickMatchArcadeRoom
+      tags: [rooms]
+      summary: Join or create a compatible room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcadeRoomInput"
+      responses:
+        "200":
+          description: Existing room joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoomAccess"
+        "201":
+          description: Waiting room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoomAccess"
+  /arcade/rooms/{code}/join:
+    post:
+      operationId: joinArcadeRoom
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcadeRoomJoinInput"
+      responses:
+        "200":
+          description: Joined room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoomAccess"
+        "404":
+          description: Room not found
+        "409":
+          description: Room is full
+  /arcade/rooms/{code}:
+    get:
+      operationId: getArcadeRoom
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      responses:
+        "200":
+          description: Room summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoom"
+        "404":
+          description: Room not found
   /lobby:
     get:
       operationId: getLobby
@@ -531,6 +611,85 @@ components:
         type: string
         pattern: "^[A-Z0-9]{4,8}$"
   schemas:
+    ArcadeGameId:
+      type: string
+      enum: [mopyon, box, kay, chess, dame, scrabble, barricade, four-in-a-row, filler, block-drop]
+    ArcadeRoomInput:
+      type: object
+      required: [game, displayName]
+      properties:
+        game:
+          $ref: "#/components/schemas/ArcadeGameId"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
+        playerCount:
+          type: integer
+          enum: [2, 3, 4]
+          default: 2
+        isPrivate:
+          type: boolean
+          default: false
+    ArcadeRoomJoinInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
+    ArcadeRoomPlayer:
+      type: object
+      required: [name, seat]
+      properties:
+        name:
+          type: string
+        seat:
+          type: integer
+          minimum: 0
+          maximum: 3
+    ArcadeRoom:
+      type: object
+      required: [code, game, capacity, status, players, state, turn]
+      properties:
+        code:
+          type: string
+        game:
+          $ref: "#/components/schemas/ArcadeGameId"
+        capacity:
+          type: integer
+          enum: [2, 3, 4]
+        status:
+          type: string
+          enum: [waiting, playing]
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArcadeRoomPlayer"
+        state:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items: {}
+            - type: "null"
+        turn:
+          type: integer
+          minimum: 0
+          maximum: 3
+    ArcadeRoomAccess:
+      allOf:
+        - $ref: "#/components/schemas/ArcadeRoom"
+        - type: object
+          required: [seat, reconnectToken]
+          properties:
+            seat:
+              type: integer
+              minimum: 0
+              maximum: 3
+            reconnectToken:
+              type: string
     HealthStatus:
       type: object
       properties:

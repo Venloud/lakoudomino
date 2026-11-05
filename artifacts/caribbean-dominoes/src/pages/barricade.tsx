@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link } from 'wouter';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
+import { ArcadeOnlinePanel } from '@/components/arcade-online-panel';
 
 type Player = 0 | 1;
 type Pawn = { player: Player; id: number; position: number | null };
@@ -29,6 +30,25 @@ export default function BarricadePage() {
   const [barrierMove, setBarrierMove] = useState<BarrierMove | null>(null);
   const [winner, setWinner] = useState<Player | null>(null);
   const [message, setMessage] = useState('Roll the die, then choose one of your pawns.');
+  const [onlineSession, setOnlineSession] = useState<{ seat: number; connected: boolean; turn: number | null } | null>(null);
+  const canAct = onlineSession === null || (onlineSession.connected && onlineSession.seat === turn);
+  const applyRemoteGame = useCallback((state: unknown) => {
+    if (!state || typeof state !== 'object') return;
+    const remote = state as { pawns?: unknown; barriers?: unknown; turn?: unknown; roll?: unknown; winner?: unknown; barrierMove?: unknown; message?: unknown };
+    if (!Array.isArray(remote.pawns) || !Array.isArray(remote.barriers) || !Number.isInteger(remote.turn)) return;
+    setPawns(remote.pawns as Pawn[]);
+    setBarriers(remote.barriers as number[]);
+    setTurn(remote.turn as Player);
+    setRoll(typeof remote.roll === 'number' ? remote.roll : null);
+    setWinner(typeof remote.winner === 'number' ? remote.winner as Player : null);
+    setBarrierMove(remote.barrierMove as BarrierMove | null);
+    setSelected(null);
+    if (typeof remote.message === 'string') setMessage(remote.message);
+  }, []);
+  const handleRoomChange = useCallback((session: { seat: number; connected: boolean; turn: number | null } | null) => {
+    setOnlineSession(session);
+    if (session) setPracticeBot(false);
+  }, []);
 
   const reset = () => {
     setPawns(newPawns());
@@ -42,6 +62,7 @@ export default function BarricadePage() {
   };
 
   const rollDie = (botMove = false) => {
+    if (!canAct) return;
     if (practiceBot && turn === 1 && !botMove) return;
     if (winner !== null || barrierMove) return;
     const value = Math.floor(Math.random() * 6) + 1;
@@ -72,6 +93,7 @@ export default function BarricadePage() {
   };
 
   const movePawn = (direction: 1 | -1, botMove = false) => {
+    if (!canAct) return;
     if (practiceBot && turn === 1 && !botMove) return;
     if (selected === null || !canMove(selected, direction) || roll === null) return;
     const pawn = pawns[selected];
@@ -99,6 +121,7 @@ export default function BarricadePage() {
   };
 
   const moveBarrier = (target: number, botMove = false) => {
+    if (!canAct) return;
     if (practiceBot && turn === 1 && !botMove) return;
     if (!barrierMove || pawns.some((pawn) => pawn.position === target) || barriers.includes(target) || target === PATH.length - 1) return;
     setBarriers((current) => [...current, target]);
@@ -143,9 +166,10 @@ export default function BarricadePage() {
       <header className="yard-heading" style={{ marginTop: 16 }}>
         <div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>Barricade</h1><p className="yard-subtitle">Race your pawns to the finish, capture rivals, and move the barricades in your way.</p></div>
       </header>
+      <ArcadeOnlinePanel game="barricade" turn={turn} state={{ pawns, barriers, turn, roll, barrierMove, winner, message }} onRemoteState={applyRemoteGame} onRoomChange={handleRoomChange} />
       <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 14 }} role="group" aria-label="Choose opponent">
-        <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} onClick={() => setPracticeBot(false)}>Two players</button>
-        <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} onClick={() => setPracticeBot(true)}>Practice vs bot</button>
+        <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} disabled={onlineSession !== null} onClick={() => setPracticeBot(false)}>Two players</button>
+        <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} disabled={onlineSession !== null} onClick={() => setPracticeBot(true)}>Practice vs bot</button>
       </div>
       <section className="yard-panel" style={{ padding: 16, marginTop: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
@@ -153,7 +177,7 @@ export default function BarricadePage() {
           <button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <button className="yard-button primary" type="button" disabled={winner !== null || roll !== null || barrierMove !== null || (practiceBot && turn === 1)} onClick={() => rollDie()}>Roll die</button>
+           <button className="yard-button primary" type="button" disabled={!canAct || winner !== null || roll !== null || barrierMove !== null || (practiceBot && turn === 1)} onClick={() => rollDie()}>Roll die</button>
           <strong aria-live="polite" style={{ minWidth: 75, textAlign: 'center' }}>{roll === null ? '—' : `Rolled ${roll}`}</strong>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${COLS}, minmax(30px, 56px))`, gap: 3, justifyContent: 'center', overflowX: 'auto' }}>
@@ -163,7 +187,7 @@ export default function BarricadePage() {
             const pawn = pawnIndex >= 0 ? pawns[pawnIndex] : null;
             const hasBarrier = position !== undefined && barriers.includes(position);
             const canPlaceBarrier = barrierMove !== null && position !== undefined && !pawn && !hasBarrier && position !== PATH.length - 1;
-            return <button key={cell} type="button" aria-label={position === undefined ? 'Off track' : `Track space ${position + 1}${pawn ? `, Player ${pawn.player + 1} pawn` : ''}${hasBarrier ? ', barricade' : ''}`} disabled={position === undefined || (practiceBot && turn === 1) || (barrierMove ? !canPlaceBarrier : pawnIndex < 0 || pawns[pawnIndex].player !== turn || roll === null)} onClick={() => {
+             return <button key={cell} type="button" aria-label={position === undefined ? 'Off track' : `Track space ${position + 1}${pawn ? `, Player ${pawn.player + 1} pawn` : ''}${hasBarrier ? ', barricade' : ''}`} disabled={!canAct || position === undefined || (practiceBot && turn === 1) || (barrierMove ? !canPlaceBarrier : pawnIndex < 0 || pawns[pawnIndex].player !== turn || roll === null)} onClick={() => {
               if (barrierMove && position !== undefined) moveBarrier(position);
               else if (pawnIndex >= 0) setSelected(pawnIndex);
             }} style={{ aspectRatio: '1', minWidth: 30, display: 'grid', placeItems: 'center', padding: 2, border: selected === pawnIndex && pawnIndex >= 0 ? '3px solid #75d64b' : '1px solid #52564f', borderRadius: 6, color: '#f5f4ee', background: position === PATH.length - 1 ? '#765b2f' : position === 0 ? '#354a31' : '#202522', cursor: position !== undefined ? 'pointer' : 'default', opacity: position === undefined ? 0.12 : 1 }}>
@@ -175,15 +199,15 @@ export default function BarricadePage() {
           {[0, 1].map((player) => <div key={player} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <b style={{ color: PLAYER_COLORS[player] }}>P{player + 1} base</b>
             {pawns.map((pawn, index) => pawn.player === player && pawn.position === null ? (
-              player === turn && roll !== null && winner === null && !barrierMove
-                 ? <button key={pawn.id} type="button" disabled={practiceBot && turn === 1} onClick={() => setSelected(index)} aria-label={`Select player ${player + 1} pawn ${String.fromCharCode(65 + pawn.id)}`} style={{ border: selected === index ? '2px solid #75d64b' : '1px solid #596057', borderRadius: 5, padding: '3px 6px', background: PLAYER_COLORS[player], color: '#172016', fontWeight: 800 }}>{String.fromCharCode(65 + pawn.id)}</button>
+               player === turn && roll !== null && winner === null && !barrierMove
+                  ? <button key={pawn.id} type="button" disabled={!canAct || (practiceBot && turn === 1)} onClick={() => setSelected(index)} aria-label={`Select player ${player + 1} pawn ${String.fromCharCode(65 + pawn.id)}`} style={{ border: selected === index ? '2px solid #75d64b' : '1px solid #596057', borderRadius: 5, padding: '3px 6px', background: PLAYER_COLORS[player], color: '#172016', fontWeight: 800 }}>{String.fromCharCode(65 + pawn.id)}</button>
                 : <span key={pawn.id} style={{ color: PLAYER_COLORS[player], padding: '0 3px' }}>{String.fromCharCode(65 + pawn.id)}</span>
             ) : null)}
           </div>)}
         </div>
         {selected !== null && roll !== null && <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 10 }}>
-          <button className="yard-button primary" disabled={!canMove(selected, 1)} onClick={() => movePawn(1)}>Toward finish</button>
-          <button className="yard-button" disabled={!canMove(selected, -1)} onClick={() => movePawn(-1)}>Toward base</button>
+          <button className="yard-button primary" disabled={!canAct || !canMove(selected, 1)} onClick={() => movePawn(1)}>Toward finish</button>
+          <button className="yard-button" disabled={!canAct || !canMove(selected, -1)} onClick={() => movePawn(-1)}>Toward base</button>
           {!canMove(selected, 1) && !canMove(selected, -1) && <button className="yard-button" onClick={() => { setRoll(null); setSelected(null); setTurn(turn === 0 ? 1 : 0); setMessage('No legal move. Turn passed.'); }}>Pass turn</button>}
         </div>}
         {barrierMove && <p style={{ textAlign: 'center', color: '#e7c77a' }}>Choose an empty track space to place the barricade.</p>}

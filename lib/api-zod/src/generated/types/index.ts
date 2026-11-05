@@ -6,6 +6,16 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './arcadeGameId';
+export * from './arcadeRoom';
+export * from './arcadeRoomAccess';
+export * from './arcadeRoomCapacity';
+export * from './arcadeRoomInput';
+export * from './arcadeRoomInputPlayerCount';
+export * from './arcadeRoomJoinInput';
+export * from './arcadeRoomPlayer';
+export * from './arcadeRoomState';
+export * from './arcadeRoomStatus';
 export * from './authCredentials';
 export * from './authMe';
 export * from './authResponse';

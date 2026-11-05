@@ -1,14 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link } from 'wouter';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
+import { ArcadeOnlinePanel } from '@/components/arcade-online-panel';
 import { createMopyonState, MOPYON_BOARD_SIZE, playMopyonMove } from '@/lib/mopyon';
 import './mopyon.css';
 
 export default function MopyonPage() {
   const [game, setGame] = useState(createMopyonState);
   const [practiceBot, setPracticeBot] = useState(false);
+  const [onlineSession, setOnlineSession] = useState<{ seat: number; connected: boolean; turn: number | null } | null>(null);
+  const canAct = onlineSession === null || (onlineSession.connected && onlineSession.seat === (game.currentPlayer === 'X' ? 0 : 1));
+  const applyRemoteGame = useCallback((state: unknown) => {
+    if (state && typeof state === 'object' && Array.isArray((state as typeof game).board)) setGame(state as typeof game);
+  }, []);
+  const handleRoomChange = useCallback((session: { seat: number; connected: boolean; turn: number | null } | null) => {
+    setOnlineSession(session);
+    if (session) setPracticeBot(false);
+  }, []);
   const winningCells = new Set(game.winningLine ?? []);
   useEffect(() => {
     if (!practiceBot || game.currentPlayer !== 'O' || game.winner || game.isDraw) return;
@@ -39,9 +49,10 @@ export default function MopyonPage() {
           <p className="yard-subtitle">Five in a row. Place your mark on any open intersection.</p>
         </div>
       </div>
+      <ArcadeOnlinePanel game="mopyon" turn={game.currentPlayer === 'X' ? 0 : 1} state={game} onRemoteState={applyRemoteGame} onRoomChange={handleRoomChange} />
       <div style={{ display: 'flex', justifyContent: 'center', gap: 8, margin: '0 0 14px' }} aria-label="Opponent">
-        <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} onClick={() => setPracticeBot(false)}>Two players</button>
-        <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} onClick={() => setPracticeBot(true)}>Practice vs bot</button>
+        <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} disabled={onlineSession !== null} onClick={() => setPracticeBot(false)}>Two players</button>
+        <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} disabled={onlineSession !== null} onClick={() => setPracticeBot(true)}>Practice vs bot</button>
       </div>
       <div className="yard-mopyon-layout">
         <section className="yard-mopyon-board-card" aria-label="Mòpyon game">
@@ -59,7 +70,7 @@ export default function MopyonPage() {
                   className={`yard-mopyon-point${winningCells.has(index) ? ' is-winning' : ''}${game.lastMove === index ? ' is-last-move' : ''}`}
                   data-mark={mark ?? undefined}
                   aria-label={`Row ${row + 1}, column ${column + 1}${mark ? `, ${mark}` : ', empty intersection'}`}
-                  disabled={Boolean(mark || game.winner || game.isDraw || (practiceBot && game.currentPlayer === 'O'))}
+                  disabled={Boolean(mark || game.winner || game.isDraw || !canAct || (practiceBot && game.currentPlayer === 'O'))}
                   onClick={() => setGame((current) => playMopyonMove(current, row, column))}
                 >{mark && <span aria-hidden="true">{mark}</span>}</button>;
               })}

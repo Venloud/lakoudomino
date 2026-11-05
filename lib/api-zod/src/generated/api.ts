@@ -346,6 +346,164 @@ export const SubmitWordYardGuessResponse = zod.object({
 
 
 /**
+ * @summary Create a private room for a supported game
+ */
+export const createArcadeRoomBodyDisplayNameMax = 24;
+
+export const createArcadeRoomBodyPlayerCountDefault = 2;
+export const createArcadeRoomBodyIsPrivateDefault = false;
+
+export const CreateArcadeRoomBody = zod.object({
+  "game": zod.enum(['mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
+  "displayName": zod.string().min(1).max(createArcadeRoomBodyDisplayNameMax),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]).default(createArcadeRoomBodyPlayerCountDefault),
+  "isPrivate": zod.boolean().default(createArcadeRoomBodyIsPrivateDefault)
+})
+
+export const createArcadeRoomResponseOnePlayersItemSeatMin = 0;
+export const createArcadeRoomResponseOnePlayersItemSeatMax = 3;
+
+export const createArcadeRoomResponseOneTurnMin = 0;
+export const createArcadeRoomResponseOneTurnMax = 3;
+
+export const createArcadeRoomResponseTwoSeatMin = 0;
+export const createArcadeRoomResponseTwoSeatMax = 3;
+
+
+
+export const CreateArcadeRoomResponse = zod.object({
+  "code": zod.string(),
+  "game": zod.enum(['mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
+  "capacity": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "status": zod.enum(['waiting', 'playing']),
+  "players": zod.array(zod.object({
+  "name": zod.string(),
+  "seat": zod.number().int().min(createArcadeRoomResponseOnePlayersItemSeatMin).max(createArcadeRoomResponseOnePlayersItemSeatMax)
+})),
+  "state": zod.union([zod.record(zod.string(), zod.unknown()),zod.array(zod.unknown()),zod.null()]),
+  "turn": zod.number().int().min(createArcadeRoomResponseOneTurnMin).max(createArcadeRoomResponseOneTurnMax)
+}).and(zod.object({
+  "seat": zod.number().int().min(createArcadeRoomResponseTwoSeatMin).max(createArcadeRoomResponseTwoSeatMax),
+  "reconnectToken": zod.string()
+}))
+
+
+/**
+ * @summary Join or create a compatible room
+ */
+export const quickMatchArcadeRoomBodyDisplayNameMax = 24;
+
+export const quickMatchArcadeRoomBodyPlayerCountDefault = 2;
+export const quickMatchArcadeRoomBodyIsPrivateDefault = false;
+
+export const QuickMatchArcadeRoomBody = zod.object({
+  "game": zod.enum(['mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
+  "displayName": zod.string().min(1).max(quickMatchArcadeRoomBodyDisplayNameMax),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]).default(quickMatchArcadeRoomBodyPlayerCountDefault),
+  "isPrivate": zod.boolean().default(quickMatchArcadeRoomBodyIsPrivateDefault)
+})
+
+export const quickMatchArcadeRoomResponseOnePlayersItemSeatMin = 0;
+export const quickMatchArcadeRoomResponseOnePlayersItemSeatMax = 3;
+
+export const quickMatchArcadeRoomResponseOneTurnMin = 0;
+export const quickMatchArcadeRoomResponseOneTurnMax = 3;
+
+export const quickMatchArcadeRoomResponseTwoSeatMin = 0;
+export const quickMatchArcadeRoomResponseTwoSeatMax = 3;
+
+
+
+export const QuickMatchArcadeRoomResponse = zod.object({
+  "code": zod.string(),
+  "game": zod.enum(['mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
+  "capacity": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "status": zod.enum(['waiting', 'playing']),
+  "players": zod.array(zod.object({
+  "name": zod.string(),
+  "seat": zod.number().int().min(quickMatchArcadeRoomResponseOnePlayersItemSeatMin).max(quickMatchArcadeRoomResponseOnePlayersItemSeatMax)
+})),
+  "state": zod.union([zod.record(zod.string(), zod.unknown()),zod.array(zod.unknown()),zod.null()]),
+  "turn": zod.number().int().min(quickMatchArcadeRoomResponseOneTurnMin).max(quickMatchArcadeRoomResponseOneTurnMax)
+}).and(zod.object({
+  "seat": zod.number().int().min(quickMatchArcadeRoomResponseTwoSeatMin).max(quickMatchArcadeRoomResponseTwoSeatMax),
+  "reconnectToken": zod.string()
+}))
+
+
+export const joinArcadeRoomPathCodeRegExp = new RegExp('^[A-Z0-9]{4,8}$');
+
+
+export const JoinArcadeRoomParams = zod.object({
+  "code": zod.coerce.string().regex(joinArcadeRoomPathCodeRegExp)
+})
+
+export const joinArcadeRoomBodyDisplayNameMax = 24;
+
+
+
+export const JoinArcadeRoomBody = zod.object({
+  "displayName": zod.string().min(1).max(joinArcadeRoomBodyDisplayNameMax)
+})
+
+export const joinArcadeRoomResponseOnePlayersItemSeatMin = 0;
+export const joinArcadeRoomResponseOnePlayersItemSeatMax = 3;
+
+export const joinArcadeRoomResponseOneTurnMin = 0;
+export const joinArcadeRoomResponseOneTurnMax = 3;
+
+export const joinArcadeRoomResponseTwoSeatMin = 0;
+export const joinArcadeRoomResponseTwoSeatMax = 3;
+
+
+
+export const JoinArcadeRoomResponse = zod.object({
+  "code": zod.string(),
+  "game": zod.enum(['mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
+  "capacity": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "status": zod.enum(['waiting', 'playing']),
+  "players": zod.array(zod.object({
+  "name": zod.string(),
+  "seat": zod.number().int().min(joinArcadeRoomResponseOnePlayersItemSeatMin).max(joinArcadeRoomResponseOnePlayersItemSeatMax)
+})),
+  "state": zod.union([zod.record(zod.string(), zod.unknown()),zod.array(zod.unknown()),zod.null()]),
+  "turn": zod.number().int().min(joinArcadeRoomResponseOneTurnMin).max(joinArcadeRoomResponseOneTurnMax)
+}).and(zod.object({
+  "seat": zod.number().int().min(joinArcadeRoomResponseTwoSeatMin).max(joinArcadeRoomResponseTwoSeatMax),
+  "reconnectToken": zod.string()
+}))
+
+
+export const getArcadeRoomPathCodeRegExp = new RegExp('^[A-Z0-9]{4,8}$');
+
+
+export const GetArcadeRoomParams = zod.object({
+  "code": zod.coerce.string().regex(getArcadeRoomPathCodeRegExp)
+})
+
+export const getArcadeRoomResponsePlayersItemSeatMin = 0;
+export const getArcadeRoomResponsePlayersItemSeatMax = 3;
+
+export const getArcadeRoomResponseTurnMin = 0;
+export const getArcadeRoomResponseTurnMax = 3;
+
+
+
+export const GetArcadeRoomResponse = zod.object({
+  "code": zod.string(),
+  "game": zod.enum(['mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
+  "capacity": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "status": zod.enum(['waiting', 'playing']),
+  "players": zod.array(zod.object({
+  "name": zod.string(),
+  "seat": zod.number().int().min(getArcadeRoomResponsePlayersItemSeatMin).max(getArcadeRoomResponsePlayersItemSeatMax)
+})),
+  "state": zod.union([zod.record(zod.string(), zod.unknown()),zod.array(zod.unknown()),zod.null()]),
+  "turn": zod.number().int().min(getArcadeRoomResponseTurnMin).max(getArcadeRoomResponseTurnMax)
+})
+
+
+/**
  * @summary Get open public waiting tables
  */
 export const getLobbyResponseTablesItemRowLengthMax = 20;

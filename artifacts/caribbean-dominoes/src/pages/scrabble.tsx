@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link } from 'wouter';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
 import { createScrabbleGame, exchangeScrabbleTiles, passScrabbleTurn, playScrabbleWord, premiumAt, SCRABBLE_SIZE, type ScrabbleDirection, type ScrabbleGame } from '@/lib/scrabble';
 import { WORDS } from '@/lib/word-game-data';
+import { ArcadeOnlinePanel } from '@/components/arcade-online-panel';
 
 const premiumColors = { TW: '#733c35', DW: '#754951', TL: '#355a72', DL: '#3c6252' };
 
@@ -17,7 +18,21 @@ export default function ScrabblePage() {
   const [message, setMessage] = useState('Start at the center star. Words must connect to the tiles already played.');
   const [selectedRackTiles, setSelectedRackTiles] = useState<number[]>([]);
   const [practiceBot, setPracticeBot] = useState(false);
-  const botTurn = practiceBot && game.turn === 1 && game.winner === null;
+  const [onlineSession, setOnlineSession] = useState<{ seat: number; connected: boolean; turn: number | null } | null>(null);
+  const botTurn = practiceBot && !onlineSession && game.turn === 1 && game.winner === null;
+  const canAct = onlineSession === null || (onlineSession.connected && onlineSession.seat === game.turn);
+  const handleRoomChange = useCallback((session: { seat: number; connected: boolean; turn: number | null } | null) => {
+    setOnlineSession(session);
+    if (session) setPracticeBot(false);
+  }, []);
+  const applyRemoteGame = useCallback((state: unknown) => {
+    if (state && typeof state === 'object' && Array.isArray((state as ScrabbleGame).board) &&
+      Array.isArray((state as ScrabbleGame).racks) && typeof (state as ScrabbleGame).turn === 'number') {
+      setGame(state as ScrabbleGame);
+      setSelectedRackTiles([]);
+      setWord('');
+    }
+  }, []);
   useEffect(() => {
     if (!botTurn) return;
     const timer = window.setTimeout(() => {
@@ -61,7 +76,7 @@ export default function ScrabblePage() {
   };
 
   const handlePlay = () => {
-    if (botTurn) return;
+    if (botTurn || !canAct) return;
     const result = playScrabbleWord(game, {
       word: preview,
       row: Math.floor(start / SCRABBLE_SIZE),
@@ -77,13 +92,13 @@ export default function ScrabblePage() {
   };
 
   const handlePass = () => {
-    if (botTurn) return;
+    if (botTurn || !canAct) return;
     setGame((current) => passScrabbleTurn(current));
     setSelectedRackTiles([]);
     setMessage('Turn passed.');
   };
   const handleExchange = () => {
-    if (botTurn) return;
+    if (botTurn || !canAct) return;
     const tiles = selectedRackTiles.map((index) => game.racks[game.turn][index]).filter(Boolean);
     const result = exchangeScrabbleTiles(game, tiles);
     if (!result.game) { setMessage(result.error); return; }
@@ -100,17 +115,18 @@ export default function ScrabblePage() {
       <header className="yard-heading" style={{ marginTop: 16 }}>
          <div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>Scrabble</h1><p className="yard-subtitle">Play connected words for 2–4 players, score bonuses, exchange tiles, and finish with the highest score.</p></div>
       </header>
+      <ArcadeOnlinePanel game="scrabble" playerCount={playerCount} turn={game.turn} state={game} onRemoteState={applyRemoteGame} onRoomChange={handleRoomChange} />
       <section className="yard-panel" style={{ padding: 16, marginTop: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
           <strong role="status">{botTurn ? 'Yard bot is thinking…' : turnLabel}</strong>
            <button className="yard-button" type="button" onClick={() => newGame()}><RotateCcw size={14} /> New game</button>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12, fontSize: 13 }}>
-          <span>Players</span>{([2, 3, 4] as const).map((count) => <button key={count} type="button" className="yard-button" aria-pressed={playerCount === count} disabled={practiceBot} onClick={() => newGame(count)}>{count}</button>)}
+          <span>Players</span>{([2, 3, 4] as const).map((count) => <button key={count} type="button" className="yard-button" aria-pressed={playerCount === count} disabled={practiceBot || onlineSession !== null} onClick={() => newGame(count)}>{count}</button>)}
         </div>
         <div role="group" aria-label="Choose opponent" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
-          <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} onClick={() => setPracticeBot(false)}>Two players</button>
-          <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} onClick={() => { setPracticeBot(true); if (playerCount !== 2) newGame(2); }}>Practice vs bot</button>
+          <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} disabled={onlineSession !== null} onClick={() => setPracticeBot(false)}>Two players</button>
+          <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} disabled={onlineSession !== null} onClick={() => { setPracticeBot(true); if (playerCount !== 2) newGame(2); }}>Practice vs bot</button>
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 18, marginBottom: 12, fontSize: 13 }}>
           {game.scores.map((score, index) => <span key={index} aria-current={game.turn === index ? 'step' : undefined}>Player {index + 1} <b>{score}</b></span>)}<span>Tiles left <b>{game.bag.length}</b></span>
@@ -129,7 +145,7 @@ export default function ScrabblePage() {
               type="button"
               role="gridcell"
               aria-label={`${tile ? `${tile.letter}, ` : ''}row ${row + 1}, column ${col + 1}${premium ? `, ${premium}` : ''}`}
-              disabled={botTurn}
+              disabled={botTurn || !canAct}
               onClick={() => setStart(index)}
               style={{
                 position: 'relative', display: 'grid', placeItems: 'center', minWidth: 0, aspectRatio: '1',
@@ -145,14 +161,14 @@ export default function ScrabblePage() {
           })}
         </div>
         <div style={{ maxWidth: 660, margin: '14px auto 0', display: 'grid', gap: 12 }}>
-          <div style={{ margin: 0, textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>{practiceBot && game.turn === 1 ? 'Yard bot rack: ' : `Player ${game.turn + 1} rack: `}{game.racks[game.turn].map((letter, i) => <button type="button" key={`${letter}-${i}`} disabled={botTurn} aria-pressed={selectedRackTiles.includes(i)} onClick={() => setSelectedRackTiles((current) => current.includes(i) ? current.filter((index) => index !== i) : [...current, i])} style={{ display: 'inline-grid', placeItems: 'center', width: 32, height: 36, margin: '0 2px', borderRadius: 4, border: selectedRackTiles.includes(i) ? '2px solid #75d64b' : '1px solid #9e947f', background: '#e5dfd1', color: '#202124' }}>{letter === '?' ? '☆' : letter}<small style={{ fontSize: 8 }}>{letter === '?' ? 0 : undefined}</small></button>)}</div>
+          <div style={{ margin: 0, textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>{practiceBot && game.turn === 1 ? 'Yard bot rack: ' : `Player ${game.turn + 1} rack: `}{game.racks[game.turn].map((letter, i) => <button type="button" key={`${letter}-${i}`} disabled={botTurn || !canAct} aria-pressed={selectedRackTiles.includes(i)} onClick={() => setSelectedRackTiles((current) => current.includes(i) ? current.filter((index) => index !== i) : [...current, i])} style={{ display: 'inline-grid', placeItems: 'center', width: 32, height: 36, margin: '0 2px', borderRadius: 4, border: selectedRackTiles.includes(i) ? '2px solid #75d64b' : '1px solid #9e947f', background: '#e5dfd1', color: '#202124' }}>{letter === '?' ? '☆' : letter}<small style={{ fontSize: 8 }}>{letter === '?' ? 0 : undefined}</small></button>)}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>Word <input className="yard-input" value={word} onChange={(event) => setWord(event.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} maxLength={15} placeholder="e.g. WORD" style={{ width: 150 }} disabled={game.winner !== null || botTurn} /></label>
             <button type="button" className="yard-button" aria-pressed={direction === 'horizontal'} disabled={botTurn} onClick={() => setDirection('horizontal')}>Across</button>
             <button type="button" className="yard-button" aria-pressed={direction === 'vertical'} disabled={botTurn} onClick={() => setDirection('vertical')}>Down</button>
-            <button type="button" className="yard-button primary" onClick={handlePlay} disabled={game.winner !== null || botTurn}>Play word</button>
-            <button type="button" className="yard-button" onClick={handleExchange} disabled={game.winner !== null || botTurn || selectedRackTiles.length === 0 || game.bag.length < 7}>Exchange selected</button>
-            <button type="button" className="yard-button" onClick={handlePass} disabled={game.winner !== null || botTurn}>Pass</button>
+            <button type="button" className="yard-button primary" onClick={handlePlay} disabled={game.winner !== null || botTurn || !canAct}>Play word</button>
+            <button type="button" className="yard-button" onClick={handleExchange} disabled={game.winner !== null || botTurn || !canAct || selectedRackTiles.length === 0 || game.bag.length < 7}>Exchange selected</button>
+            <button type="button" className="yard-button" onClick={handlePass} disabled={game.winner !== null || botTurn || !canAct}>Pass</button>
           </div>
           <p role="status" style={{ minHeight: 18, margin: 0, textAlign: 'center', color: '#b7b8b9', fontSize: 12 }}>{message}</p>
           <p style={{ margin: 0, textAlign: 'center', color: '#85878b', fontSize: 11 }}>Local pass-and-play. Starter dictionary; premium squares apply once when a tile is placed.</p>
