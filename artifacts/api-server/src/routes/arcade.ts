@@ -202,6 +202,7 @@ function roomSummary(room: ArcadeRoom, seat: number | null = null) {
     code: room.code,
     game: room.game,
     capacity: room.capacity,
+    reconnectDeadline: room.updatedAt + ROOM_TTL_MS,
     status: isArcadeGameFinished(room) ? "finished" : room.players.length === room.capacity ? "playing" : "waiting",
     players: room.players.map((player, seat) => ({
       name: player.name,

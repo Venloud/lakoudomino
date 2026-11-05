@@ -4,13 +4,14 @@ type PublicRoom = {
   code: string;
   game: string;
   capacity: number;
+  reconnectDeadline?: number;
   status: "waiting" | "playing" | "finished";
   players: { name: string; seat: number; isBot?: boolean }[];
   state: unknown;
   turn: number;
   result?: { winnerSeat: number; resignedSeat: number; endedAt: number } | null;
 };
-type Access = { code: string; reconnectToken: string; seat: number };
+type Access = { code: string; reconnectToken: string; seat: number; reconnectDeadline?: number };
 type Props = {
   game: string;
   playerCount?: 2 | 3 | 4;
@@ -36,6 +37,16 @@ const clientStateFor = (game: string, state: unknown): unknown => {
   return { ...gameState, bag: [], bagCount };
 };
 
+function formatReconnectTime(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemoteState, onRoomChange }: Props) {
   const [name, setName] = useState(() => localStorage.getItem("yard-display-name") ?? "");
   const [codeInput, setCodeInput] = useState("");
@@ -48,6 +59,13 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
   });
   const [room, setRoom] = useState<PublicRoom | null>(null);
   const [connected, setConnected] = useState(false);
+  const [reconnectDeadline, setReconnectDeadline] = useState<number | null>(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(storageKey(game)) ?? "null");
+      return Number.isFinite(saved?.reconnectDeadline) ? saved.reconnectDeadline : null;
+    } catch { return null; }
+  });
+  const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [notice, setNotice] = useState("");
@@ -70,6 +88,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
       bag: Array.from({ length: bagCount }, () => ""),
     };
   }, [access, game, state]);
+  const reconnectRemaining = reconnectDeadline === null ? null : Math.max(0, reconnectDeadline - now);
 
   useEffect(() => {
     onRoomChange?.(access ? { seat: access.seat, connected, turn: room?.turn ?? null } : null);
@@ -83,7 +102,25 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
     socket = new WebSocket(`${protocol}://${window.location.host}/ws?arcadeCode=${encodeURIComponent(access.code)}&token=${encodeURIComponent(access.reconnectToken)}`);
     socketRef.current = socket;
     socket.addEventListener("open", () => { if (!disposed) setConnected(true); });
-    socket.addEventListener("close", () => { if (!disposed) setConnected(false); });
+    socket.addEventListener("close", () => {
+      if (disposed) return;
+      setConnected(false);
+      void fetch(`/api/arcade/rooms/${encodeURIComponent(access.code)}`)
+        .then(async (response) => response.ok ? await response.json() as PublicRoom : null)
+        .then((latest) => {
+          if (disposed) return;
+          if (latest && Number.isFinite(latest.reconnectDeadline)) {
+            setReconnectDeadline(latest.reconnectDeadline!);
+            sessionStorage.setItem(storageKey(game), JSON.stringify({
+              ...access,
+              reconnectDeadline: latest.reconnectDeadline,
+            }));
+          } else if (!latest) {
+            setReconnectDeadline(Date.now());
+          }
+        })
+        .catch(() => undefined);
+    });
     socket.addEventListener("error", () => { if (!disposed) setNotice("Connection interrupted. Reconnecting may help."); });
     socket.addEventListener("message", (event) => {
       let message: unknown;
@@ -95,6 +132,13 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
         setNotice(data.message);
       } else if ((data.type === "room" || data.type === "state") && isRoom(data.room)) {
         setRoom(data.room);
+        if (Number.isFinite(data.room.reconnectDeadline)) {
+          setReconnectDeadline(data.room.reconnectDeadline!);
+          sessionStorage.setItem(storageKey(game), JSON.stringify({
+            ...access,
+            reconnectDeadline: data.room.reconnectDeadline,
+          }));
+        }
         if (data.room.result) {
           setLeaving(false);
           setNotice("");
@@ -136,6 +180,26 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
     return undefined;
   }, [access, room, connected, game, outgoingState, stateJson, turn]);
 
+  useEffect(() => {
+    if (!access || connected || reconnectDeadline === null) return;
+    const tick = () => {
+      const currentTime = Date.now();
+      setNow(currentTime);
+      if (reconnectDeadline > currentTime) return;
+      sessionStorage.removeItem(storageKey(game));
+      setAccess(null);
+      setRoom(null);
+      setConnected(false);
+      setLeaving(false);
+      setReconnectDeadline(null);
+      setNotice("Your reconnect window expired. Create a new room or join another match.");
+      lastReceivedRef.current = "";
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [access, connected, game, reconnectDeadline]);
+
   const requestRoom = async (endpoint: string, payload: Record<string, unknown>) => {
     setBusy(true);
     setNotice("");
@@ -149,11 +213,17 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
       const result = await response.json() as Access & { error?: string };
       if (!response.ok) throw new Error(result.error ?? "Could not join that room.");
       localStorage.setItem("yard-display-name", name.trim());
-      const next = { code: result.code, seat: result.seat, reconnectToken: result.reconnectToken };
+      const next = {
+        code: result.code,
+        seat: result.seat,
+        reconnectToken: result.reconnectToken,
+        ...(Number.isFinite(result.reconnectDeadline) ? { reconnectDeadline: result.reconnectDeadline } : {}),
+      };
       sessionStorage.setItem(storageKey(game), JSON.stringify(next));
       lastReceivedRef.current = "";
       setLeaving(false);
       setAccess(next);
+      setReconnectDeadline(Number.isFinite(result.reconnectDeadline) ? result.reconnectDeadline! : null);
       setRoom(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not reach the game server.");
@@ -170,6 +240,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
       setRoom(null);
       setConnected(false);
       setLeaving(false);
+      setReconnectDeadline(null);
       setNotice("");
       lastReceivedRef.current = "";
       return;
@@ -192,6 +263,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
     setRoom(null);
     setConnected(false);
     setLeaving(false);
+    setReconnectDeadline(null);
     lastReceivedRef.current = "";
   };
 
@@ -205,11 +277,16 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
           : connected ? room?.players.some((player) => player.isBot && player.seat === room.turn)
             ? "Yard bot is taking its turn"
             : room?.status === "playing" ? "Match in progress" : "Waiting for players"
-          : "Connecting…"}</span>
+          : reconnectRemaining !== null
+            ? `Reconnecting · ${formatReconnectTime(reconnectRemaining)} left`
+            : "Connecting…"}</span>
         <button className="yard-button" type="button" disabled={leaving} onClick={leaveRoom}>
           {leaving ? "Recording result…" : room?.result || room?.status === "finished" ? "Return to games" : "Resign & leave"}
         </button>
       </div>
+      {!connected && reconnectRemaining !== null && <p role="status" style={{ margin: "10px 0 0", color: "#c8c8ce", fontSize: 13 }}>
+        Reconnect within <b>{formatReconnectTime(reconnectRemaining)}</b>. If time runs out, you can create or join another room.
+      </p>}
       {room?.result && <p role="status" style={{ margin: "10px 0 0", color: room.result.resignedSeat === access.seat ? "#ef9b8d" : "#9be27d", fontWeight: 700 }}>
         {room.result.resignedSeat === access.seat
           ? "You resigned. This match is recorded as a loss."
