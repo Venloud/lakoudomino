@@ -16,6 +16,7 @@ import { CreateTicTacToeRoomBody, JoinTicTacToeRoomBody } from "@workspace/api-z
 import { db, dominoRooms, ticTacToeResults, ticTacToeRooms } from "@workspace/db";
 import { getIdentityFromRequest } from "../lib/auth-session";
 import { buildTicTacToeResultInserts } from "../lib/tic-tac-toe-results";
+import { clearPresence, trackPresence, updatePresence } from "../lib/presence";
 
 type TicTacToePlayer = {
   seat: 0 | 1;
@@ -256,10 +257,27 @@ function sendSnapshot(socket: WebSocket, room: TicTacToeRoom, seat: 0 | 1 | null
 }
 
 function broadcastRoom(room: TicTacToeRoom): void {
+  const presence = presenceForRoom(room);
   room.connections.forEach((sockets, seat) => {
-    sockets.forEach((socket) => sendSnapshot(socket, room, seat));
+    sockets.forEach((socket) => {
+      updatePresence(socket, presence);
+      sendSnapshot(socket, room, seat);
+    });
   });
   room.spectators.forEach((socket) => sendSnapshot(socket, room, null));
+}
+
+function presenceForRoom(room: TicTacToeRoom) {
+  if (room.status !== "playing") {
+    return { status: "online" as const, detail: undefined, roomCode: undefined, game: undefined };
+  }
+  const modeName = room.mode === "yard" ? "Yard Mode" : "Regular";
+  return {
+    status: "game" as const,
+    detail: `Tic-Tac-Toe · ${modeName} · Room ${room.code}`,
+    roomCode: room.code,
+    game: "tic-tac-toe",
+  };
 }
 
 function sendSocketError(socket: WebSocket, message: string): void {
@@ -319,6 +337,13 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
       const sockets = room.connections.get(seat) ?? new Set<WebSocket>();
       sockets.add(socket);
       room.connections.set(seat, sockets);
+      trackPresence(socket, {
+        identityKey: player.userId ? `user:${player.userId}` : `guest:tic-tac-toe:${code}:${seat}`,
+        userId: player.userId ?? null,
+        username: player.name,
+        client: "room",
+        ...presenceForRoom(room),
+      });
       sendSnapshot(socket, room, seat);
       return;
     }
@@ -391,6 +416,7 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
 
   socket.on("close", () => {
     room.spectators.delete(socket);
+    clearPresence(socket);
     if (seat === undefined) return;
     const sockets = room.connections.get(seat);
     sockets?.delete(socket);

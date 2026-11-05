@@ -227,7 +227,7 @@ export default function SocialPage({ page }: { page: Destination }) {
   const auth = useGetAuthMe({ query: { queryKey: getGetAuthMeQueryKey(), refetchOnWindowFocus: true } });
   const user = auth.data?.user;
   const signedIn = Boolean(user);
-  const friendsQuery = useListFriends({ query: { queryKey: getListFriendsQueryKey(), enabled: signedIn, refetchOnWindowFocus: true } });
+  const friendsQuery = useListFriends({ query: { queryKey: getListFriendsQueryKey(), enabled: signedIn, refetchInterval: 15000, refetchOnWindowFocus: true } });
   const lobby = useGetLobby({ query: { queryKey: getGetLobbyQueryKey(), refetchInterval: 15000, refetchOnWindowFocus: true } });
   const recent = useGetRecentMatches({ query: { queryKey: getRecentMatchesQueryKey(), enabled: signedIn, refetchOnWindowFocus: true } });
   const ticTacToeResults = useGetTicTacToeResults({ query: { queryKey: getGetTicTacToeResultsQueryKey(), enabled: signedIn, refetchOnWindowFocus: true } });
@@ -404,7 +404,11 @@ export default function SocialPage({ page }: { page: Destination }) {
             <span className="yard-avatar">{initials(friend.username)}</span>
             <span style={{ flex: 1 }}><b>{friend.username}</b><small className="yard-presence"><i style={{ background: friend.status ? 'var(--yard-accent)' : '#66676c' }} />{presenceText(friend.status?.status, friend.status?.detail)}</small></span>
             <span className="yard-list-actions">
-              {friend.status?.status === 'game' && friend.status.roomCode && <Link className="yard-small-button" href={`/room/${friend.status.roomCode}`} data-testid={`watch-friend-${friend.id}`}>Watch</Link>}
+              {friend.status?.status === 'game' && friend.status.roomCode && <Link
+                className="yard-small-button"
+                href={friend.status.game === 'tic-tac-toe' ? `/games/tic-tac-toe/${friend.status.roomCode}?watch=1` : `/room/${friend.status.roomCode}`}
+                data-testid={`watch-friend-${friend.id}`}
+              >Watch</Link>}
               <button className="yard-small-button" disabled={Boolean(invitingFriendId)} onClick={() => void inviteFriendToGame(friend.id)} data-testid={`invite-friend-${friend.id}`}>{invitingFriendId === friend.id ? 'Inviting…' : 'Invite'}</button>
             </span>
           </div>)}

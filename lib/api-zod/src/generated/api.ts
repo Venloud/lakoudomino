@@ -1305,7 +1305,8 @@ export const ListFriendsResponse = zod.object({
   "status": zod.union([zod.object({
   "status": zod.enum(['lobby', 'game', 'online']),
   "detail": zod.string().optional(),
-  "roomCode": zod.string().optional()
+  "roomCode": zod.string().optional(),
+  "game": zod.string().optional()
 }),zod.null()])
 })),
   "requests": zod.array(zod.object({

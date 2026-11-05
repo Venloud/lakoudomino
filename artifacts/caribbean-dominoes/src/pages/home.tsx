@@ -438,7 +438,12 @@ export default function Home() {
         onInviteFriend={inviteFriendToTable}
         onWatchFriend={(id) => {
           const friend = friendsQuery.data?.friends.find((entry) => entry.id === id);
-          if (friend?.status?.status === 'game' && friend.status.roomCode) setLocation(`/room/${friend.status.roomCode}`);
+          if (friend?.status?.status === 'game' && friend.status.roomCode) {
+            const route = friend.status.game === 'tic-tac-toe'
+              ? `/games/tic-tac-toe/${friend.status.roomCode}?watch=1`
+              : `/room/${friend.status.roomCode}`;
+            setLocation(route);
+          }
         }}
       />
       {signedIn && invites.length > 0 && (
