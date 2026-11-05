@@ -581,16 +581,22 @@ function send(socket: WebSocket, message: unknown) {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
 }
 
-setInterval(() => {
+async function maintainArcadeRooms(): Promise<void> {
   const activeCodes = [...socketsByRoom.entries()]
     .filter(([, sockets]) => [...sockets.keys()].some((socket) => socket.readyState === WebSocket.OPEN))
     .map(([code]) => code);
-  void (async () => {
-    if (activeCodes.length) {
-      await pool.query("UPDATE arcade_rooms SET updated_at = now() WHERE code = ANY($1::text[])", [activeCodes]);
-    }
-    await pool.query("DELETE FROM arcade_rooms WHERE updated_at < $1", [new Date(Date.now() - ROOM_TTL_MS)]);
-  })().catch((error) => logger.error({ err: error }, "Failed to maintain arcade rooms"));
+  if (activeCodes.length) {
+    await pool.query("UPDATE arcade_rooms SET updated_at = now() WHERE code = ANY($1::text[])", [activeCodes]);
+  }
+  await pool.query("DELETE FROM arcade_rooms WHERE updated_at < $1", [new Date(Date.now() - ROOM_TTL_MS)]);
+}
+
+export async function maintainArcadeRoomsForTest(): Promise<void> {
+  await maintainArcadeRooms();
+}
+
+setInterval(() => {
+  void maintainArcadeRooms().catch((error) => logger.error({ err: error }, "Failed to maintain arcade rooms"));
 }, 5 * 60 * 1000).unref();
 
 export default router;
