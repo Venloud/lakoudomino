@@ -581,18 +581,29 @@ function send(socket: WebSocket, message: unknown) {
   if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
 }
 
-async function maintainArcadeRooms(): Promise<void> {
-  const activeCodes = [...socketsByRoom.entries()]
-    .filter(([, sockets]) => [...sockets.keys()].some((socket) => socket.readyState === WebSocket.OPEN))
-    .map(([code]) => code);
-  if (activeCodes.length) {
-    await pool.query("UPDATE arcade_rooms SET updated_at = now() WHERE code = ANY($1::text[])", [activeCodes]);
+async function maintainArcadeRooms(afterActivityRefresh?: () => Promise<void>): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const activeCodes = [...socketsByRoom.entries()]
+      .filter(([, sockets]) => [...sockets.keys()].some((socket) => socket.readyState === WebSocket.OPEN))
+      .map(([code]) => code);
+    if (activeCodes.length) {
+      await client.query("UPDATE arcade_rooms SET updated_at = now() WHERE code = ANY($1::text[])", [activeCodes]);
+    }
+    await afterActivityRefresh?.();
+    await client.query("DELETE FROM arcade_rooms WHERE updated_at < $1", [new Date(Date.now() - ROOM_TTL_MS)]);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
-  await pool.query("DELETE FROM arcade_rooms WHERE updated_at < $1", [new Date(Date.now() - ROOM_TTL_MS)]);
 }
 
-export async function maintainArcadeRoomsForTest(): Promise<void> {
-  await maintainArcadeRooms();
+export async function maintainArcadeRoomsForTest(afterActivityRefresh?: () => Promise<void>): Promise<void> {
+  await maintainArcadeRooms(afterActivityRefresh);
 }
 
 setInterval(() => {
