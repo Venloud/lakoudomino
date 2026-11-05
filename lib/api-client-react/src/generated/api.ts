@@ -3463,3 +3463,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getDismissFriendInviteMutationOptions(options));
     }
 
+export const getWithdrawFriendInviteUrl = (id: string,) => {
+
+
+
+
+  return `/api/friends/invites/${id}/withdraw`
+}
+
+export const withdrawFriendInvite = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getWithdrawFriendInviteUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getWithdrawFriendInviteMutationKey = () => ['withdrawFriendInvite'] as const;
+
+export const getWithdrawFriendInviteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawFriendInvite>>, TError,WithdrawFriendInviteMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof withdrawFriendInvite>>, TError,WithdrawFriendInviteMutationVariables, TContext> => {
+
+const mutationKey = getWithdrawFriendInviteMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof withdrawFriendInvite>>, WithdrawFriendInviteMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  withdrawFriendInvite(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WithdrawFriendInviteMutationResult = NonNullable<Awaited<ReturnType<typeof withdrawFriendInvite>>>
+
+    export type WithdrawFriendInviteMutationError = ErrorType<unknown>
+    export type WithdrawFriendInviteMutationVariables = {id: string}
+
+    export const useWithdrawFriendInvite = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof withdrawFriendInvite>>, TError,WithdrawFriendInviteMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof withdrawFriendInvite>>,
+        TError,
+        WithdrawFriendInviteMutationVariables,
+        TContext
+      > => {
+      return useMutation(getWithdrawFriendInviteMutationOptions(options));
+    }
+

@@ -35,7 +35,10 @@ router.get("/friends", async (req, res): Promise<void> => {
   const invites = await db.select({ invite: dominoFriendInvites, username: dominoUsers.username }).from(dominoFriendInvites)
     .innerJoin(dominoUsers, eq(dominoFriendInvites.inviterId, dominoUsers.id))
     .where(and(eq(dominoFriendInvites.inviteeId, me.userId), eq(dominoFriendInvites.status, "pending")));
-  const inviteCodes = [...new Set(invites.map((entry) => entry.invite.roomCode))];
+  const sentInvites = await db.select({ invite: dominoFriendInvites, username: dominoUsers.username }).from(dominoFriendInvites)
+    .innerJoin(dominoUsers, eq(dominoFriendInvites.inviteeId, dominoUsers.id))
+    .where(and(eq(dominoFriendInvites.inviterId, me.userId), eq(dominoFriendInvites.status, "pending")));
+  const inviteCodes = [...new Set([...invites, ...sentInvites].map((entry) => entry.invite.roomCode))];
   const ticTacToeCodes = inviteCodes.length
     ? await db.select({ code: ticTacToeRooms.code }).from(ticTacToeRooms).where(inArray(ticTacToeRooms.code, inviteCodes))
     : [];
@@ -60,6 +63,14 @@ router.get("/friends", async (req, res): Promise<void> => {
       id: x.invite.id,
       inviterId: x.invite.inviterId,
       inviterName: x.username,
+      roomCode: x.invite.roomCode,
+      game: wordYardCodeSet.has(x.invite.roomCode) ? "word-yard" : ticTacToeCodeSet.has(x.invite.roomCode) ? "tic-tac-toe" : arcadeGamesByCode.get(x.invite.roomCode) ?? "domino",
+      status: "pending" as const,
+    })),
+    sentInvites: sentInvites.map((x) => ({
+      id: x.invite.id,
+      inviteeId: x.invite.inviteeId,
+      inviteeName: x.username,
       roomCode: x.invite.roomCode,
       game: wordYardCodeSet.has(x.invite.roomCode) ? "word-yard" : ticTacToeCodeSet.has(x.invite.roomCode) ? "tic-tac-toe" : arcadeGamesByCode.get(x.invite.roomCode) ?? "domino",
       status: "pending" as const,
@@ -134,6 +145,18 @@ router.post("/friends/invites", async (req, res): Promise<void> => {
 });
 router.post("/friends/invites/:id/accept", async (req, res): Promise<void> => inviteAction(req, res, "accepted"));
 router.post("/friends/invites/:id/dismiss", async (req, res): Promise<void> => inviteAction(req, res, "dismissed"));
+router.post("/friends/invites/:id/withdraw", async (req, res): Promise<void> => {
+  const me = await identity(req, res); if (!me) return;
+  if (!protectedMutation(req)) { res.status(403).json({ error: "Invalid client" }); return; }
+  const [invite] = await db.update(dominoFriendInvites).set({ status: "withdrawn" }).where(and(
+    eq(dominoFriendInvites.id, req.params.id),
+    eq(dominoFriendInvites.inviterId, me.userId),
+    eq(dominoFriendInvites.status, "pending"),
+  )).returning();
+  if (!invite) { res.status(404).json({ error: "Pending invite not found" }); return; }
+  sendToUser(invite.inviteeId, { type: "friendInviteUpdated", id: invite.id, status: "withdrawn" });
+  res.json({ ok: true });
+});
 async function inviteAction(req: any, res: any, status: string) {
   const me = await identity(req, res); if (!me) return; if (!protectedMutation(req)) { res.status(403).json({ error: "Invalid client" }); return; }
   const [invite] = await db.update(dominoFriendInvites).set({ status }).where(and(eq(dominoFriendInvites.id, req.params.id), eq(dominoFriendInvites.inviteeId, me.userId), eq(dominoFriendInvites.status, "pending"))).returning();

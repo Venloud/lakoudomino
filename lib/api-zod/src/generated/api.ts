@@ -1322,6 +1322,14 @@ export const ListFriendsResponse = zod.object({
   "roomCode": zod.string(),
   "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard', 'mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
   "status": zod.enum(['pending'])
+})),
+  "sentInvites": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "inviteeId": zod.string().uuid(),
+  "inviteeName": zod.string(),
+  "roomCode": zod.string(),
+  "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard', 'mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
+  "status": zod.enum(['pending'])
 }))
 })
 
@@ -1408,5 +1416,12 @@ export const DismissFriendInviteParams = zod.object({
 })
 
 export const DismissFriendInviteResponse = zod.unknown()
+
+
+export const WithdrawFriendInviteParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+export const WithdrawFriendInviteResponse = zod.unknown()
 
 

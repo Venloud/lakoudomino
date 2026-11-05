@@ -835,6 +835,22 @@ export interface FriendInviteNotification {
   status: FriendInviteNotificationStatus;
 }
 
+export type SentFriendInviteNotificationStatus = typeof SentFriendInviteNotificationStatus[keyof typeof SentFriendInviteNotificationStatus];
+
+
+export const SentFriendInviteNotificationStatus = {
+  pending: 'pending',
+} as const;
+
+export interface SentFriendInviteNotification {
+  id: string;
+  inviteeId: string;
+  inviteeName: string;
+  roomCode: string;
+  game: FriendInviteGame;
+  status: SentFriendInviteNotificationStatus;
+}
+
 export interface FriendInviteAcceptResponse {
   /** @pattern ^[A-Z0-9]{4,8}$ */
   roomCode: string;
@@ -845,6 +861,7 @@ export interface FriendsResponse {
   friends: Friend[];
   requests: FriendRequestView[];
   invites: FriendInviteNotification[];
+  sentInvites: SentFriendInviteNotification[];
 }
 
 export interface FriendRequestInput {
