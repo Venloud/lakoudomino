@@ -36,6 +36,7 @@ type TicTacToeRoom = {
   state: TicTacToeGameState;
   roundNumber: number;
   connections: Map<0 | 1, Set<WebSocket>>;
+  spectators: Set<WebSocket>;
 };
 
 const rooms = new Map<string, TicTacToeRoom>();
@@ -101,6 +102,7 @@ function restoreRoom(record: {
     state: record.state,
     roundNumber: Number.isInteger(record.roundNumber) && (record.roundNumber ?? 0) > 0 ? record.roundNumber! : 1,
     connections: new Map(),
+    spectators: new Set(),
   };
 }
 
@@ -188,6 +190,7 @@ router.post("/tic-tac-toe/rooms", async (req, res) => {
     state: parsed.data.mode === "regular" ? createTicTacToeState() : createYardTicTacToeState(),
     roundNumber: 1,
     connections: new Map(),
+    spectators: new Set(),
   };
   rooms.set(code, room);
   try {
@@ -237,7 +240,7 @@ router.post("/tic-tac-toe/rooms/:code/join", async (req, res) => {
   return res.json(accessResponse(room, reconnectToken));
 });
 
-function sendSnapshot(socket: WebSocket, room: TicTacToeRoom, seat: 0 | 1): void {
+function sendSnapshot(socket: WebSocket, room: TicTacToeRoom, seat: 0 | 1 | null): void {
   if (socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify({
     type: "snapshot",
@@ -246,7 +249,8 @@ function sendSnapshot(socket: WebSocket, room: TicTacToeRoom, seat: 0 | 1): void
     status: room.status,
     players: room.players.map(({ seat: playerSeat, mark, name }) => ({ seat: playerSeat, mark, name })),
     state: room.state,
-    myMark: room.players[seat]?.mark ?? null,
+    viewerRole: seat === null ? "spectator" : "player",
+    myMark: seat === null ? null : room.players[seat]?.mark ?? null,
     resignedSeat: room.players.find((player) => player.resigned)?.seat ?? null,
   }));
 }
@@ -255,6 +259,7 @@ function broadcastRoom(room: TicTacToeRoom): void {
   room.connections.forEach((sockets, seat) => {
     sockets.forEach((socket) => sendSnapshot(socket, room, seat));
   });
+  room.spectators.forEach((socket) => sendSnapshot(socket, room, null));
 }
 
 function sendSocketError(socket: WebSocket, message: string): void {
@@ -277,7 +282,12 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
     socket.close(1008, "Room not found");
     return;
   }
+  const watchOnly = requestUrl.searchParams.get("ticWatch") === "1";
   let seat: 0 | 1 | undefined;
+  if (watchOnly) {
+    room.spectators.add(socket);
+    sendSnapshot(socket, room, null);
+  }
 
   socket.on("message", async (raw) => {
     let message: unknown;
@@ -289,6 +299,10 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
     }
     if (!message || typeof message !== "object") return;
     const event = message as Record<string, unknown>;
+    if (watchOnly) {
+      sendSocketError(socket, "Spectators can watch, but cannot play or start another round.");
+      return;
+    }
     if (event.type === "hello") {
       if (typeof event.reconnectToken !== "string") {
         sendSocketError(socket, "A room reconnect token is required.");
@@ -376,6 +390,7 @@ export async function handleTicTacToeSocket(socket: WebSocket, request: Incoming
   });
 
   socket.on("close", () => {
+    room.spectators.delete(socket);
     if (seat === undefined) return;
     const sockets = room.connections.get(seat);
     sockets?.delete(socket);

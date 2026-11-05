@@ -32,13 +32,15 @@ type RoomSnapshot = {
   status: 'waiting' | 'playing' | 'finished';
   players: RoomPlayer[];
   state: TicTacToeGameState;
-  myMark: 'X' | 'O';
+  myMark: 'X' | 'O' | null;
+  viewerRole: 'player' | 'spectator';
   resignedSeat: 0 | 1 | null;
 };
 
 const reconnectKey = (code: string) => `tic-tac-toe-reconnect-${code}`;
 const displayNameKey = (code: string) => `tic-tac-toe-display-name-${code}`;
 const sharePath = (code: string) => `/games/tic-tac-toe/${code}`;
+const watchPath = (code: string) => `/games/tic-tac-toe/${code}?watch=1`;
 
 async function apiError(response: Response, fallback: string): Promise<Error> {
   try {
@@ -91,6 +93,7 @@ function choosePracticeMove(state: TicTacToeState | YardTicTacToeState, mode: Ti
 export default function TicTacToePage() {
   const { code: rawCode } = useParams<{ code?: string }>();
   const code = rawCode?.toUpperCase();
+  const spectatorMode = Boolean(code && new URLSearchParams(window.location.search).get('watch') === '1');
   const [, setLocation] = useLocation();
   const auth = useGetAuthMe({ query: { queryKey: getGetAuthMeQueryKey() } });
   const user = auth.data?.user;
@@ -142,8 +145,8 @@ export default function TicTacToePage() {
     const connect = async () => {
       if (closed) return;
       setConnection(retry ? 'reconnecting' : 'connecting');
-      let token = sessionStorage.getItem(reconnectKey(code));
-      if (!token) {
+      let token = spectatorMode ? null : sessionStorage.getItem(reconnectKey(code));
+      if (!spectatorMode && !token) {
         setJoiningFromLink(true);
         if (linkJoinCode.current !== code) {
           linkJoinCode.current = code;
@@ -175,10 +178,10 @@ export default function TicTacToePage() {
         setJoiningFromLink(false);
       }
       if (closed) return;
-      const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?ticCode=${encodeURIComponent(code)}`;
+      const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?ticCode=${encodeURIComponent(code)}${spectatorMode ? '&ticWatch=1' : ''}`;
       ws = new WebSocket(wsUrl);
       socket.current = ws;
-      ws.onopen = () => ws?.send(JSON.stringify({ type: 'hello', reconnectToken: token }));
+      ws.onopen = () => { if (token) ws?.send(JSON.stringify({ type: 'hello', reconnectToken: token })); };
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as RoomSnapshot | { type: 'error'; message?: string };
@@ -212,7 +215,7 @@ export default function TicTacToePage() {
       ws?.close();
       if (socket.current === ws) socket.current = null;
     };
-  }, [code, user?.username]);
+  }, [code, spectatorMode, user?.username]);
 
   const displayName = (user?.username || name || 'Guest').trim().slice(0, 24);
 
@@ -251,6 +254,16 @@ export default function TicTacToePage() {
     });
   };
 
+  const watchOnlineRoom = () => {
+    const cleanCode = joinCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{4,8}$/.test(cleanCode)) {
+      setNotice('Enter a room code between 4 and 8 letters or numbers.');
+      return;
+    }
+    setNotice('');
+    setLocation(watchPath(cleanCode));
+  };
+
   const sendMove = (move: Record<string, unknown>) => {
     if (socket.current?.readyState !== WebSocket.OPEN) {
       setNotice('Reconnecting to the room. Try your move again in a moment.');
@@ -276,6 +289,16 @@ export default function TicTacToePage() {
       setNotice('Invite link copied. Send it to your friend.');
     } catch {
       setNotice(`Room code ${code} is ready to share.`);
+    }
+  };
+
+  const copyWatchLink = async () => {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${watchPath(code)}`);
+      setNotice('Watch-only link copied. Friends can follow without taking a seat.');
+    } catch {
+      setNotice(`Watch-only link for room ${code} is ready to share.`);
     }
   };
 
@@ -317,6 +340,8 @@ export default function TicTacToePage() {
       friends={friends.data?.friends ?? []}
       invitePending={inviteFriend.isPending}
       onCopyInvite={() => void copyInvite()}
+      onCopyWatchLink={() => void copyWatchLink()}
+      spectatorMode={snapshot.viewerRole === 'spectator'}
       onInviteFriend={sendFriendInvite}
       onMove={sendMove}
       onResign={resign}
@@ -351,12 +376,13 @@ export default function TicTacToePage() {
           <form className="yard-tic-join-form" onSubmit={joinOnlineRoom}>
             <input className="yard-input" aria-label="Room code" placeholder="Room code" value={joinCode} onChange={(event) => setJoinCode(event.target.value.toUpperCase())} maxLength={8} />
             <button className="yard-button" type="submit" disabled={joinRoom.isPending || !joinCode.trim()}>{joinRoom.isPending ? 'Joining…' : 'Join room'}</button>
+            <button type="button" className="yard-button" onClick={watchOnlineRoom} disabled={!joinCode.trim()}>Watch</button>
           </form>
         </div>
         {notice && <p className="yard-tic-notice" role="alert">{notice}</p>}
         <div className="yard-tic-room-copy">
           <h2>How rooms work</h2>
-          <p>Create a room and share its link or code. Your friend takes the other mark, and each move is checked and saved by the server.</p>
+          <p>Create a room and share a player invite. Friends can also open a watch-only link to follow the live board without taking a seat.</p>
         </div>
         <button type="button" className="yard-tic-local-link" onClick={showLocal}>Play locally on this device</button>
       </section>
@@ -373,7 +399,9 @@ function OnlineGame(props: {
   username?: string;
   friends: { id: string; username: string }[];
   invitePending: boolean;
+  spectatorMode: boolean;
   onCopyInvite: () => void;
+  onCopyWatchLink: () => void;
   onInviteFriend: (id: string) => void;
   onMove: (move: Record<string, unknown>) => void;
   onResign: () => void;
@@ -381,13 +409,20 @@ function OnlineGame(props: {
 }) {
   const { code, snapshot, connection, notice } = props;
   const game = snapshot.state;
+  const spectatorMode = props.spectatorMode;
   const finished = snapshot.status === 'finished';
-  const myTurn = snapshot.status === 'playing' && game.currentPlayer === snapshot.myMark;
+  const myTurn = !spectatorMode && snapshot.status === 'playing' && game.currentPlayer === snapshot.myMark;
   const otherPlayer = snapshot.players.find((player) => player.mark !== snapshot.myMark);
+  const activePlayer = snapshot.players.find((player) => player.mark === game.currentPlayer);
   const roundWinner = game.winner ? snapshot.players.find((player) => player.mark === game.winner)?.name ?? otherPlayer?.name : undefined;
   return <div className="yard-app">
     <YardHeader active="games" username={props.username} notifications={0} onLogout={() => {}} />
-      {finished && <GameEndSequence
+      {finished && spectatorMode && <section className="yard-tic-spectator-result" role="status" aria-live="polite">
+        <span>FINAL RESULT · SPECTATOR VIEW</span>
+        <h2>{game.isDraw ? "It's a draw" : `${roundWinner ?? 'A player'} wins`}</h2>
+        <p>You’re watching only. The players can decide whether to start another round.</p>
+      </section>}
+      {finished && !spectatorMode && <GameEndSequence
         gameName={snapshot.mode === 'yard' ? 'Yard Mode' : 'Tic-Tac-Toe'}
         perspective={!game.winner ? 'draw' : game.winner === snapshot.myMark ? 'winner' : 'opponent'}
         winnerName={roundWinner ?? 'Your opponent'}
@@ -401,16 +436,20 @@ function OnlineGame(props: {
     <main className={`yard-main yard-tic-main${snapshot.mode === 'yard' ? ' is-yard-mode' : ''}`}>
       <Link href="/games/tic-tac-toe" className="yard-tic-back"><ArrowLeft size={14} /> Tic-Tac-Toe rooms</Link>
       <div className="yard-heading yard-tic-room-heading">
-        <div><p className="yard-kicker">509 YARD / ROOM {code}</p><h1>{snapshot.mode === 'regular' ? 'Regular' : 'Yard Mode'}</h1><p className="yard-subtitle">{connection === 'connected' ? 'Match connected' : 'Reconnecting to your match…'}</p></div>
+          <div><p className="yard-kicker">509 YARD / ROOM {code}</p><h1>{snapshot.mode === 'regular' ? 'Regular' : 'Yard Mode'}</h1><p className="yard-subtitle">{spectatorMode ? 'Spectator view · Read-only' : connection === 'connected' ? 'Match connected' : 'Reconnecting to your match…'}</p></div>
          <div className="yard-tic-room-actions">
-           <button type="button" className="yard-button" onClick={props.onCopyInvite}><Copy size={14} /> Copy invite link</button>
-           {snapshot.status === 'playing' && <button type="button" className="yard-button" onClick={props.onResign}>Resign &amp; leave</button>}
+            {!spectatorMode && <button type="button" className="yard-button" onClick={props.onCopyInvite}><Copy size={14} /> Copy player invite</button>}
+            <button type="button" className="yard-button" onClick={props.onCopyWatchLink}><Copy size={14} /> Copy watch link</button>
+            {!spectatorMode && snapshot.status === 'playing' && <button type="button" className="yard-button" onClick={props.onResign}>Resign &amp; leave</button>}
          </div>
       </div>
       <div className="yard-tic-layout">
         <section className="yard-tic-board-card" aria-label="Online Tic-Tac-Toe game">
           <p className="yard-tic-status" role="status" aria-live="polite">
-             {finished ? game.winner ? <><strong>{game.winner}</strong> wins this round</> : "It's a draw" :
+              {spectatorMode ? finished ? game.winner ? <><strong>{roundWinner}</strong> wins this round</> : "It's a draw" :
+                snapshot.status === 'waiting' ? 'Waiting for both players to join…' :
+                  <><strong>Spectating live</strong> · {activePlayer?.name ?? game.currentPlayer} is to move</> :
+              finished ? game.winner ? <><strong>{game.winner}</strong> wins this round</> : "It's a draw" :
               snapshot.status === 'waiting' ? 'Waiting for your friend to join…' :
                 myTurn ? <><strong>Your turn</strong> · You are {snapshot.myMark}</> :
                   <><strong>{otherPlayer?.name ?? 'Your friend'}</strong> is taking a turn</>}
@@ -458,7 +497,7 @@ function OnlineGame(props: {
             </div> : null}
           {notice && <p className="yard-tic-notice" role="alert">{notice}</p>}
           <div className="yard-tic-actions">
-            {finished && <button type="button" className="yard-button" onClick={props.onNewRound}><RotateCcw size={14} /> Play another round</button>}
+            {finished && !spectatorMode && <button type="button" className="yard-button" onClick={props.onNewRound}><RotateCcw size={14} /> Play another round</button>}
           </div>
         </section>
         <aside className="yard-tic-info">
@@ -473,14 +512,14 @@ function OnlineGame(props: {
             })}
           </div>
           {snapshot.mode === 'yard' && <p className="yard-tic-rule-note">Your move routes the other player to the matching small grid. If that grid is closed, they can choose any open one.</p>}
-          {props.userId && snapshot.status === 'waiting' && props.friends.length > 0 && <div className="yard-tic-friend-invites">
+          {!spectatorMode && props.userId && snapshot.status === 'waiting' && props.friends.length > 0 && <div className="yard-tic-friend-invites">
             <label htmlFor="tic-friend-invite">Invite a 509 Yard friend</label>
             <select id="tic-friend-invite" className="yard-input" defaultValue="" onChange={(event) => event.target.value && props.onInviteFriend(event.target.value)} disabled={props.invitePending}>
               <option value="">Choose a friend</option>
               {props.friends.map((friend) => <option key={friend.id} value={friend.id}>{friend.username}</option>)}
             </select>
           </div>}
-          <small className="yard-tic-note">Room state and completed rounds are saved, so reconnecting brings you back to this match.</small>
+          <small className="yard-tic-note">{spectatorMode ? 'This room is read-only for you. Player seats and match controls remain with the two players.' : 'Room state and completed rounds are saved, so reconnecting brings you back to this match.'}</small>
         </aside>
       </div>
     </main>
