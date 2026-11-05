@@ -8,7 +8,7 @@ import {
 import {
   getGetAuthMeQueryKey, getGetLobbyQueryKey, getListFriendsQueryKey,
   getGetRecentMatchesQueryKey as getRecentMatchesQueryKey, getGetTicTacToeResultsQueryKey,
-  useAcceptFriendInvite, useAcceptFriendRequest,
+  useAcceptFriendInvite, useAcceptFriendRequest, useCreateFriendInvite,
   useCreateFriendRequest, useDeclineFriendRequest, useGetAuthMe, useGetLobby,
   useGetRecentMatches, useGetTicTacToeResults, useJoinRoom, useJoinTicTacToeRoom, useListFriends, useLogout,
 } from '@workspace/api-client-react';
@@ -108,6 +108,64 @@ function GameIcon({ slug }: { slug: string }) {
   return <GameMark game={slug} />;
 }
 
+const arcadeGameIds = new Set([
+  'mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble',
+  'barricade', 'four-in-a-row', 'filler', 'block-drop',
+]);
+
+async function createInviteRoom(game: string, displayName: string): Promise<{ code: string; route: string }> {
+  const arcade = arcadeGameIds.has(game);
+  const endpoint = game === 'domino' ? '/api/rooms'
+    : game === 'tic-tac-toe' ? '/api/tic-tac-toe/rooms'
+      : game === 'words' ? '/api/word-yard/rooms'
+        : '/api/arcade/rooms';
+  const body = game === 'domino'
+    ? { displayName, mode: 'regular', rowLength: 10, rowBoxes: 10, playerCount: 2, twoPlayerVariant: 'draw', isPrivate: true }
+    : game === 'tic-tac-toe'
+      ? { displayName, mode: 'regular' }
+      : game === 'words'
+        ? { displayName, mode: 'classic', playerCount: 2, wordLength: 5, timeLimitMs: 180_000, roundsToPlay: 3, isPrivate: true }
+        : { game, displayName, playerCount: 2, isPrivate: true };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', 'x-lakou-client': 'lakou' },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json() as {
+    code?: string; reconnectToken?: string; seat?: number;
+    room?: { code?: string };
+    error?: string;
+  };
+  if (!response.ok) throw new Error(result.error || 'Could not create a private game room.');
+  const code = result.room?.code ?? result.code;
+  if (!code || !result.reconnectToken) throw new Error('The room was created without access details.');
+
+  if (game === 'domino') {
+    sessionStorage.setItem(`dominoes-reconnect-${code}`, result.reconnectToken);
+    sessionStorage.setItem(`dominoes-display-name-${code}`, displayName);
+    sessionStorage.setItem(`dominoes-host-token-${code}`, result.reconnectToken);
+    sessionStorage.setItem(`dominoes-host-${code}`, displayName);
+  } else if (game === 'tic-tac-toe') {
+    sessionStorage.setItem(`tic-tac-toe-reconnect-${code}`, result.reconnectToken);
+    sessionStorage.setItem(`tic-tac-toe-display-name-${code}`, displayName);
+  } else if (game === 'words') {
+    sessionStorage.setItem(`word-yard-reconnect-${code}`, result.reconnectToken);
+    sessionStorage.setItem(`word-yard-display-name-${code}`, displayName);
+    if (Number.isInteger(result.seat)) sessionStorage.setItem(`word-yard-seat-${code}`, String(result.seat));
+  } else if (arcade) {
+    sessionStorage.setItem(`509-yard-arcade-room:${game}`, JSON.stringify({
+      code, seat: result.seat ?? 0, reconnectToken: result.reconnectToken,
+    }));
+  }
+  const route = game === 'domino' ? `/room/${code}`
+    : game === 'tic-tac-toe' ? `/games/tic-tac-toe/${code}`
+      : game === 'words' ? `/games/words/${code}`
+        : `/games/${game}`;
+  return { code, route };
+}
+
 const navItems: { label: string; href: string; key: Destination }[] = [
   { label: 'Home', href: '/', key: 'home' },
   { label: 'Games', href: '/games', key: 'games' },
@@ -177,11 +235,14 @@ export default function SocialPage({ page }: { page: Destination }) {
   const acceptRequest = useAcceptFriendRequest();
   const declineRequest = useDeclineFriendRequest();
   const acceptInvite = useAcceptFriendInvite();
+  const createFriendInvite = useCreateFriendInvite();
   const joinRoom = useJoinRoom();
   const joinTicTacToeRoom = useJoinTicTacToeRoom();
   const logout = useLogout();
   const [username, setUsername] = useState('');
   const [notice, setNotice] = useState('');
+  const [inviteGame, setInviteGame] = useState('domino');
+  const [invitingFriendId, setInvitingFriendId] = useState<string | null>(null);
   const friendData = friendsQuery.data;
   const unreadSocial = (friendData?.requests.length ?? 0) + (friendData?.invites.length ?? 0);
   const leaderRows = lobby.data?.leaderboard ?? [];
@@ -204,6 +265,21 @@ export default function SocialPage({ page }: { page: Destination }) {
       onSuccess: () => { setUsername(''); setNotice(`Friend request sent to ${clean}.`); void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }); },
       onError: () => setNotice('We could not send that friend request. Check the username and try again.'),
     });
+  };
+  const inviteFriendToGame = async (friendId: string) => {
+    if (!user || invitingFriendId) return;
+    setInvitingFriendId(friendId);
+    setNotice('');
+    try {
+      const displayName = user.username.slice(0, 24);
+      const room = await createInviteRoom(inviteGame, displayName);
+      await createFriendInvite.mutateAsync({ data: { friendId, roomCode: room.code } });
+      setLocation(room.route);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not send that game invite.');
+    } finally {
+      setInvitingFriendId(null);
+    }
   };
   const joinInvite = (id: string) => acceptInvite.mutate({ id }, {
     onSuccess: (result) => {
@@ -232,6 +308,25 @@ export default function SocialPage({ page }: { page: Destination }) {
             setLocation(`/games/tic-tac-toe/${room.code}`);
           },
           onError: () => setNotice('Invite accepted, but the Tic-Tac-Toe room could not be joined.'),
+        });
+        return;
+      }
+      if (arcadeGameIds.has(result.game)) {
+        void fetch(`/api/arcade/rooms/${encodeURIComponent(result.roomCode)}/join`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json', 'x-lakou-client': 'lakou' },
+          body: JSON.stringify({ displayName }),
+        }).then(async (response) => {
+          const room = await response.json() as { code?: string; seat?: number; reconnectToken?: string; error?: string };
+          if (!response.ok) throw new Error(room.error || 'Invite accepted, but the game room could not be joined.');
+          if (!room.code || !room.reconnectToken) throw new Error('The room did not issue access details.');
+          sessionStorage.setItem(`509-yard-arcade-room:${result.game}`, JSON.stringify({
+            code: room.code, seat: room.seat ?? 1, reconnectToken: room.reconnectToken,
+          }));
+          setLocation(`/games/${result.game}`);
+        }).catch((error: unknown) => {
+          setNotice(error instanceof Error ? error.message : 'Invite accepted, but the game room could not be joined.');
         });
         return;
       }
@@ -292,10 +387,28 @@ export default function SocialPage({ page }: { page: Destination }) {
         <span className="yard-avatar">{initials(request.username)}</span><span style={{ flex: 1 }}><b>{request.username}</b><small>Wants to be friends</small></span>
         <span className="yard-list-actions"><button className="yard-small-button" onClick={() => acceptRequest.mutate({ id: request.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`accept-request-${request.id}`}>Accept</button><button className="yard-small-button" onClick={() => declineRequest.mutate({ id: request.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getListFriendsQueryKey() }) })} data-testid={`decline-request-${request.id}`}>Decline</button></span>
       </div>)}</div> : null}
-      {friendData?.invites.length ? <div className="yard-section-space"><p className="yard-kicker">Game invitations · {friendData.invites.length}</p>{friendData.invites.map((invite) => <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to {invite.game === 'tic-tac-toe' ? 'Tic-Tac-Toe' : 'Domino'} · {invite.roomCode}</small></span><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button></div>)}</div> : null}
+      {friendData?.invites.length ? <div className="yard-section-space"><p className="yard-kicker">Game invitations · {friendData.invites.length}</p>{friendData.invites.map((invite) => {
+        const gameName = gameCatalog.find((game) => game.slug === invite.game || (game.slug === 'words' && invite.game === 'word-yard'))?.name ?? invite.game;
+        return <div className="yard-friend-row" key={invite.id} data-testid={`friend-invite-${invite.id}`}><span className="yard-avatar">{initials(invite.inviterName)}</span><span style={{ flex: 1 }}><b>{invite.inviterName}</b><small>Invited you to {gameName} · {invite.roomCode}</small></span><button className="yard-small-button" onClick={() => joinInvite(invite.id)} data-testid={`join-invite-${invite.id}`}>Join</button></div>;
+      })}</div> : null}
       <div className="yard-section-space">
         <p className="yard-kicker">Your friends · {friendRows.length}</p>
-        {friendRows.length ? friendRows.map((friend) => <div className="yard-friend-row" key={friend.id} data-testid={`friend-${friend.id}`}><span className="yard-avatar">{initials(friend.username)}</span><span style={{ flex: 1 }}><b>{friend.username}</b><small className="yard-presence"><i style={{ background: friend.status ? 'var(--yard-accent)' : '#66676c' }} />{presenceText(friend.status?.status, friend.status?.detail)}</small></span>{friend.status?.status === 'game' && friend.status.roomCode && <Link className="yard-small-button" href={`/room/${friend.status.roomCode}`} data-testid={`watch-friend-${friend.id}`}>Watch</Link>}</div>) : <div className="yard-empty"><strong>Start your circle</strong><p>Add a username above to find a friend and invite them to the next table.</p></div>}
+        {friendRows.length ? <>
+          <label className="yard-input-row" style={{ marginBottom: 8 }}>
+            <span className="yard-sr-only">Choose a game to invite friends to</span>
+            <select className="yard-input" aria-label="Game to invite to" value={inviteGame} onChange={(event) => setInviteGame(event.target.value)} data-testid="select-invite-game">
+              {gameCatalog.map((game) => <option key={game.slug} value={game.slug}>{game.name}</option>)}
+            </select>
+          </label>
+          {friendRows.map((friend) => <div className="yard-friend-row" key={friend.id} data-testid={`friend-${friend.id}`}>
+            <span className="yard-avatar">{initials(friend.username)}</span>
+            <span style={{ flex: 1 }}><b>{friend.username}</b><small className="yard-presence"><i style={{ background: friend.status ? 'var(--yard-accent)' : '#66676c' }} />{presenceText(friend.status?.status, friend.status?.detail)}</small></span>
+            <span className="yard-list-actions">
+              {friend.status?.status === 'game' && friend.status.roomCode && <Link className="yard-small-button" href={`/room/${friend.status.roomCode}`} data-testid={`watch-friend-${friend.id}`}>Watch</Link>}
+              <button className="yard-small-button" disabled={Boolean(invitingFriendId)} onClick={() => void inviteFriendToGame(friend.id)} data-testid={`invite-friend-${friend.id}`}>{invitingFriendId === friend.id ? 'Inviting…' : 'Invite'}</button>
+            </span>
+          </div>)}
+        </> : <div className="yard-empty"><strong>Start your circle</strong><p>Add a username above to find a friend and invite them to the next table.</p></div>}
       </div>
     </>;
   };

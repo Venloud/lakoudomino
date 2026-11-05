@@ -1304,7 +1304,7 @@ export const ListFriendsResponse = zod.object({
   "inviterId": zod.string().uuid(),
   "inviterName": zod.string(),
   "roomCode": zod.string(),
-  "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard']),
+  "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard', 'mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
   "status": zod.enum(['pending'])
 }))
 })
@@ -1369,6 +1369,7 @@ export const CreateFriendInviteResponse = zod.object({
   "inviterId": zod.string().uuid(),
   "inviteeId": zod.string().uuid(),
   "roomCode": zod.string(),
+  "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard', 'mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop']),
   "status": zod.string()
 })
 
@@ -1382,7 +1383,7 @@ export const acceptFriendInviteResponseRoomCodeRegExp = new RegExp('^[A-Z0-9]{4,
 
 export const AcceptFriendInviteResponse = zod.object({
   "roomCode": zod.string().regex(acceptFriendInviteResponseRoomCodeRegExp),
-  "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard'])
+  "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard', 'mopyon', 'box', 'kay', 'chess', 'dame', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop'])
 })
 
 

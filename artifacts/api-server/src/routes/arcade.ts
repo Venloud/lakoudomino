@@ -26,6 +26,12 @@ const rooms = new Map<string, ArcadeRoom>();
 const router = Router();
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+export function getArcadeInviteRoom(code: string) {
+  const room = rooms.get(code.toUpperCase());
+  if (!room || !room.isPrivate || room.players.length >= room.capacity) return null;
+  return { code: room.code, game: room.game };
+}
+
 function randomCode(): string {
   return `Y${Array.from(randomBytes(7), (byte) => CODE_CHARS[byte % CODE_CHARS.length]).join("")}`;
 }

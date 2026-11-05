@@ -5,11 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { FriendInviteGame } from './friendInviteGame';
 
 export interface FriendInvite {
   id: string;
   inviterId: string;
   inviteeId: string;
   roomCode: string;
+  game: FriendInviteGame;
   status: string;
 }
