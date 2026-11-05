@@ -41,7 +41,7 @@ type ArcadeNotificationClient = {
   release: (destroy?: boolean) => void;
 };
 
-const socketsByRoom = new Map<string, Set<WebSocket>>();
+const socketsByRoom = new Map<string, Map<WebSocket, number>>();
 const router = Router();
 const instanceId = randomUUID();
 let listenerStarted = false;
@@ -145,14 +145,26 @@ async function fetchRoom(code: string): Promise<ArcadeRoom | null> {
   return record ? restoreRoom(record) : null;
 }
 
-function roomSummary(room: ArcadeRoom) {
+function privateScrabbleState(state: unknown, seat: number | null): unknown {
+  if (!state || typeof state !== "object" || Array.isArray(state)) return null;
+  const gameState = state as Record<string, unknown>;
+  if (!Array.isArray(gameState.racks) || !Array.isArray(gameState.bag)) return null;
+  return {
+    ...gameState,
+    racks: gameState.racks.map((rack, index) => seat === index && Array.isArray(rack) ? [...rack] : []),
+    // Keep only the public count; never send the hidden tile order or identities.
+    bag: gameState.bag.map(() => ""),
+  };
+}
+
+function roomSummary(room: ArcadeRoom, seat: number | null = null) {
   return {
     code: room.code,
     game: room.game,
     capacity: room.capacity,
     status: room.players.length === room.capacity ? "playing" : "waiting",
     players: room.players.map((player, seat) => ({ name: player.name, seat })),
-    state: room.state,
+    state: room.game === "scrabble" ? privateScrabbleState(room.state, seat) : room.state,
     turn: room.turn,
   };
 }
@@ -162,13 +174,16 @@ async function broadcastRoomEvent(event: RoomEvent): Promise<void> {
   if (!sockets?.size) return;
   if (event.type === "resigned") {
     const message = JSON.stringify({ type: "resigned", seat: event.seat });
-    for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.send(message);
+    for (const socket of sockets.keys()) if (socket.readyState === WebSocket.OPEN) socket.send(message);
     return;
   }
   const room = await fetchRoom(event.code);
   if (!room) return;
-  const message = JSON.stringify({ type: event.type, room: roomSummary(room) });
-  for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.send(message);
+  for (const [socket, seat] of sockets) {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: event.type, room: roomSummary(room, seat) }));
+    }
+  }
 }
 
 async function resyncConnectedRooms(): Promise<void> {
@@ -315,7 +330,7 @@ function makeRoom(input: RoomInput): { room: ArcadeRoom; token: string } {
 }
 
 function roomResponse(room: ArcadeRoom, seat: number, reconnectToken: string) {
-  return { ...roomSummary(room), seat, reconnectToken };
+  return { ...roomSummary(room, seat), seat, reconnectToken };
 }
 
 function parseCreate(body: unknown): RoomInput | null {
@@ -444,15 +459,15 @@ export async function handleArcadeSocket(socket: WebSocket, request: IncomingMes
     return;
   }
 
-  const connections = socketsByRoom.get(room.code) ?? new Set<WebSocket>();
-  connections.add(socket);
+  const connections = socketsByRoom.get(room.code) ?? new Map<WebSocket, number>();
+  connections.set(socket, seat);
   socketsByRoom.set(room.code, connections);
-  send(socket, { type: "room", room: roomSummary(room), seat });
+  send(socket, { type: "room", room: roomSummary(room, seat), seat });
 
   socket.on("message", async (raw) => {
     const rejectUpdate = (message: string, currentRoom: ArcadeRoom = room!) => {
       send(socket, { type: "error", message });
-      send(socket, { type: "room", room: roomSummary(currentRoom), seat });
+      send(socket, { type: "room", room: roomSummary(currentRoom, seat), seat });
     };
     const rawText = raw.toString();
     if (rawText.length > 64 * 1024) {
@@ -529,7 +544,7 @@ function send(socket: WebSocket, message: unknown) {
 
 setInterval(() => {
   const activeCodes = [...socketsByRoom.entries()]
-    .filter(([, sockets]) => [...sockets].some((socket) => socket.readyState === WebSocket.OPEN))
+    .filter(([, sockets]) => [...sockets.keys()].some((socket) => socket.readyState === WebSocket.OPEN))
     .map(([code]) => code);
   void (async () => {
     if (activeCodes.length) {

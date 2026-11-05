@@ -16,6 +16,14 @@ const move = (
   submittedTurn: unknown = currentTurn,
 ) => validateArcadeTransition(game, current, proposed, seat, capacity, currentTurn, submittedTurn);
 
+function privateScrabbleView(state: Record<string, unknown>, seat: number): Record<string, unknown> {
+  return {
+    ...state,
+    racks: (state.racks as string[][]).map((rack, index) => index === seat ? [...rack] : []),
+    bag: (state.bag as string[]).map(() => ""),
+  };
+}
+
 test("Mòpyon accepts one turn-correct mark and rejects overwritten or multi-cell boards", () => {
   const current = createArcadeInitialState("mopyon", 2) as Record<string, unknown>;
   const board = [...current.board as unknown[]];
@@ -67,12 +75,45 @@ test("Dame only accepts a legal diagonal step from the active side", () => {
   assert.equal(move("dame", current, { ...legal, pieces: [...pieces.slice(0, 32), { side: 0, kind: "Q" }, ...pieces.slice(33)] }, 0, 2, 0, 1).ok, false);
 });
 
-test("Scrabble accepts a pass and rejects client-invented scores", () => {
+test("Scrabble recalculates submitted scores from the trusted room state", () => {
   const current = createArcadeInitialState("scrabble", 2) as Record<string, unknown>;
-  const legal = { ...current, turn: 1, passes: 1 };
+  const legal = { ...privateScrabbleView(current, 0), turn: 1, passes: 1 };
   const result = move("scrabble", current, legal, 0, 2, 0, 1);
   assert.equal(result.ok, true, result.ok ? undefined : result.error);
-  assert.equal(move("scrabble", current, { ...legal, scores: [999, 0] }, 0, 2, 0, 1).ok, false);
+  const forgedScore = move("scrabble", current, { ...legal, scores: [999, 0] }, 0, 2, 0, 1);
+  assert.equal(forgedScore.ok, true, forgedScore.ok ? undefined : forgedScore.error);
+  if (forgedScore.ok) assert.deepEqual((forgedScore.state as Record<string, unknown>).scores, current.scores);
+});
+
+test("Scrabble accepts a private player view and restores hidden state from the server", () => {
+  const current = createArcadeInitialState("scrabble", 2) as Record<string, unknown>;
+  const racks = [...current.racks as string[][]].map((rack) => [...rack]);
+  racks[0] = ["C", "A", "T", "S", "E", "R", "N"];
+  racks[1] = ["Q", "Q", "Q", "Q", "Q", "Q", "Q"];
+  current.racks = racks;
+  current.bag = ["B", "D", "E", "F", "G", "H"];
+
+  const board = [...current.board as (Record<string, unknown> | null)[]];
+  board[112] = { letter: "C", points: 3 };
+  board[113] = { letter: "A", points: 1 };
+  board[114] = { letter: "T", points: 1 };
+  const projectedMove = {
+    ...privateScrabbleView(current, 0),
+    board,
+    racks: [["S", "E", "R", "N", "", "", ""], []],
+    bag: ["", "", ""],
+    scores: [10, 0],
+    turn: 1,
+    passes: 0,
+  };
+
+  const result = move("scrabble", current, projectedMove, 0, 2, 0, 1);
+  assert.equal(result.ok, true, result.ok ? undefined : result.error);
+  if (result.ok) {
+    const accepted = result.state as Record<string, unknown>;
+    assert.deepEqual(accepted.racks, [["S", "E", "R", "N", "B", "D", "E"], racks[1]]);
+    assert.deepEqual(accepted.bag, ["F", "G", "H"]);
+  }
 });
 
 test("Scrabble replays a connected word and validates its score, rack refill, and turn", () => {
@@ -89,17 +130,19 @@ test("Scrabble replays a connected word and validates its score, rack refill, an
   nextRacks[0] = [...nextRacks[0].slice(3), ...bag.slice(0, 3)];
   const nextBag = bag.slice(3);
   const legal = {
-    ...current,
+    ...privateScrabbleView(current, 0),
     board,
-    racks: nextRacks,
-    bag: nextBag,
+    racks: [[...nextRacks[0].slice(0, 4), "", "", ""], []],
+    bag: nextBag.map(() => ""),
     scores: [10, 0],
     turn: 1,
     passes: 0,
   };
   const result = move("scrabble", current, legal, 0, 2, 0, 1);
   assert.equal(result.ok, true, result.ok ? undefined : result.error);
-  assert.equal(move("scrabble", current, { ...legal, scores: [999, 0] }, 0, 2, 0, 1).ok, false);
+  const forgedScore = move("scrabble", current, { ...legal, scores: [999, 0] }, 0, 2, 0, 1);
+  assert.equal(forgedScore.ok, true, forgedScore.ok ? undefined : forgedScore.error);
+  if (forgedScore.ok) assert.deepEqual((forgedScore.state as Record<string, unknown>).scores, [10, 0]);
 });
 
 test("Scrabble exchanges only tiles from the active rack and shuffles the return bag server-side", () => {
@@ -108,10 +151,11 @@ test("Scrabble exchanges only tiles from the active rack and shuffles the return
   racks[0] = ["A", "B", "C", "D", "E", "F", "G"];
   current.racks = racks;
   const bag = [...current.bag as string[]];
+  const privateCurrent = privateScrabbleView(current, 0);
   const proposed = {
-    ...current,
-    racks: [[...racks[0].slice(1), bag[0]], racks[1]],
-    bag: [...bag.slice(1), "A"],
+    ...privateCurrent,
+    racks: [[...racks[0].slice(1), ""], []],
+    bag: bag.map(() => ""),
     turn: 1,
     passes: 0,
   };

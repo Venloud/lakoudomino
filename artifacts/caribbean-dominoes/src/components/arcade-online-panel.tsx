@@ -42,6 +42,17 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
   const socketRef = useRef<WebSocket | null>(null);
   const lastReceivedRef = useRef("");
   const stateJson = useMemo(() => JSON.stringify(state), [state]);
+  const outgoingState = useMemo(() => {
+    if (game !== "scrabble" || !access || !state || typeof state !== "object" || Array.isArray(state)) return state;
+    const gameState = state as Record<string, unknown>;
+    return {
+      ...gameState,
+      racks: Array.isArray(gameState.racks)
+        ? gameState.racks.map((rack, index) => index === access.seat && Array.isArray(rack) ? rack : [])
+        : [],
+      bag: Array.isArray(gameState.bag) ? gameState.bag.map(() => "") : [],
+    };
+  }, [access, game, state]);
 
   useEffect(() => {
     onRoomChange?.(access ? { seat: access.seat, connected, turn: room?.turn ?? null } : null);
@@ -91,7 +102,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
         (game !== "block-drop" && access.seat !== room.turn) || stateJson === lastReceivedRef.current) return;
     const publish = () => {
       if (socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify({ type: "state", state, turn }));
+      socket.send(JSON.stringify({ type: "state", state: outgoingState, turn }));
       lastReceivedRef.current = stateJson;
     };
     if (game === "block-drop") {
@@ -100,7 +111,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
     }
     publish();
     return undefined;
-  }, [access, room, connected, game, state, stateJson, turn]);
+  }, [access, room, connected, game, outgoingState, stateJson, turn]);
 
   const requestRoom = async (endpoint: string, payload: Record<string, unknown>) => {
     setBusy(true);

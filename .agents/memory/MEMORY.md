@@ -15,3 +15,4 @@
 - [Online resignation behavior](online-resignation.md) — leaving an active 1v1 is a loss; in larger rooms a bot takes over until the next match.
 - [Practice bot coverage](practice-bot-coverage.md) — every game, including solo games, should offer a playable practice opponent.
 - [Arcade restart test isolation](arcade-restart-test-isolation.md) — restart integration tests must use a separate schema because startup expires old rooms.
+- [Scrabble private snapshots](scrabble-private-snapshots.md) — deliver seat-specific projections while keeping complete racks and tile order in trusted server state.
