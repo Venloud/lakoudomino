@@ -521,6 +521,7 @@ test("signed-in arcade results remain in profile history after room deletion and
       playerCount: 2,
       isPrivate: true,
     }, hostCookie);
+    assert.ok(typeof host.reconnectDeadline === "number" && host.reconnectDeadline > Date.now());
     const guest = await postRoom(processOne.baseUrl, `rooms/${String(host.code)}/join`, {
       displayName: "History guest",
     }, guestCookie);
