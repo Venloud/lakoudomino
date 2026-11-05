@@ -1,0 +1,301 @@
+import assert from "node:assert/strict";
+import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
+import { randomUUID } from "node:crypto";
+import { once } from "node:events";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+import { WebSocket } from "ws";
+import { pool } from "@workspace/db";
+
+type JsonRecord = Record<string, unknown>;
+
+const apiServerDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const delay = (milliseconds: number) =>
+  new Promise<void>((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+
+async function reservePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  await new Promise<void>((resolveClose, reject) =>
+    server.close((error) => error ? reject(error) : resolveClose()),
+  );
+  return address.port;
+}
+
+async function startArcadeProcess(databaseUrl: string): Promise<{
+  child: ChildProcess;
+  baseUrl: string;
+  getOutput: () => string;
+}> {
+  const port = await reservePort();
+  const child = spawn(
+    process.execPath,
+    ["--import", "tsx", "src/routes/arcade-test-process.ts"],
+    {
+      cwd: apiServerDirectory,
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+        NODE_ENV: "test",
+        PORT: String(port),
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let output = "";
+  child.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+  child.stderr?.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const deadline = Date.now() + 15_000;
+
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(`Arcade API process exited during startup:\n${output}`);
+    }
+    try {
+      const response = await fetch(`${baseUrl}/healthz`);
+      if (response.ok) return { child, baseUrl, getOutput: () => output };
+    } catch {
+      // The process is still starting; try again.
+    }
+    await delay(100);
+  }
+
+  child.kill("SIGKILL");
+  throw new Error(`Arcade API process did not become ready:\n${output}`);
+}
+
+async function stopArcadeProcess(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = once(child, "exit").then(() => undefined);
+  child.kill("SIGTERM");
+  let timeout: NodeJS.Timeout | undefined;
+  await Promise.race([
+    exited,
+    new Promise<void>((resolveTimeout) => {
+      timeout = setTimeout(() => {
+        child.kill("SIGKILL");
+        resolveTimeout();
+      }, 5_000);
+    }),
+  ]);
+  if (timeout) clearTimeout(timeout);
+  await exited;
+}
+
+async function postRoom(
+  baseUrl: string,
+  path: string,
+  body: JsonRecord,
+): Promise<JsonRecord> {
+  const response = await fetch(`${baseUrl}/api/arcade/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (response.status !== 200 && response.status !== 201) {
+    assert.fail(`Room request failed with ${response.status}: ${await response.text()}`);
+  }
+  return await response.json() as JsonRecord;
+}
+
+function parseSocketMessage(raw: WebSocket.RawData): JsonRecord {
+  return JSON.parse(raw.toString()) as JsonRecord;
+}
+
+async function connectArcadeSocket(
+  baseUrl: string,
+  code: string,
+  token: string,
+): Promise<{ socket: WebSocket; firstMessage: JsonRecord }> {
+  const socketUrl = new URL(baseUrl);
+  socketUrl.protocol = socketUrl.protocol === "https:" ? "wss:" : "ws:";
+  socketUrl.pathname = "/ws";
+  socketUrl.searchParams.set("arcadeCode", code);
+  socketUrl.searchParams.set("token", token);
+  const socket = new WebSocket(socketUrl);
+  const firstMessage = new Promise<JsonRecord>((resolveMessage, rejectMessage) => {
+    const timer = setTimeout(() => rejectMessage(new Error("Timed out waiting for arcade socket state.")), 5_000);
+    socket.once("message", (raw) => {
+      clearTimeout(timer);
+      resolveMessage(parseSocketMessage(raw));
+    });
+    socket.once("error", (error) => {
+      clearTimeout(timer);
+      rejectMessage(error);
+    });
+  });
+  return { socket, firstMessage: await firstMessage };
+}
+
+function nextSocketMessage(socket: WebSocket): Promise<JsonRecord> {
+  return new Promise((resolveMessage, rejectMessage) => {
+    const timer = setTimeout(() => rejectMessage(new Error("Timed out waiting for arcade state update.")), 5_000);
+    socket.once("message", (raw) => {
+      clearTimeout(timer);
+      resolveMessage(parseSocketMessage(raw));
+    });
+    socket.once("error", (error) => {
+      clearTimeout(timer);
+      rejectMessage(error);
+    });
+  });
+}
+
+test("arcade private, matchmaking, and Block Drop rooms survive an API process restart", {
+  timeout: 60_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade restart integration tests.");
+
+  const schema = `arcade_restart_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  const codes: string[] = [];
+  let processOne: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  let processTwo: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  let blockDropSocket: WebSocket | undefined;
+  let reconnectSockets: WebSocket[] = [];
+
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY,
+        game text NOT NULL,
+        capacity integer NOT NULL,
+        is_private boolean NOT NULL,
+        players jsonb NOT NULL,
+        state jsonb,
+        turn integer NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    processOne = await startArcadeProcess(isolatedDatabaseUrl.toString());
+
+    const privateRoom = await postRoom(processOne.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "Private player",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    const matchmakingRoom = await postRoom(processOne.baseUrl, "quick-match", {
+      game: "scrabble",
+      displayName: "Waiting player",
+      playerCount: 3,
+    });
+    const blockDropRoom = await postRoom(processOne.baseUrl, "rooms", {
+      game: "block-drop",
+      displayName: "Block Drop player",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    await postRoom(processOne.baseUrl, `rooms/${String(blockDropRoom.code)}/join`, {
+      displayName: "Block Drop opponent",
+    });
+    for (const room of [privateRoom, matchmakingRoom, blockDropRoom]) {
+      codes.push(String(room.code));
+    }
+    assert.equal(matchmakingRoom.seat, 0);
+
+    const blockState = blockDropRoom.state as unknown[];
+    const playerState = blockState[0] as JsonRecord;
+    const activePiece = playerState.active as JsonRecord;
+    const changedPlayerState = {
+      ...playerState,
+      active: { ...activePiece, x: Number(activePiece.x) - 1 },
+    };
+    const connected = await connectArcadeSocket(
+      processOne.baseUrl,
+      String(blockDropRoom.code),
+      String(blockDropRoom.reconnectToken),
+    );
+    blockDropSocket = connected.socket;
+    assert.equal(connected.firstMessage.type, "room");
+    blockDropSocket.send(JSON.stringify({ type: "state", state: changedPlayerState, turn: 0 }));
+    const acceptedMove = await nextSocketMessage(blockDropSocket);
+    assert.equal(acceptedMove.type, "state", JSON.stringify(acceptedMove));
+    const movedRoom = acceptedMove.room as JsonRecord;
+    const movedPlayer = (movedRoom.state as unknown[])[0] as JsonRecord;
+    assert.equal((movedPlayer.active as JsonRecord).x, Number(activePiece.x) - 1);
+
+    const expiredCode = `Y${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const expiredState = {
+      board: Array(225).fill(null),
+      currentPlayer: "X",
+      winner: null,
+      isDraw: false,
+      winningLine: null,
+      lastMove: null,
+    };
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.arcade_rooms
+        (code, game, capacity, is_private, players, state, turn, updated_at)
+       VALUES ($1, 'mopyon', 2, true, $2::jsonb, $3::jsonb, 0, now() - interval '7 hours')`,
+      [
+        expiredCode,
+        JSON.stringify([{ name: "Expired player", tokenHash: "0".repeat(64) }]),
+        JSON.stringify(expiredState),
+      ],
+    );
+
+    await stopArcadeProcess(processOne.child);
+    processOne = undefined;
+    processTwo = await startArcadeProcess(isolatedDatabaseUrl.toString());
+
+    for (const code of codes) {
+      const response = await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${code}`);
+      assert.equal(response.status, 200, `room ${code} should be restored after restart`);
+    }
+
+    const privateReconnect = await connectArcadeSocket(
+      processTwo.baseUrl,
+      String(privateRoom.code),
+      String(privateRoom.reconnectToken),
+    );
+    reconnectSockets.push(privateReconnect.socket);
+    assert.equal(privateReconnect.firstMessage.type, "room");
+    assert.equal(privateReconnect.firstMessage.seat, 0);
+
+    const waitingReconnect = await connectArcadeSocket(
+      processTwo.baseUrl,
+      String(matchmakingRoom.code),
+      String(matchmakingRoom.reconnectToken),
+    );
+    reconnectSockets.push(waitingReconnect.socket);
+    const waitingSnapshot = waitingReconnect.firstMessage.room as JsonRecord;
+    assert.equal(waitingSnapshot.status, "waiting");
+    assert.deepEqual(waitingSnapshot.players, [{ name: "Waiting player", seat: 0 }]);
+
+    const restoredBlockDrop = await fetch(
+      `${processTwo.baseUrl}/api/arcade/rooms/${String(blockDropRoom.code)}`,
+    );
+    assert.equal(restoredBlockDrop.status, 200);
+    const restoredRoom = await restoredBlockDrop.json() as JsonRecord;
+    const restoredPlayer = (restoredRoom.state as unknown[])[0] as JsonRecord;
+    assert.equal((restoredPlayer.active as JsonRecord).x, Number(activePiece.x) - 1);
+
+    const expiredResponse = await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${expiredCode}`);
+    assert.equal(expiredResponse.status, 404);
+    const expiredRows = await pool.query(
+      `SELECT code FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
+      [expiredCode],
+    );
+    assert.equal(expiredRows.rowCount, 0, "expired room should also be deleted from storage");
+  } finally {
+    blockDropSocket?.close();
+    reconnectSockets.forEach((socket) => socket.close());
+    if (processTwo) await stopArcadeProcess(processTwo.child);
+    if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
