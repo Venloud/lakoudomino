@@ -442,7 +442,7 @@ export default function SocialPage({ page }: { page: Destination }) {
           <Link href="/friends" data-testid="link-home-friends">Friends <ArrowUpRight size={13} /></Link>
         </div>
       </>}
-      {page === 'games' && <div className="yard-dashboard-grid">
+      {page === 'games' && <div className="yard-dashboard-grid yard-games-dashboard">
         <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/domino" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true"><img src="/domino-logo.webp" alt="" /></div></section>
              <section className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">THE GAME YARD</p><h2 style={{ fontSize: 17, margin: '0 0 8px' }}>Choose a game</h2><p className="yard-subtitle" style={{ margin: 0 }}>Online rooms are available for Domino, Tic-Tac-Toe, and Word Yard. The rest are ready for local play.</p>
               <div className="yard-game-foundation-list">
