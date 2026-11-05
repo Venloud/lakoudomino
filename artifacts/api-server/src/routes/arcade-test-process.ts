@@ -25,9 +25,17 @@ app.post("/__test/resume-notification-listener", (_request, response) => {
   resumeArcadeNotificationListenerForTest();
   response.json({ resumed: true });
 });
-app.post("/__test/maintain-rooms", async (_request, response) => {
-  await maintainArcadeRoomsForTest();
-  response.json({ maintained: true });
+app.post("/__test/maintain-rooms", async (request, response) => {
+  const pauseAfterRefreshMs = Number(request.query.pauseAfterRefreshMs ?? 0);
+  let respondedAfterRefresh = false;
+  await maintainArcadeRoomsForTest(async () => {
+    if (Number.isFinite(pauseAfterRefreshMs) && pauseAfterRefreshMs > 0) {
+      response.json({ refreshed: true });
+      respondedAfterRefresh = true;
+      await new Promise<void>((resolvePause) => setTimeout(resolvePause, Math.min(pauseAfterRefreshMs, 1_000)));
+    }
+  });
+  if (!respondedAfterRefresh) response.json({ maintained: true });
 });
 app.use("/api", arcadeRouter);
 

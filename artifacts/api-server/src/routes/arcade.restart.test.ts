@@ -554,7 +554,7 @@ test("resignation records one winner and survives duplicate requests and reconne
   }
 });
 
-test("an instance refresh keeps an idle active room from another instance's expiry cleanup", {
+test("overlapping cross-instance room refresh and cleanup preserves live matches", {
   timeout: 60_000,
 }, async () => {
   const databaseUrl = process.env.DATABASE_URL;
@@ -619,26 +619,30 @@ test("an instance refresh keeps an idle active room from another instance's expi
     disconnectedConnection.socket.close();
     await socketClosed;
 
-    const staleTimestamp = new Date(Date.now() - 7 * 60 * 60 * 1000);
-    await pool.query(
-      `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
-      [room.code, staleTimestamp],
-    );
-    const refreshed = await fetch(`${processOne.baseUrl}/__test/maintain-rooms`, { method: "POST" });
-    assert.equal(refreshed.status, 200);
-    const activeRow = await pool.query(
-      `SELECT updated_at FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
-      [room.code],
-    );
-    assert.equal(activeRow.rowCount, 1);
-    assert.ok(
-      new Date(activeRow.rows[0]!.updated_at as string).getTime() > staleTimestamp.getTime(),
-      "the connected instance should refresh the room's shared activity timestamp",
-    );
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const staleTimestamp = new Date(Date.now() - 6 * 60 * 60 * 1000 - 10_000);
+      await pool.query(
+        `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
+        [room.code, staleTimestamp],
+      );
 
+      const refreshed = await fetch(
+        `${processOne.baseUrl}/__test/maintain-rooms?pauseAfterRefreshMs=250`,
+        { method: "POST" },
+      );
+      assert.equal(refreshed.status, 200);
+      const cleaned = fetch(`${processTwo.baseUrl}/__test/maintain-rooms`, { method: "POST" });
+      const cleanupResponse = await cleaned;
+      assert.equal(cleanupResponse.status, 200);
+
+      const activeRoom = await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${String(room.code)}`);
+      assert.equal(activeRoom.status, 200, `the active match should survive refresh/cleanup race ${attempt + 1}`);
+    }
+
+    const expiredTimestamp = new Date(Date.now() - 6 * 60 * 60 * 1000 - 10_000);
     await pool.query(
       `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
-      [disconnectedRoom.code, staleTimestamp],
+      [disconnectedRoom.code, expiredTimestamp],
     );
     const cleaned = await fetch(`${processTwo.baseUrl}/__test/maintain-rooms`, { method: "POST" });
     assert.equal(cleaned.status, 200);
