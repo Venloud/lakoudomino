@@ -10,7 +10,11 @@ import { WebSocket } from "ws";
 import { pool } from "@workspace/db";
 import { autoStep, createMatch } from "lakou-engine";
 import { serializeRoom } from "../lib/room-persistence-codec.ts";
-import { SOCKET_AUTHENTICATION_ERROR, SOCKET_PROTOCOL_ERROR } from "../lib/room-protocol.ts";
+import {
+  hashReconnectToken,
+  SOCKET_AUTHENTICATION_ERROR,
+  SOCKET_PROTOCOL_ERROR,
+} from "../lib/room-protocol.ts";
 import type { PersistedRoomState } from "../lib/room-types.ts";
 
 type JsonRecord = Record<string, unknown>;
@@ -200,8 +204,15 @@ function makeRoom(code: string, match: ReturnType<typeof createMatch>["match"], 
   };
 }
 
-async function insertRoom(schema: string, room: PersistedRoomState): Promise<void> {
+async function insertRoom(
+  schema: string,
+  room: PersistedRoomState,
+  legacySeatWithoutTokenHash?: number,
+): Promise<void> {
   const stored = serializeRoom(room);
+  if (legacySeatWithoutTokenHash !== undefined) {
+    delete (stored.seats[legacySeatWithoutTokenHash] as { reconnectTokenHash?: string | null }).reconnectTokenHash;
+  }
   await pool.query(
     `INSERT INTO "${schema}".domino_rooms
       (code, host_name, mode, row_length, player_count, row_boxes, two_player_variant,
@@ -401,6 +412,90 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
   } finally {
     spectator?.terminate();
     player?.terminate();
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("restored rooms reconnect only preserved seat tokens and never claim tokenless legacy seats", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room reconnect integration tests.");
+
+  const schema = `rooms_reconnect_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  let reconnectingPlayer: WebSocket | undefined;
+  let legacyNameClient: WebSocket | undefined;
+  let blankTokenClient: WebSocket | undefined;
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const match = createMatch({
+      mode: "regular",
+      playerCount: 2,
+      rowBoxes: 10,
+      twoPlayerVariant: "draw",
+      seed: 118,
+    }).match;
+    const opening = autoStep(match, []);
+    assert.ok(opening, "fixture opening should be a legal automatic move");
+    const reconnectToken = randomUUID();
+    const code = `R${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const room = makeRoom(code, opening.match, false);
+    room.hostName = "Preserved token player";
+    for (const seat of room.seats) {
+      seat.status = seat.seat < 2 ? "waiting" : "open";
+      seat.name = seat.seat === 0 ? "Preserved token player" : seat.seat === 1 ? "Legacy player" : null;
+      seat.reconnectTokenHash = seat.seat === 0 ? hashReconnectToken(reconnectToken) : null;
+      delete seat.botLevel;
+    }
+    await insertRoom(schema, room, 1);
+
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    reconnectingPlayer = await openRoomSocket(api.baseUrl, code);
+    const welcomePromise = receiveSocketMessage(reconnectingPlayer);
+    reconnectingPlayer.send(JSON.stringify({ type: "hello", reconnectToken }));
+    const welcome = await welcomePromise;
+    const game = welcome.game as JsonRecord;
+    assert.equal(welcome.type, "snapshot");
+    assert.equal(game.yourSeat, 0);
+    const tileView = (tiles: [number, number][]) => tiles.map(([left, right]) => ({
+      id: `${left}-${right}`,
+      left,
+      right,
+    }));
+    const expectedHand = tileView(opening.match.hand.hands[0]);
+    const legacyHand = tileView(opening.match.hand.hands[1]);
+    assert.deepEqual(game.hand, expectedHand, "the preserved token should receive its own restored hand");
+    assert.notDeepEqual(expectedHand, legacyHand, "the fixture should give each seat a different hand");
+    const privateView = welcome.view as JsonRecord;
+    assert.deepEqual(privateView.myHand, opening.match.hand.hands[0]);
+    assert.equal(Array.isArray(privateView.revealedHands), false, "the socket must not reveal all player hands");
+
+    legacyNameClient = await openRoomSocket(api.baseUrl, code);
+    const legacyWelcomePromise = receiveSocketMessage(legacyNameClient);
+    legacyNameClient.send(JSON.stringify({ type: "hello", displayName: "Legacy player" }));
+    const legacyWelcome = await legacyWelcomePromise;
+    const legacyGame = legacyWelcome.game as JsonRecord;
+    assert.equal(legacyGame.yourSeat, null, "a matching display name must not claim a tokenless legacy seat");
+    assert.deepEqual(legacyGame.hand, [], "spectators must not receive either player's private hand");
+
+    blankTokenClient = await openRoomSocket(api.baseUrl, code);
+    const blankTokenWelcomePromise = receiveSocketMessage(blankTokenClient);
+    blankTokenClient.send(JSON.stringify({ type: "hello", reconnectToken: "" }));
+    const blankTokenWelcome = await blankTokenWelcomePromise;
+    const blankTokenGame = blankTokenWelcome.game as JsonRecord;
+    assert.equal(blankTokenGame.yourSeat, null, "a blank token must not match a legacy seat with no token hash");
+    assert.deepEqual(blankTokenGame.hand, [], "blank-token clients must not receive private hands");
+  } finally {
+    reconnectingPlayer?.terminate();
+    legacyNameClient?.terminate();
+    blankTokenClient?.terminate();
     if (api) await stopRoomsProcess(api.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
