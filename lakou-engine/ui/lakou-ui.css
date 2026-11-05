@@ -1058,3 +1058,84 @@
   .lk-final-sequence, .lk-final-sequence::before, .lk-final-sequence .lk-modal,
   .lk-hand-sequence .lk-modal, .lk-hand-sequence .lk-winner, .lk-hand-sequence .lk-result { animation-duration: 1ms; animation-delay: 0ms; }
 }
+
+/* Make the lobby the first decision point and keep active play centered. */
+.lk-home {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  grid-template-areas: "lobby lobby" "secondary support";
+  gap: 20px;
+  max-width: 1420px;
+  margin: 24px auto 36px;
+}
+.lk-home > .lk-live { grid-area: lobby; min-height: 0; }
+.lk-home > .lk-col-left { grid-area: secondary; }
+.lk-home > .lk-quick,
+.lk-home > .lk-friends { grid-area: support; }
+.lk-home .lk-live-body { grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); }
+.lk-home .lk-open-list,
+.lk-home .lk-open-card { min-width: 0; }
+
+.lk-desk {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 24px;
+  max-width: 1540px;
+  padding-inline: 24px;
+}
+.lk-board-area {
+  min-width: 0;
+  grid-template-columns: minmax(92px, 1fr) minmax(0, 680px) minmax(92px, 1fr);
+  grid-template-areas: "turn turn turn" ". top ." "left table right" "me me me";
+  column-gap: 16px;
+}
+.lk-slot-turn { grid-area: turn; display: flex; justify-content: center; margin-bottom: 12px; }
+.lk-turn-banner {
+  width: min(100%, 720px);
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  border: 1px solid var(--lk-line);
+  border-radius: 12px;
+  background: var(--lk-panel);
+}
+.lk-turn-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.lk-turn-active { color: var(--lk-green); font-size: 15px; }
+.lk-turn-waiting { color: var(--lk-text); font-size: 15px; }
+.lk-slot-me { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.lk-me-hand { grid-column: 1; }
+.lk-me-spectator { grid-column: 1; }
+
+@media (max-width: 999px) {
+  .lk-home {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "lobby" "secondary" "support";
+    gap: 16px;
+    margin: 16px auto 28px;
+    padding-inline: 16px;
+  }
+  .lk-home .lk-live-body { grid-template-columns: minmax(0, 1fr); }
+  .lk-home > .lk-col-left,
+  .lk-home > .lk-quick,
+  .lk-home > .lk-friends { width: 100%; }
+  .lk-desk { grid-template-columns: minmax(0, 1fr); gap: 14px; padding-inline: 16px; }
+  .lk-board-area { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; }
+  .lk-slot-turn,
+  .lk-slot-top,
+  .lk-slot-left,
+  .lk-slot-table,
+  .lk-slot-right,
+  .lk-slot-me { grid-area: auto; }
+  .lk-slot-turn { margin-bottom: 0; }
+  .lk-side { margin-top: 0; }
+  .lk-stack { max-width: 760px; }
+  .lk-stack .lk-turn-banner { width: 100%; }
+}
+
+@media (max-width: 679px) {
+  .lk-home { gap: 12px; padding-inline: 12px; }
+  .lk-home > .lk-live { padding: 16px 14px; }
+  .lk-turn-banner { min-height: 52px; padding: 9px 12px; }
+  .lk-desk { padding-inline: 12px; }
+}

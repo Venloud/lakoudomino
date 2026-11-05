@@ -246,6 +246,15 @@ export function LakouGame(props: LakouGameProps) {
       ? (selectedSame ? 'Tap a glowing spot, or double-tap the tile' : 'Tap a glowing spot')
       : 'Tap a tile to play';
   const turnLine = myTurn ? `Your turn${msLeft != null ? ` · ${Math.ceil(msLeft / 1000)}s` : ''}` : me === null ? '' : view.handOver ? 'Hand over' : 'Waiting';
+  const turnBanner = (
+    <div className="lk-turn-banner" role="group" aria-label="Turn status">
+      <div className="lk-turn-copy">
+        <b className={myTurn ? 'lk-turn-active' : 'lk-turn-waiting'}>{turnLine || 'Watching the table'}</b>
+        {hint && me !== null && <span className="lk-sub">{hint}</span>}
+      </div>
+      {myTurn && msLeft != null && <TurnTimer msLeft={msLeft} totalMs={turnMs} width={desktop ? 276 : undefined} />}
+    </div>
+  );
   const changeDominoStyle = (style: DominoStyle) => {
     setDominoStyle(style);
     if (typeof window !== 'undefined') saveDominoStyle(playerName, style, window.localStorage);
@@ -304,23 +313,14 @@ export function LakouGame(props: LakouGameProps) {
       {desktop ? (
         <div className="lk-desk">
           <main className="lk-board-area">
+            <div className="lk-slot lk-slot-turn">{turnBanner}</div>
             <div className="lk-slot lk-slot-top">{seatCard(around.top)}</div>
             <div className="lk-slot lk-slot-left">{seatCard(around.left)}</div>
             <div className="lk-slot lk-slot-table">{tableEl}</div>
             <div className="lk-slot lk-slot-right">{seatCard(around.right)}</div>
             <div className="lk-slot lk-slot-me">
               {me !== null ? (
-                <>
-                  <div className="lk-me-info">
-                    <b className="lk-me-name">{names[me]}</b>
-                    <span className={myTurn ? 'lk-green' : 'lk-muted'}>{turnLine}</span>
-                    <span className="lk-sub">{hint}</span>
-                  </div>
-                  <div className="lk-me-hand">
-                    {handEl}
-                    {myTurn && msLeft != null && <TurnTimer msLeft={msLeft} totalMs={turnMs} width={276} />}
-                  </div>
-                </>
+                <div className="lk-me-hand">{handEl}</div>
               ) : (
                 <div className="lk-me-spectator">{seatCard(0)}<span className="lk-sub">Watching the table</span></div>
               )}
@@ -346,19 +346,13 @@ export function LakouGame(props: LakouGameProps) {
           <div className="lk-opponents">
             {[...Array(n - 1).keys()].map((k) => seatCard(rel(k + 1), true))}
           </div>
+          {turnBanner}
           <div className="lk-stack-table">{tableEl}</div>
           {me !== null ? (
             <>
-              <div className="lk-turnline">
-                <span className={myTurn ? 'lk-green lk-strong' : 'lk-muted'}>{turnLine}</span>
-                <span className="lk-sub">{hint}</span>
-              </div>
-              {myTurn && msLeft != null && <TurnTimer msLeft={msLeft} totalMs={turnMs} />}
               <div className="lk-stack-hand">{handEl}</div>
             </>
-          ) : (
-            <div className="lk-turnline"><span className="lk-sub">Watching the table</span></div>
-          )}
+          ) : null}
           <div className="lk-sheet">
             <span className="lk-grabber" />
             <div className="lk-tabs" role="tablist">
