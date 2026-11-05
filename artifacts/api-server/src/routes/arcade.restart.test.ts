@@ -553,3 +553,104 @@ test("resignation records one winner and survives duplicate requests and reconne
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });
+
+test("an instance refresh keeps an idle active room from another instance's expiry cleanup", {
+  timeout: 60_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade room retention integration tests.");
+
+  const schema = `arcade_idle_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let processOne: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  let processTwo: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY,
+        game text NOT NULL,
+        capacity integer NOT NULL,
+        is_private boolean NOT NULL,
+        players jsonb NOT NULL,
+        state jsonb,
+        turn integer NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    [processOne, processTwo] = await Promise.all([
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+    ]);
+
+    const room = await postRoom(processOne.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "Idle host",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    await postRoom(processOne.baseUrl, `rooms/${String(room.code)}/join`, {
+      displayName: "Idle opponent",
+    });
+    const connection = await connectArcadeSocket(
+      processOne.baseUrl,
+      String(room.code),
+      String(room.reconnectToken),
+    );
+    sockets.push(connection.socket);
+    assert.equal((connection.firstMessage.room as JsonRecord).status, "playing");
+
+    const disconnectedRoom = await postRoom(processTwo.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "Disconnected host",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    const disconnectedConnection = await connectArcadeSocket(
+      processTwo.baseUrl,
+      String(disconnectedRoom.code),
+      String(disconnectedRoom.reconnectToken),
+    );
+    sockets.push(disconnectedConnection.socket);
+    const socketClosed = once(disconnectedConnection.socket, "close");
+    disconnectedConnection.socket.close();
+    await socketClosed;
+
+    const staleTimestamp = new Date(Date.now() - 7 * 60 * 60 * 1000);
+    await pool.query(
+      `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
+      [room.code, staleTimestamp],
+    );
+    const refreshed = await fetch(`${processOne.baseUrl}/__test/maintain-rooms`, { method: "POST" });
+    assert.equal(refreshed.status, 200);
+    const activeRow = await pool.query(
+      `SELECT updated_at FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
+      [room.code],
+    );
+    assert.equal(activeRow.rowCount, 1);
+    assert.ok(
+      new Date(activeRow.rows[0]!.updated_at as string).getTime() > staleTimestamp.getTime(),
+      "the connected instance should refresh the room's shared activity timestamp",
+    );
+
+    await pool.query(
+      `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
+      [disconnectedRoom.code, staleTimestamp],
+    );
+    const cleaned = await fetch(`${processTwo.baseUrl}/__test/maintain-rooms`, { method: "POST" });
+    assert.equal(cleaned.status, 200);
+
+    const activeRoom = await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${String(room.code)}`);
+    const expiredRoom = await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${String(disconnectedRoom.code)}`);
+    assert.equal(activeRoom.status, 200, "the cleanup instance must retain the refreshed live match");
+    assert.equal(expiredRoom.status, 404, "an expired room with no connected players must be removed");
+  } finally {
+    sockets.forEach((socket) => socket.close());
+    if (processTwo) await stopArcadeProcess(processTwo.child);
+    if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});

@@ -5,6 +5,7 @@ import arcadeRouter, {
   handleArcadeSocket,
   initializeArcadeRooms,
   interruptArcadeNotificationListenerForTest,
+  maintainArcadeRoomsForTest,
   resumeArcadeNotificationListenerForTest,
 } from "./arcade.ts";
 
@@ -23,6 +24,10 @@ app.post("/__test/interrupt-notification-listener", (_request, response) => {
 app.post("/__test/resume-notification-listener", (_request, response) => {
   resumeArcadeNotificationListenerForTest();
   response.json({ resumed: true });
+});
+app.post("/__test/maintain-rooms", async (_request, response) => {
+  await maintainArcadeRoomsForTest();
+  response.json({ maintained: true });
 });
 app.use("/api", arcadeRouter);
 
