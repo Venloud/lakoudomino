@@ -1,8 +1,11 @@
 import { randomBytes, createHash } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { Router } from "express";
+import { eq, lt } from "drizzle-orm";
 import { WebSocket } from "ws";
 import { CreateArcadeRoomBody, JoinArcadeRoomBody, QuickMatchArcadeRoomBody } from "@workspace/api-zod";
+import { arcadeRooms, db, type ArcadeRoomRecord } from "@workspace/db";
+import { logger } from "../lib/logger";
 
 const GAME_IDS = new Set([
   "mopyon", "box", "kay", "chess", "dame", "scrabble",
@@ -23,13 +26,87 @@ type ArcadeRoom = {
 };
 
 const rooms = new Map<string, ArcadeRoom>();
+const pendingWrites = new Map<string, Promise<void>>();
 const router = Router();
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
 
 export function getArcadeInviteRoom(code: string) {
   const room = rooms.get(code.toUpperCase());
   if (!room || !room.isPrivate || room.players.length >= room.capacity) return null;
   return { code: room.code, game: room.game };
+}
+
+function restoreRoom(record: ArcadeRoomRecord): ArcadeRoom | null {
+  if (!/^[A-Z0-9]{4,8}$/.test(record.code) || !GAME_IDS.has(record.game) ||
+      ![2, 3, 4].includes(record.capacity) || typeof record.isPrivate !== "boolean" ||
+      !Array.isArray(record.players) || record.players.length < 1 || record.players.length > record.capacity ||
+      !Number.isInteger(record.turn) || record.turn < 0 || record.turn >= record.capacity ||
+      !(record.updatedAt instanceof Date) || !Number.isFinite(record.updatedAt.getTime())) return null;
+  const players: ArcadePlayer[] = [];
+  for (const value of record.players) {
+    if (!value || typeof value !== "object") return null;
+    const player = value as Record<string, unknown>;
+    if (typeof player.name !== "string" || !player.name.trim() ||
+        typeof player.tokenHash !== "string" || !/^[a-f0-9]{64}$/.test(player.tokenHash)) return null;
+    players.push({ name: player.name, tokenHash: player.tokenHash });
+  }
+  return {
+    code: record.code, game: record.game, capacity: record.capacity, isPrivate: record.isPrivate,
+    players, state: record.state, turn: record.turn, sockets: new Map(), updatedAt: record.updatedAt.getTime(),
+  };
+}
+
+function persistRoom(room: ArcadeRoom): Promise<void> {
+  const values = {
+    code: room.code, game: room.game, capacity: room.capacity, isPrivate: room.isPrivate,
+    players: room.players, state: room.state, turn: room.turn, updatedAt: new Date(room.updatedAt),
+  };
+  const previous = pendingWrites.get(room.code) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(async () => {
+    await db.insert(arcadeRooms).values(values).onConflictDoUpdate({
+      target: arcadeRooms.code,
+      set: values,
+    });
+  });
+  pendingWrites.set(room.code, next);
+  return next.finally(() => {
+    if (pendingWrites.get(room.code) === next) pendingWrites.delete(room.code);
+  });
+}
+
+export async function initializeArcadeRooms(): Promise<void> {
+  const cutoff = new Date(Date.now() - ROOM_TTL_MS);
+  await db.delete(arcadeRooms).where(lt(arcadeRooms.updatedAt, cutoff));
+  const records = await db.select().from(arcadeRooms);
+  for (const record of records) {
+    const room = restoreRoom(record);
+    if (room) rooms.set(room.code, room);
+    else {
+      logger.warn({ code: record.code }, "Ignoring invalid persisted arcade room");
+      await db.delete(arcadeRooms).where(eq(arcadeRooms.code, record.code));
+    }
+  }
+}
+
+function hasOpenSockets(room: ArcadeRoom): boolean {
+  for (const sockets of room.sockets.values()) {
+    for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) return true;
+  }
+  return false;
+}
+
+async function expireInactiveRooms(): Promise<void> {
+  const cutoff = Date.now() - ROOM_TTL_MS;
+  for (const [code, room] of rooms) {
+    if (room.updatedAt >= cutoff || hasOpenSockets(room)) continue;
+    rooms.delete(code);
+    try {
+      await db.delete(arcadeRooms).where(eq(arcadeRooms.code, code));
+    } catch (error) {
+      logger.error({ err: error, code }, "Failed to delete expired arcade room");
+    }
+  }
 }
 
 function randomCode(): string {
@@ -117,35 +194,38 @@ function publish(room: ArcadeRoom, message: unknown) {
   for (const sockets of room.sockets.values()) for (const socket of sockets) send(socket, message);
 }
 
-router.post("/arcade/rooms", (req, res) => {
+router.post("/arcade/rooms", async (req, res): Promise<void> => {
   const parsed = CreateArcadeRoomBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Choose a supported game and enter a player name." });
+  if (!parsed.success) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
   const created = createOrFind(parsed.data, true, false);
-  if (!created) return res.status(400).json({ error: "Choose a supported game and enter a player name." });
-  return res.status(201).json(roomResponse(created.room, created.seat, created.reconnectToken));
+  if (!created) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
+  await persistRoom(created.room);
+  res.status(201).json(roomResponse(created.room, created.seat, created.reconnectToken));
 });
 
-router.post("/arcade/quick-match", (req, res) => {
+router.post("/arcade/quick-match", async (req, res): Promise<void> => {
   const parsed = QuickMatchArcadeRoomBody.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Choose a supported game and enter a player name." });
+  if (!parsed.success) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
   const joined = createOrFind(parsed.data, false, true);
-  if (!joined) return res.status(400).json({ error: "Choose a supported game and enter a player name." });
-  return res.status(joined.seat === 0 ? 201 : 200).json(roomResponse(joined.room, joined.seat, joined.reconnectToken));
+  if (!joined) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
+  await persistRoom(joined.room);
+  res.status(joined.seat === 0 ? 201 : 200).json(roomResponse(joined.room, joined.seat, joined.reconnectToken));
 });
 
-router.post("/arcade/rooms/:code/join", (req, res) => {
+router.post("/arcade/rooms/:code/join", async (req, res): Promise<void> => {
   const room = rooms.get(String(req.params.code).toUpperCase());
   const parsed = JoinArcadeRoomBody.safeParse(req.body);
   const name = parsed.success ? cleanName(parsed.data.displayName) : null;
-  if (!room) return res.status(404).json({ error: "That room was not found." });
-  if (!name) return res.status(400).json({ error: "Enter a player name." });
-  if (room.players.length >= room.capacity) return res.status(409).json({ error: "That room is full." });
+  if (!room) { res.status(404).json({ error: "That room was not found." }); return; }
+  if (!name) { res.status(400).json({ error: "Enter a player name." }); return; }
+  if (room.players.length >= room.capacity) { res.status(409).json({ error: "That room is full." }); return; }
   const token = issueToken();
   const seat = room.players.length;
   room.players.push({ name, tokenHash: hashToken(token) });
   room.updatedAt = Date.now();
+  await persistRoom(room);
   publish(room, { type: "room", room: roomSummary(room) });
-  return res.status(200).json(roomResponse(room, seat, token));
+  res.status(200).json(roomResponse(room, seat, token));
 });
 
 router.get("/arcade/rooms/:code", (req, res) => {
@@ -170,12 +250,13 @@ export function handleArcadeSocket(socket: WebSocket, request: IncomingMessage):
   room.sockets.set(seat, connections);
   send(socket, { type: "room", room: roomSummary(room), seat });
 
-  socket.on("message", (raw) => {
+  socket.on("message", async (raw) => {
     let message: unknown;
     try { message = JSON.parse(raw.toString()); } catch { return; }
     if (!message || typeof message !== "object") return;
     const event = message as Record<string, unknown>;
     if (event.type === "state") {
+      const previous = { state: room.state, turn: room.turn, updatedAt: room.updatedAt };
       if (room.game === "block-drop") {
         const boards = Array.isArray(room.state) ? [...room.state] : Array(room.capacity).fill(null);
         boards[seat] = event.state;
@@ -188,9 +269,21 @@ export function handleArcadeSocket(socket: WebSocket, request: IncomingMessage):
         room.turn = event.turn as number;
       }
       room.updatedAt = Date.now();
+      try {
+        await persistRoom(room);
+      } catch (error) {
+        room.state = previous.state;
+        room.turn = previous.turn;
+        room.updatedAt = previous.updatedAt;
+        logger.error({ err: error, code: room.code }, "Failed to persist arcade game state");
+        send(socket, { type: "error", message: "Your move could not be saved. Please try again." });
+        return;
+      }
       publish(room, { type: "state", room: roomSummary(room) });
     } else if (event.type === "resign") {
       room.updatedAt = Date.now();
+      try { await persistRoom(room); }
+      catch (error) { logger.error({ err: error, code: room.code }, "Failed to persist arcade resignation"); }
       publish(room, { type: "resigned", seat });
     }
   });
@@ -200,9 +293,6 @@ export function handleArcadeSocket(socket: WebSocket, request: IncomingMessage):
   });
 }
 
-setInterval(() => {
-  const expiry = Date.now() - 6 * 60 * 60 * 1000;
-  for (const [code, room] of rooms) if (room.updatedAt < expiry) rooms.delete(code);
-}, 15 * 60 * 1000).unref();
+setInterval(() => { void expireInactiveRooms(); }, 15 * 60 * 1000).unref();
 
 export default router;
