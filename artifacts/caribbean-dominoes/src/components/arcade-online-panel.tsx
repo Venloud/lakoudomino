@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ARCADE_ROOM_RETENTION_MS } from "@workspace/api-zod";
 
 type PublicRoom = {
   code: string;
@@ -6,6 +7,7 @@ type PublicRoom = {
   capacity: number;
   reconnectDeadline?: number;
   status: "waiting" | "playing" | "finished";
+  updatedAt?: number;
   players: { name: string; seat: number; isBot?: boolean }[];
   state: unknown;
   turn: number;
@@ -26,6 +28,10 @@ const isRoom = (value: unknown): value is PublicRoom =>
   !!value && typeof value === "object" &&
   typeof (value as PublicRoom).code === "string" &&
   Array.isArray((value as PublicRoom).players);
+const reconnectDeadlineFor = (value: { updatedAt?: number; reconnectDeadline?: number }): number | null => {
+  if (Number.isFinite(value.updatedAt)) return value.updatedAt! + ARCADE_ROOM_RETENTION_MS;
+  return Number.isFinite(value.reconnectDeadline) ? value.reconnectDeadline! : null;
+};
 
 const clientStateFor = (game: string, state: unknown): unknown => {
   if (game !== "scrabble" || !state || typeof state !== "object" || Array.isArray(state)) return state;
@@ -109,11 +115,12 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
         .then(async (response) => response.ok ? await response.json() as PublicRoom : null)
         .then((latest) => {
           if (disposed) return;
-          if (latest && Number.isFinite(latest.reconnectDeadline)) {
-            setReconnectDeadline(latest.reconnectDeadline!);
+          const deadline = latest ? reconnectDeadlineFor(latest) : null;
+          if (deadline !== null) {
+            setReconnectDeadline(deadline);
             sessionStorage.setItem(storageKey(game), JSON.stringify({
               ...access,
-              reconnectDeadline: latest.reconnectDeadline,
+              reconnectDeadline: deadline,
             }));
           } else if (!latest) {
             setReconnectDeadline(Date.now());
@@ -132,11 +139,12 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
         setNotice(data.message);
       } else if ((data.type === "room" || data.type === "state") && isRoom(data.room)) {
         setRoom(data.room);
-        if (Number.isFinite(data.room.reconnectDeadline)) {
-          setReconnectDeadline(data.room.reconnectDeadline!);
+        const deadline = reconnectDeadlineFor(data.room);
+        if (deadline !== null) {
+          setReconnectDeadline(deadline);
           sessionStorage.setItem(storageKey(game), JSON.stringify({
             ...access,
-            reconnectDeadline: data.room.reconnectDeadline,
+            reconnectDeadline: deadline,
           }));
         }
         if (data.room.result) {
@@ -210,20 +218,20 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ game, displayName: name, playerCount, ...payload }),
       });
-      const result = await response.json() as Access & { error?: string };
+      const result = await response.json() as Access & { error?: string; updatedAt?: number };
       if (!response.ok) throw new Error(result.error ?? "Could not join that room.");
       localStorage.setItem("yard-display-name", name.trim());
       const next = {
         code: result.code,
         seat: result.seat,
         reconnectToken: result.reconnectToken,
-        ...(Number.isFinite(result.reconnectDeadline) ? { reconnectDeadline: result.reconnectDeadline } : {}),
+        ...(reconnectDeadlineFor(result) !== null ? { reconnectDeadline: reconnectDeadlineFor(result)! } : {}),
       };
       sessionStorage.setItem(storageKey(game), JSON.stringify(next));
       lastReceivedRef.current = "";
       setLeaving(false);
       setAccess(next);
-      setReconnectDeadline(Number.isFinite(result.reconnectDeadline) ? result.reconnectDeadline! : null);
+      setReconnectDeadline(reconnectDeadlineFor(result));
       setRoom(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not reach the game server.");
