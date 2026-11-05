@@ -32,6 +32,9 @@ type ArcadeRoom = {
   result?: ArcadeResult | null;
 };
 type RoomInput = { game: string; name: string; capacity: number; isPrivate: boolean };
+type ArcadeJoinResult =
+  | { error: "missing" | "full" }
+  | { room: ArcadeRoom; seat: number; token: string };
 type RoomEvent = { code: string; type: "room" | "state" | "resigned"; seat?: number; origin?: string };
 type SqlExecutor = {
   query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
@@ -374,6 +377,11 @@ function parseCreate(body: unknown): RoomInput | null {
   return { game, name, capacity, isPrivate: value.isPrivate === true };
 }
 
+function replyWithRetryableRoomSaveError(res: import("express").Response, error: unknown, action: string): void {
+  logger.error({ err: error, action }, "Arcade room persistence failed");
+  res.status(503).json({ error: "Room storage is temporarily unavailable. Please retry.", retryable: true });
+}
+
 async function createPrivateRoom(input: RoomInput): Promise<{ room: ArcadeRoom; seat: number; token: string }> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const created = makeRoom({ ...input, isPrivate: true });
@@ -420,7 +428,13 @@ router.post("/arcade/rooms", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
   const input = parseCreate(parsed.data);
   if (!input) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
-  const created = await createPrivateRoom(input);
+  let created: Awaited<ReturnType<typeof createPrivateRoom>>;
+  try {
+    created = await createPrivateRoom(input);
+  } catch (error) {
+    replyWithRetryableRoomSaveError(res, error, "create");
+    return;
+  }
   res.status(201).json(roomResponse(created.room, created.seat, created.token));
 });
 
@@ -429,7 +443,13 @@ router.post("/arcade/quick-match", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
   const input = parseCreate(parsed.data);
   if (!input) { res.status(400).json({ error: "Choose a supported game and enter a player name." }); return; }
-  const joined = await createOrJoinQuickMatch(input);
+  let joined: Awaited<ReturnType<typeof createOrJoinQuickMatch>>;
+  try {
+    joined = await createOrJoinQuickMatch(input);
+  } catch (error) {
+    replyWithRetryableRoomSaveError(res, error, "quick-match");
+    return;
+  }
   if (joined.seat > 0) queueRoomEvent({ code: joined.room.code, type: "room" });
   res.status(joined.seat === 0 ? 201 : 200).json(roomResponse(joined.room, joined.seat, joined.token));
 });
@@ -439,19 +459,25 @@ router.post("/arcade/rooms/:code/join", async (req, res): Promise<void> => {
   const parsed = JoinArcadeRoomBody.safeParse(req.body);
   const name = parsed.success ? cleanName(parsed.data.displayName) : null;
   if (!name) { res.status(400).json({ error: "Enter a player name." }); return; }
-  const joined = await withTransaction(async (client) => {
-    const record = await readRoom(client, code, true);
-    const room = record ? restoreRoom(record) : null;
-    if (!room) return { error: "missing" as const };
-    if (room.players.length >= room.capacity) return { error: "full" as const };
-    const token = issueToken();
-    const seat = room.players.length;
-    room.players.push({ name, tokenHash: hashToken(token) });
-    room.updatedAt = Date.now();
-    await updateRoom(client, room);
-    await notifyRoom(client, { code, type: "room" });
-    return { room, seat, token };
-  });
+  let joined: ArcadeJoinResult;
+  try {
+    joined = await withTransaction(async (client) => {
+      const record = await readRoom(client, code, true);
+      const room = record ? restoreRoom(record) : null;
+      if (!room) return { error: "missing" as const };
+      if (room.players.length >= room.capacity) return { error: "full" as const };
+      const token = issueToken();
+      const seat = room.players.length;
+      room.players.push({ name, tokenHash: hashToken(token) });
+      room.updatedAt = Date.now();
+      await updateRoom(client, room);
+      await notifyRoom(client, { code, type: "room" });
+      return { room, seat, token };
+    });
+  } catch (error) {
+    replyWithRetryableRoomSaveError(res, error, "join");
+    return;
+  }
   if ("error" in joined) {
     res.status(joined.error === "missing" ? 404 : 409).json({
       error: joined.error === "missing" ? "That room was not found." : "That room is full.",
