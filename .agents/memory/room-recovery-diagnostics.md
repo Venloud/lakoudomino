@@ -7,4 +7,4 @@ Operator-facing recovery diagnostics may show skipped-room totals and sanitized 
 
 **Why:** The task requirements explicitly forbid credentials in operator-facing recovery output; aggregate diagnostics are useful without identifying rooms or revealing stored values.
 
-**How to apply:** Add only counts and sanitized static field paths to health or operational endpoints. Keep detailed room context in server logs, not response payloads.
+**How to apply:** Add only counts and allowlisted static field paths to health or operational alerts; map unknown paths to a generic value rather than sanitizing arbitrary input. Keep room context out of operator-facing payloads.

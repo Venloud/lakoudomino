@@ -35,6 +35,24 @@ export type RoomRecoveryDiagnostics = {
   issueCounts: Array<{ fieldPath: string; occurrenceCount: number }>;
 };
 
+export type RoomRecoveryAlertPayload = {
+  event: "persisted_room_recovery_skipped";
+  skippedRoomCount: number;
+  issueCounts: Array<{ fieldPath: string; occurrenceCount: number }>;
+};
+
+const safeIssuePaths = new Set([
+  "code",
+  "hostName",
+  "mode",
+  "rowLength",
+  "status",
+  "seats",
+  "speed",
+  "afkState",
+  "engineState",
+]);
+
 let roomRecoveryDiagnostics: RoomRecoveryDiagnostics = {
   checkedAt: null,
   skippedRoomCount: 0,
@@ -48,11 +66,33 @@ export function getRoomRecoveryDiagnostics(): RoomRecoveryDiagnostics {
   };
 }
 
+export function createRoomRecoveryAlertPayload(
+  diagnostics: RoomRecoveryDiagnostics,
+): RoomRecoveryAlertPayload | null {
+  if (diagnostics.skippedRoomCount <= 0) return null;
+
+  return {
+    event: "persisted_room_recovery_skipped",
+    skippedRoomCount: diagnostics.skippedRoomCount,
+    issueCounts: diagnostics.issueCounts.map(({ fieldPath, occurrenceCount }) => ({
+      fieldPath: safeIssuePaths.has(fieldPath) ? fieldPath : "unknown",
+      occurrenceCount,
+    })),
+  };
+}
+
+function alertOnSkippedRooms(): void {
+  const payload = createRoomRecoveryAlertPayload(getRoomRecoveryDiagnostics());
+  if (payload) {
+    logger.error(payload, "Persisted rooms skipped during recovery");
+  }
+}
+
 function recordRoomRecoveryDiagnostics(errors: readonly PersistedRoomRecoveryError[]): void {
   const issueCounts = new Map<string, number>();
   for (const error of errors) {
     for (const issue of error.issues) {
-      const fieldPath = issue.path.replace(/[^a-zA-Z0-9_.[\]-]/g, "").slice(0, 120) || "unknown";
+      const fieldPath = safeIssuePaths.has(issue.path) ? issue.path : "unknown";
       issueCounts.set(fieldPath, (issueCounts.get(fieldPath) ?? 0) + 1);
     }
   }
@@ -71,16 +111,7 @@ export function restorePersistedRooms(
 ): PersistedRoomState[] {
   const result = restoreRooms(rows);
   recordRoomRecoveryDiagnostics(result.errors);
-  result.errors.forEach((error) => {
-    logger.error(
-      {
-        err: error,
-        roomCode: error.roomCode,
-        issues: error.issues,
-      },
-      "Skipping invalid persisted room",
-    );
-  });
+  alertOnSkippedRooms();
   return result.rooms;
 }
 
@@ -142,16 +173,7 @@ export async function loadPersistedRooms(
   const result = restoreRooms(rows);
   recordRoomRecoveryDiagnostics(result.errors);
 
-  result.errors.forEach((error) => {
-    logger.error(
-      {
-        err: error,
-        roomCode: error.roomCode,
-        issues: error.issues,
-      },
-      "Skipping invalid persisted room",
-    );
-  });
+  alertOnSkippedRooms();
   await quarantineInvalidRooms(result.errors, store);
   return result.rooms;
 }
