@@ -1,5 +1,7 @@
 - [Native TypeScript tests](typescript-tests.md) — use Node's runner for explicit `.ts` imports; use existing `tsx` when authoritative sources are extensionless.
+- [pnpm workspace reformatting](pnpm-workspace-reformatting.md) — inspect workspace YAML after package changes because pnpm may reorder policies and strip comments.
 - [Vite preview module cache](vite-preview-cache.md) — restart the artifact workflow after adding or renaming TSX modules if HMR keeps resolving an obsolete extension.
+- [Vite compressed assets](vite-compressed-assets.md) — give manually gzipped Vite assets a non-`.gz` extension so dev serving preserves the compressed bytes.
 - [WebGL preview fallback](webgl-preview.md) — headless previews may lack a WebGL context; guard Canvas mounting and keep a functional fallback for non-WebGL clients.
 - [Browser visual QA](browser-visual-qa.md) — preview capture can verify this app when Playwright browsers are unavailable; keep the fallback UI fully functional.
 - [Reference-state visual QA](reference-state-qa.md) — parity work must validate lobby, auth, waiting, desktop table, and mobile table separately.
@@ -7,3 +9,6 @@
 - [Seat-offer lifecycle](seat-offer-lifecycle.md) — dispatch offers returned by game-end transitions directly; periodic checks only maintain existing offers.
 - [Headless browser runtime](playwright-runtime.md) — keep CLI sessions in one shell call, use browser APIs in run-code, and use the artifact proxy path for API/WS tests.
 - [GitHub connector upload pacing](github-connector-upload-throttling.md) — large blob uploads through the GitHub connector need paced, low-concurrency requests.
+- [Protected GitHub main](github-main-protection.md) — main requires PRs; sync changes on a branch and preserve remote commits.
+- [509 Yard social-club direction](509-yard-social-club.md) — use a consistent Caribbean club look across lobby, auth, rules, waiting room, and table.
+- [Online resignation behavior](online-resignation.md) — leaving an active 1v1 is a loss; in larger rooms a bot takes over until the next match.

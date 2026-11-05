@@ -44,6 +44,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Room"
+  /tic-tac-toe/rooms:
+    post:
+      operationId: createTicTacToeRoom
+      tags: [rooms]
+      summary: Create an online Tic-Tac-Toe room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicTacToeRoomInput"
+      responses:
+        "201":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicTacToeRoomAccess"
+  /tic-tac-toe/rooms/{code}/join:
+    post:
+      operationId: joinTicTacToeRoom
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicTacToeRoomJoinInput"
+      responses:
+        "200":
+          description: Room joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicTacToeRoomAccess"
+        "404":
+          description: Room not found
+        "409":
+          description: Room is full or already started
   /lobby:
     get:
       operationId: getLobby
@@ -261,6 +302,30 @@ paths:
       tags: [auth]
       responses:
         "200": { description: Current account, content: { application/json: { schema: { $ref: "#/components/schemas/AuthMe" } } } }
+  /auth/recent-matches:
+    get:
+      operationId: getRecentMatches
+      tags: [auth]
+      summary: Get recently recorded matches for the signed-in user
+      responses:
+        "200":
+          description: Recent matches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecentMatchesResponse" }
+        "401": { description: Authentication required }
+  /auth/tic-tac-toe-results:
+    get:
+      operationId: getTicTacToeResults
+      tags: [auth]
+      summary: Get Tic-Tac-Toe results for the signed-in user
+      responses:
+        "200":
+          description: Tic-Tac-Toe totals and recent results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicTacToeResultsResponse" }
+        "401": { description: Authentication required }
   /auth/signup:
     post:
       operationId: signup
@@ -273,6 +338,20 @@ paths:
       tags: [auth]
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AuthCredentials" } } } }
       responses: { "200": { description: Signed in, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } } }
+  /auth/google:
+    get:
+      operationId: googleAuthStart
+      tags: [auth]
+      summary: Start Google sign-in
+      responses: { "302": { description: Redirect to Google authorization } }
+  /auth/google/callback:
+    get:
+      operationId: googleAuthCallback
+      tags: [auth]
+      summary: Complete Google sign-in
+      responses:
+        "302": { description: Redirect back to the app after sign-in }
+        "400": { description: Invalid OAuth response }
   /auth/logout:
     post:
       operationId: logout
@@ -441,6 +520,58 @@ components:
         isPrivate:
           type: boolean
           default: false
+    TicTacToeMode:
+      type: string
+      enum: [regular, yard]
+    TicTacToeStatus:
+      type: string
+      enum: [waiting, playing, finished]
+    TicTacToeRoomPlayer:
+      type: object
+      required: [seat, mark, name]
+      properties:
+        seat:
+          type: integer
+          enum: [0, 1]
+        mark:
+          type: string
+          enum: [X, O]
+        name:
+          type: string
+    TicTacToeRoomAccess:
+      type: object
+      required: [code, mode, status, players, reconnectToken]
+      properties:
+        code:
+          type: string
+        mode:
+          $ref: "#/components/schemas/TicTacToeMode"
+        status:
+          $ref: "#/components/schemas/TicTacToeStatus"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/TicTacToeRoomPlayer"
+        reconnectToken:
+          type: string
+    TicTacToeRoomInput:
+      type: object
+      required: [mode, displayName]
+      properties:
+        mode:
+          $ref: "#/components/schemas/TicTacToeMode"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
+    TicTacToeRoomJoinInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
     RoomJoinInput:
       type: object
       required: [displayName]
@@ -683,6 +814,49 @@ components:
       type: object
       required: [user]
       properties: { user: { oneOf: [{ $ref: "#/components/schemas/User" }, { type: "null" }] } }
+    RecentMatch:
+      type: object
+      required: [matchId, roomCode, mode, recordedAt, rank, medal, crownPoints, won]
+      properties:
+        matchId: { type: string, format: uuid }
+        roomCode: { type: string }
+        mode: { $ref: "#/components/schemas/RoomMode" }
+        recordedAt: { type: string, format: date-time }
+        rank: { type: integer }
+        medal: { type: string }
+        crownPoints: { type: integer }
+        won: { type: boolean }
+    RecentMatchesResponse:
+      type: object
+      required: [matches]
+      properties:
+        matches: { type: array, items: { $ref: "#/components/schemas/RecentMatch" } }
+    TicTacToeResult:
+      type: object
+      required: [id, roomCode, mode, outcome, mark, opponentName, completedAt]
+      properties:
+        id: { type: string, format: uuid }
+        roomCode: { type: string }
+        mode: { type: string, enum: [regular, yard] }
+        outcome: { type: string, enum: [win, loss, draw] }
+        mark: { type: string, enum: [X, O] }
+        opponentName: { type: string }
+        completedAt: { type: string, format: date-time }
+    TicTacToeResultsResponse:
+      type: object
+      required: [summary, results]
+      properties:
+        summary:
+          type: object
+          required: [games, wins, losses, draws]
+          properties:
+            games: { type: integer }
+            wins: { type: integer }
+            losses: { type: integer }
+            draws: { type: integer }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/TicTacToeResult" }
     Friendship:
       type: object
       required: [id, userLow, userHigh, requesterId, status]
@@ -728,18 +902,20 @@ components:
         status: { type: string }
     FriendInviteNotification:
       type: object
-      required: [id, inviterId, inviterName, roomCode, status]
+      required: [id, inviterId, inviterName, roomCode, game, status]
       properties:
         id: { type: string, format: uuid }
         inviterId: { type: string, format: uuid }
         inviterName: { type: string }
         roomCode: { type: string }
+        game: { type: string, enum: [domino, tic-tac-toe] }
         status: { type: string, enum: [pending] }
     FriendInviteAcceptResponse:
       type: object
-      required: [roomCode]
+      required: [roomCode, game]
       properties:
         roomCode: { type: string, pattern: "^[A-Z0-9]{4,8}$" }
+        game: { type: string, enum: [domino, tic-tac-toe] }
     LeaderboardRow:
       type: object
       required: [id, name, points, gold, silver, bronze, isMe]

@@ -34,9 +34,14 @@ import type {
   HostActionInput,
   Lobby,
   NextHandInput,
+  RecentMatchesResponse,
   Room,
   RoomCreateInput,
   RoomJoinInput,
+  TicTacToeResultsResponse,
+  TicTacToeRoomAccess,
+  TicTacToeRoomInput,
+  TicTacToeRoomJoinInput,
   WaitlistInput,
   WaitlistNotifyInput,
   WaitlistPosition
@@ -233,6 +238,177 @@ export const useCreateRoom = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateRoomMutationOptions(options));
+    }
+
+export const getCreateTicTacToeRoomUrl = () => {
+
+
+
+
+  return `/api/tic-tac-toe/rooms`
+}
+
+/**
+ * @summary Create an online Tic-Tac-Toe room
+ */
+export const createTicTacToeRoom = async (ticTacToeRoomInput: TicTacToeRoomInput, options?: Parameters<typeof customFetch>[1]): Promise<TicTacToeRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TicTacToeRoomAccess>(getCreateTicTacToeRoomUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(ticTacToeRoomInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTicTacToeRoomMutationKey = () => ['createTicTacToeRoom'] as const;
+
+export const getCreateTicTacToeRoomMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTicTacToeRoom>>, TError,CreateTicTacToeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTicTacToeRoom>>, TError,CreateTicTacToeRoomMutationVariables, TContext> => {
+
+const mutationKey = getCreateTicTacToeRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTicTacToeRoom>>, CreateTicTacToeRoomMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTicTacToeRoom(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTicTacToeRoomMutationResult = NonNullable<Awaited<ReturnType<typeof createTicTacToeRoom>>>
+    export type CreateTicTacToeRoomMutationBody = BodyType<TicTacToeRoomInput>
+    export type CreateTicTacToeRoomMutationError = ErrorType<unknown>
+    export type CreateTicTacToeRoomMutationVariables = {data: BodyType<TicTacToeRoomInput>}
+
+    /**
+ * @summary Create an online Tic-Tac-Toe room
+ */
+export const useCreateTicTacToeRoom = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTicTacToeRoom>>, TError,CreateTicTacToeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTicTacToeRoom>>,
+        TError,
+        CreateTicTacToeRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateTicTacToeRoomMutationOptions(options));
+    }
+
+export const getJoinTicTacToeRoomUrl = (code: string,) => {
+
+
+
+
+  return `/api/tic-tac-toe/rooms/${code}/join`
+}
+
+export const joinTicTacToeRoom = async (code: string,
+    ticTacToeRoomJoinInput: TicTacToeRoomJoinInput, options?: Parameters<typeof customFetch>[1]): Promise<TicTacToeRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<TicTacToeRoomAccess>(getJoinTicTacToeRoomUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(ticTacToeRoomJoinInput)
+  }
+);}
+
+
+
+
+
+export const getJoinTicTacToeRoomMutationKey = () => ['joinTicTacToeRoom'] as const;
+
+export const getJoinTicTacToeRoomMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinTicTacToeRoom>>, TError,JoinTicTacToeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof joinTicTacToeRoom>>, TError,JoinTicTacToeRoomMutationVariables, TContext> => {
+
+const mutationKey = getJoinTicTacToeRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof joinTicTacToeRoom>>, JoinTicTacToeRoomMutationVariables> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  joinTicTacToeRoom(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type JoinTicTacToeRoomMutationResult = NonNullable<Awaited<ReturnType<typeof joinTicTacToeRoom>>>
+    export type JoinTicTacToeRoomMutationBody = BodyType<TicTacToeRoomJoinInput>
+    export type JoinTicTacToeRoomMutationError = ErrorType<void>
+    export type JoinTicTacToeRoomMutationVariables = {code: string;data: BodyType<TicTacToeRoomJoinInput>}
+
+    export const useJoinTicTacToeRoom = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinTicTacToeRoom>>, TError,JoinTicTacToeRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof joinTicTacToeRoom>>,
+        TError,
+        JoinTicTacToeRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getJoinTicTacToeRoomMutationOptions(options));
     }
 
 export const getGetLobbyUrl = () => {
@@ -1397,6 +1573,160 @@ export function useGetAuthMe<TData = Awaited<ReturnType<typeof getAuthMe>>, TErr
 
 
 
+export const getGetRecentMatchesUrl = () => {
+
+
+
+
+  return `/api/auth/recent-matches`
+}
+
+/**
+ * @summary Get recently recorded matches for the signed-in user
+ */
+export const getRecentMatches = async ( options?: Parameters<typeof customFetch>[1]): Promise<RecentMatchesResponse> => {
+
+  return customFetch<RecentMatchesResponse>(getGetRecentMatchesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRecentMatchesQueryKey = () => {
+    return [
+    `/api/auth/recent-matches`
+    ] as const;
+    }
+
+
+export const getGetRecentMatchesQueryOptions = <TData = Awaited<ReturnType<typeof getRecentMatches>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRecentMatchesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRecentMatches>>> = ({ signal }) => getRecentMatches({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRecentMatchesQueryResult = NonNullable<Awaited<ReturnType<typeof getRecentMatches>>>
+export type GetRecentMatchesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get recently recorded matches for the signed-in user
+ */
+
+export function useGetRecentMatches<TData = Awaited<ReturnType<typeof getRecentMatches>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRecentMatchesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetTicTacToeResultsUrl = () => {
+
+
+
+
+  return `/api/auth/tic-tac-toe-results`
+}
+
+/**
+ * @summary Get Tic-Tac-Toe results for the signed-in user
+ */
+export const getTicTacToeResults = async ( options?: Parameters<typeof customFetch>[1]): Promise<TicTacToeResultsResponse> => {
+
+  return customFetch<TicTacToeResultsResponse>(getGetTicTacToeResultsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTicTacToeResultsQueryKey = () => {
+    return [
+    `/api/auth/tic-tac-toe-results`
+    ] as const;
+    }
+
+
+export const getGetTicTacToeResultsQueryOptions = <TData = Awaited<ReturnType<typeof getTicTacToeResults>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTicTacToeResults>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTicTacToeResultsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTicTacToeResults>>> = ({ signal }) => getTicTacToeResults({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTicTacToeResults>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTicTacToeResultsQueryResult = NonNullable<Awaited<ReturnType<typeof getTicTacToeResults>>>
+export type GetTicTacToeResultsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get Tic-Tac-Toe results for the signed-in user
+ */
+
+export function useGetTicTacToeResults<TData = Awaited<ReturnType<typeof getTicTacToeResults>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTicTacToeResults>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTicTacToeResultsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getSignupUrl = () => {
 
 
@@ -1560,6 +1890,160 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getLoginMutationOptions(options));
     }
+
+export const getGoogleAuthStartUrl = () => {
+
+
+
+
+  return `/api/auth/google`
+}
+
+/**
+ * @summary Start Google sign-in
+ */
+export const googleAuthStart = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getGoogleAuthStartUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGoogleAuthStartQueryKey = () => {
+    return [
+    `/api/auth/google`
+    ] as const;
+    }
+
+
+export const getGoogleAuthStartQueryOptions = <TData = Awaited<ReturnType<typeof googleAuthStart>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof googleAuthStart>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGoogleAuthStartQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof googleAuthStart>>> = ({ signal }) => googleAuthStart({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof googleAuthStart>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GoogleAuthStartQueryResult = NonNullable<Awaited<ReturnType<typeof googleAuthStart>>>
+export type GoogleAuthStartQueryError = ErrorType<void>
+
+
+/**
+ * @summary Start Google sign-in
+ */
+
+export function useGoogleAuthStart<TData = Awaited<ReturnType<typeof googleAuthStart>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof googleAuthStart>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGoogleAuthStartQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGoogleAuthCallbackUrl = () => {
+
+
+
+
+  return `/api/auth/google/callback`
+}
+
+/**
+ * @summary Complete Google sign-in
+ */
+export const googleAuthCallback = async ( options?: Parameters<typeof customFetch>[1]): Promise<unknown> => {
+
+  return customFetch<unknown>(getGoogleAuthCallbackUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGoogleAuthCallbackQueryKey = () => {
+    return [
+    `/api/auth/google/callback`
+    ] as const;
+    }
+
+
+export const getGoogleAuthCallbackQueryOptions = <TData = Awaited<ReturnType<typeof googleAuthCallback>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof googleAuthCallback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGoogleAuthCallbackQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof googleAuthCallback>>> = ({ signal }) => googleAuthCallback({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof googleAuthCallback>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GoogleAuthCallbackQueryResult = NonNullable<Awaited<ReturnType<typeof googleAuthCallback>>>
+export type GoogleAuthCallbackQueryError = ErrorType<void>
+
+
+/**
+ * @summary Complete Google sign-in
+ */
+
+export function useGoogleAuthCallback<TData = Awaited<ReturnType<typeof googleAuthCallback>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof googleAuthCallback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGoogleAuthCallbackQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getLogoutUrl = () => {
 

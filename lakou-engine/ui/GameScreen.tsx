@@ -4,8 +4,10 @@ import {
   type Action, type GameEvent, type PlayerView, type Tile,
 } from '../src/index';
 import { Table, type Ghost, type RevealRow } from './Table';
+import { DEFAULT_DOMINO_STYLE, DominoStyleContext, type DominoStyle } from './Domino';
+import { dominoAssetUrl, loadDominoStyle, saveDominoStyle } from './domino-style';
 import { Avatar, ChatBox, FlagStripe, Hand, PlayerCard, SeatCard, TurnTimer, useCountdown, type ChatMessage } from './Parts';
-import { Banner, EndOfHand, MatchOver, SeatOffer, WaitlistPanel, type StandingRow, type WaitlistEntryView } from './Overlays';
+import { Banner, EndOfHand, MatchOver, SeatOffer, WaitlistPanel, type ScoreReason, type StandingRow, type WaitlistEntryView } from './Overlays';
 
 /**
  * The whole Lakou Domino game screen, built from the Figma frames
@@ -61,20 +63,20 @@ function useWidth() {
 const sameTile = (a: Tile, b: Tile) => (a[0] === b[0] && a[1] === b[1]) || (a[0] === b[1] && a[1] === b[0]);
 const pipsOf = (tiles: Tile[]) => tiles.reduce((s, t) => s + t[0] + t[1], 0);
 
-/** "Domino! 118 pips left +120 · Ends +25 · Pass bonus +50 ×2" — why a player got their points this hand. */
-function reasonsFor(entries: { amount: number; reason?: string; pipsLeft?: number; doubled?: boolean }[]): string[] {
-  const out: string[] = [];
+/** Keep each scoring event separate so the result screen can reveal the math in order. */
+function reasonsFor(entries: { amount: number; reason?: string; pipsLeft?: number; doubled?: boolean }[]): ScoreReason[] {
+  const out: ScoreReason[] = [];
   const ends = entries.filter((e) => !e.reason).reduce((a, e) => a + e.amount, 0);
   const passes = entries.filter((e) => e.reason === 'pass');
   for (const e of entries) {
-    if (e.reason === 'domino') out.push(`Domino! ${e.pipsLeft} pips left over +${e.amount}`);
-    if (e.reason === 'lockedGame') out.push(`Locked the game +${e.amount}`);
-    if (e.reason === 'lowestLock') out.push(`Lowest hand +${e.amount}`);
-    if (e.reason === 'allFour') out.push(`${e.doubled ? 'Double all four' : 'All four'} +${e.amount}`);
-    if (e.reason === 'blockedDouble') out.push(`Blocked a double +${e.amount}`);
+    if (e.reason === 'domino') out.push({ label: 'Domino!', amount: e.amount, pipsLeft: e.pipsLeft });
+    if (e.reason === 'lockedGame') out.push({ label: 'Locked the game', amount: e.amount });
+    if (e.reason === 'lowestLock') out.push({ label: 'Lowest hand', amount: e.amount });
+    if (e.reason === 'allFour') out.push({ label: e.doubled ? 'Double all four' : 'All four', amount: e.amount });
+    if (e.reason === 'blockedDouble') out.push({ label: 'Blocked a double', amount: e.amount });
   }
-  if (ends) out.push(`Ends +${ends}`);
-  if (passes.length) out.push(`Pass bonus +${passes.reduce((a, e) => a + e.amount, 0)}${passes.length > 1 ? ` (${passes.length} passes)` : ''}`);
+  if (ends) out.push({ label: 'Ends', amount: ends });
+  if (passes.length) out.push({ label: `Pass bonus${passes.length > 1 ? ` · ${passes.length} passes` : ''}`, amount: passes.reduce((a, e) => a + e.amount, 0) });
   return out;
 }
 
@@ -95,8 +97,24 @@ export function LakouGame(props: LakouGameProps) {
   const [pop, setPop] = useState<{ text: string; key: number; big?: boolean } | null>(null);
   const [banner, setBanner] = useState<{ text: string; seat: number | null; key: number; sub?: string; big?: boolean } | null>(null);
   const [handOverAt, setHandOverAt] = useState<number | null>(null);
+  const playerName = names[me ?? 0] ?? 'guest';
+  const [dominoStyle, setDominoStyle] = useState<DominoStyle>(() =>
+    typeof window === 'undefined' ? DEFAULT_DOMINO_STYLE : loadDominoStyle(playerName, window.localStorage));
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [, force] = useState(0);
   const counter = useRef(0);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') setDominoStyle(loadDominoStyle(playerName, window.localStorage));
+  }, [playerName]);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [settingsOpen]);
 
   // Engine events → "Pass!" flags, score pops, glowing pips, banners.
   useEffect(() => {
@@ -135,7 +153,7 @@ export function LakouGame(props: LakouGameProps) {
       if (handOverAt == null) setHandOverAt(Date.now());
     } else if (handOverAt != null) setHandOverAt(null);
   }, [view.handOver]); // eslint-disable-line react-hooks/exhaustive-deps
-  const revealMs = props.revealMs ?? 3000;
+  const revealMs = props.revealMs ?? 2400;
   const [revealDone, setRevealDone] = useState(false);
   useEffect(() => {
     setRevealDone(false);
@@ -228,6 +246,10 @@ export function LakouGame(props: LakouGameProps) {
       ? (selectedSame ? 'Tap a glowing spot, or double-tap the tile' : 'Tap a glowing spot')
       : 'Tap a tile to play';
   const turnLine = myTurn ? `Your turn${msLeft != null ? ` · ${Math.ceil(msLeft / 1000)}s` : ''}` : me === null ? '' : view.handOver ? 'Hand over' : 'Waiting';
+  const changeDominoStyle = (style: DominoStyle) => {
+    setDominoStyle(style);
+    if (typeof window !== 'undefined') saveDominoStyle(playerName, style, window.localStorage);
+  };
 
   const turnSeat = !view.handOver && !view.matchOver ? view.turn : null;
   const handUnit = phone ? 38 : 52;
@@ -259,19 +281,21 @@ export function LakouGame(props: LakouGameProps) {
   );
 
   return (
+    <DominoStyleContext.Provider value={dominoStyle}>
     <div className={`lk-game ${desktop ? 'lk-desktop' : 'lk-compact-layout'}${phone ? ' lk-phone' : ''}`}>
       <div className="lk-glows" aria-hidden="true"><i /><i /><i /></div>
       <header className="lk-topbar">
-        {props.onHome ? <button className="lk-brand lk-brand-btn" onClick={props.onHome}>Lakou Domino</button> : <b className="lk-brand">Lakou Domino</b>}
+        {props.onHome ? <button className="lk-brand lk-brand-btn lk-game-brand-logo" onClick={props.onHome} aria-label="509 Yard home"><img src="/509-yard-logo-cutout.png" alt="509 Yard" /></button> : <b className="lk-brand lk-game-brand-logo"><img src="/509-yard-logo-cutout.png" alt="509 Yard" /></b>}
         {desktop ? (
           <span className="lk-topbar-right">
             <span className="lk-meta">{points ? `Points  ·  ${view.rowBoxes}-box row` : `Regular`}{props.tableCode ? `  ·  Table ${props.tableCode}` : ''}</span>
+            <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>
             <button className="lk-leave" onClick={props.onLeave}>Leave table</button>
           </span>
         ) : (
           <span className="lk-topbar-right">
             {props.tableCode && <span className="lk-code-pill">{props.tableCode}</span>}
-            <button className="lk-more" onClick={props.onLeave} aria-label="Leave table">⋯</button>
+            <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>
           </span>
         )}
       </header>
@@ -374,6 +398,33 @@ export function LakouGame(props: LakouGameProps) {
       )}
       {showFinal && <MatchOver rows={finalRows} points={points} onAgain={props.onPlayAgain} onLeave={props.onLeave} meSeat={me} />}
       {props.seatOffer && <SeatOffer {...props.seatOffer} onTake={props.seatOffer.onTake} onStay={props.seatOffer.onStay} />}
+      {settingsOpen && (
+        <div className="lk-settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
+          <section className="lk-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="lk-settings-title">
+            <div className="lk-settings-heading">
+              <div><p className="lk-eyebrow">PERSONALIZE YOUR GAME</p><h2 id="lk-settings-title">Domino style</h2></div>
+              <button className="lk-settings-close" onClick={() => setSettingsOpen(false)} aria-label="Close settings">×</button>
+            </div>
+            <p className="lk-sub">Your choice is saved for your player name and does not change the table appearance.</p>
+            <div className="lk-domino-style-options" role="group" aria-label="Choose domino style">
+              {([
+                ['playing-cards', 'Classic Dominoes'],
+                ['black-on-white', 'Detailed Black on White'],
+                ['white-on-black', 'Detailed White on Black'],
+              ] as const).map(([style, label]) => (
+                <button key={style} type="button" className={`lk-domino-style-option${dominoStyle === style ? ' lk-selected' : ''}`}
+                  aria-pressed={dominoStyle === style} onClick={() => changeDominoStyle(style)}>
+                  <img src={dominoAssetUrl(6, 6, style)} alt="" />
+                  <span>{label}</span>
+                  {dominoStyle === style && <b>Selected</b>}
+                </button>
+              ))}
+            </div>
+            {phone && <button className="lk-settings-leave" onClick={props.onLeave}>Leave table</button>}
+          </section>
+        </div>
+      )}
     </div>
+    </DominoStyleContext.Provider>
   );
 }

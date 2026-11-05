@@ -9,6 +9,7 @@ type RecordMatchInput = {
   mode: RoomMode;
   match: MatchState;
   participants: readonly PersistedMatchParticipant[];
+  forfeitSeats?: readonly Seat[];
 };
 
 /**
@@ -20,7 +21,13 @@ export async function recordPointsMatch(input: RecordMatchInput): Promise<boolea
 
   const participantBySeat = new Map(input.participants.map(({ seat, userId }) => [seat, userId]));
   const seenUsers = new Set<string>();
-  const awards = awardCrowns(input.match);
+  const rawAwards = awardCrowns(input.match);
+  const forfeits = new Set<number>(input.forfeitSeats ?? []);
+  const lastPlace = Math.max(...rawAwards.map((award) => award.place), rawAwards.length);
+  const awards = rawAwards.map((award) => {
+    if (!forfeits.has(award.seat)) return award;
+    return { ...award, place: lastPlace, medal: undefined, crownPoints: 0 };
+  });
   const results = awards.flatMap((award) => {
     if (![0, 1, 2, 3].includes(award.seat)) return [];
     const userId = participantBySeat.get(award.seat as Seat);

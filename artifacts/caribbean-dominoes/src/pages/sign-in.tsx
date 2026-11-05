@@ -8,7 +8,12 @@ export default function SignInPage() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const login = useLogin();
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => {
+    const code = new URLSearchParams(window.location.search).get('error');
+    if (code === 'google_setup') return 'Google sign-in is not configured yet. Add the Google OAuth credentials in Replit Secrets.';
+    if (code?.startsWith('google_')) return 'Google sign-in could not be completed. Please try again.';
+    return null;
+  });
 
   const enterAccount = (username: string, password: string) => {
     setError(null);
@@ -26,6 +31,7 @@ export default function SignInPage() {
   return (
     <SignInScreen
       onLogin={enterAccount}
+      onGoogle={() => window.location.assign('/api/auth/google')}
       onGuest={() => setLocation('/')}
       onBack={() => setLocation('/')}
       onSignUp={() => setLocation('/sign-up')}

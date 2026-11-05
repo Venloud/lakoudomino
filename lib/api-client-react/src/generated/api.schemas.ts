@@ -137,6 +137,70 @@ export interface RoomCreateInput {
   isPrivate?: boolean;
 }
 
+export type TicTacToeMode = typeof TicTacToeMode[keyof typeof TicTacToeMode];
+
+
+export const TicTacToeMode = {
+  regular: 'regular',
+  yard: 'yard',
+} as const;
+
+export type TicTacToeStatus = typeof TicTacToeStatus[keyof typeof TicTacToeStatus];
+
+
+export const TicTacToeStatus = {
+  waiting: 'waiting',
+  playing: 'playing',
+  finished: 'finished',
+} as const;
+
+export type TicTacToeRoomPlayerSeat = typeof TicTacToeRoomPlayerSeat[keyof typeof TicTacToeRoomPlayerSeat];
+
+
+export const TicTacToeRoomPlayerSeat = {
+  NUMBER_0: 0,
+  NUMBER_1: 1,
+} as const;
+
+export type TicTacToeRoomPlayerMark = typeof TicTacToeRoomPlayerMark[keyof typeof TicTacToeRoomPlayerMark];
+
+
+export const TicTacToeRoomPlayerMark = {
+  X: 'X',
+  O: 'O',
+} as const;
+
+export interface TicTacToeRoomPlayer {
+  seat: TicTacToeRoomPlayerSeat;
+  mark: TicTacToeRoomPlayerMark;
+  name: string;
+}
+
+export interface TicTacToeRoomAccess {
+  code: string;
+  mode: TicTacToeMode;
+  status: TicTacToeStatus;
+  players: TicTacToeRoomPlayer[];
+  reconnectToken: string;
+}
+
+export interface TicTacToeRoomInput {
+  mode: TicTacToeMode;
+  /**
+     * @minLength 1
+     * @maxLength 24
+     */
+  displayName: string;
+}
+
+export interface TicTacToeRoomJoinInput {
+  /**
+     * @minLength 1
+     * @maxLength 24
+     */
+  displayName: string;
+}
+
 export interface RoomJoinInput {
   /**
      * @minLength 1
@@ -340,6 +404,68 @@ export interface AuthMe {
   user: User | null;
 }
 
+export interface RecentMatch {
+  matchId: string;
+  roomCode: string;
+  mode: RoomMode;
+  recordedAt: string;
+  rank: number;
+  medal: string;
+  crownPoints: number;
+  won: boolean;
+}
+
+export interface RecentMatchesResponse {
+  matches: RecentMatch[];
+}
+
+export type TicTacToeResultMode = typeof TicTacToeResultMode[keyof typeof TicTacToeResultMode];
+
+
+export const TicTacToeResultMode = {
+  regular: 'regular',
+  yard: 'yard',
+} as const;
+
+export type TicTacToeResultOutcome = typeof TicTacToeResultOutcome[keyof typeof TicTacToeResultOutcome];
+
+
+export const TicTacToeResultOutcome = {
+  win: 'win',
+  loss: 'loss',
+  draw: 'draw',
+} as const;
+
+export type TicTacToeResultMark = typeof TicTacToeResultMark[keyof typeof TicTacToeResultMark];
+
+
+export const TicTacToeResultMark = {
+  X: 'X',
+  O: 'O',
+} as const;
+
+export interface TicTacToeResult {
+  id: string;
+  roomCode: string;
+  mode: TicTacToeResultMode;
+  outcome: TicTacToeResultOutcome;
+  mark: TicTacToeResultMark;
+  opponentName: string;
+  completedAt: string;
+}
+
+export type TicTacToeResultsResponseSummary = {
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+};
+
+export interface TicTacToeResultsResponse {
+  summary: TicTacToeResultsResponseSummary;
+  results: TicTacToeResult[];
+}
+
 export type FriendshipStatus = typeof FriendshipStatus[keyof typeof FriendshipStatus];
 
 
@@ -400,6 +526,14 @@ export interface FriendInvite {
   status: string;
 }
 
+export type FriendInviteNotificationGame = typeof FriendInviteNotificationGame[keyof typeof FriendInviteNotificationGame];
+
+
+export const FriendInviteNotificationGame = {
+  domino: 'domino',
+  'tic-tac-toe': 'tic-tac-toe',
+} as const;
+
 export type FriendInviteNotificationStatus = typeof FriendInviteNotificationStatus[keyof typeof FriendInviteNotificationStatus];
 
 
@@ -412,12 +546,22 @@ export interface FriendInviteNotification {
   inviterId: string;
   inviterName: string;
   roomCode: string;
+  game: FriendInviteNotificationGame;
   status: FriendInviteNotificationStatus;
 }
+
+export type FriendInviteAcceptResponseGame = typeof FriendInviteAcceptResponseGame[keyof typeof FriendInviteAcceptResponseGame];
+
+
+export const FriendInviteAcceptResponseGame = {
+  domino: 'domino',
+  'tic-tac-toe': 'tic-tac-toe',
+} as const;
 
 export interface FriendInviteAcceptResponse {
   /** @pattern ^[A-Z0-9]{4,8}$ */
   roomCode: string;
+  game: FriendInviteAcceptResponseGame;
 }
 
 export interface FriendsResponse {

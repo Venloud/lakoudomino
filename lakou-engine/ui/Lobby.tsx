@@ -3,17 +3,9 @@ import React, { useState } from 'react';
 import { Avatar, useCountdown } from './Parts';
 import { seatColor, seatInk } from './theme';
 import { Domino } from './Domino';
-import { Footer, OnlineLine, Page, ProfileChip, colorFor } from './Shell';
+import { Footer, OnlineLine, Page, ProfileChip, SiteNavigation, colorFor } from './Shell';
 
 export type LobbyMode = 'regular' | 'points';
-
-const regionalFlags = [
-  '🇦🇮', '🇦🇬', '🇦🇼', '🇧🇸', '🇧🇧', '🇧🇿', '🇧🇲', '🇧🇶', '🇻🇬', '🇰🇾',
-  '🇨🇺', '🇨🇼', '🇩🇲', '🇩🇴', '🇬🇩', '🇬🇵', '🇬🇾', '🇭🇹', '🇯🇲', '🇲🇶',
-  '🇲🇸', '🇵🇷', '🇧🇱', '🇰🇳', '🇱🇨', '🇲🇫', '🇵🇲', '🇻🇨', '🇸🇽', '🇸🇷',
-  '🇹🇹', '🇹🇨', '🇻🇮', '🇻🇪', '🇨🇴', '🇵🇦', '🇨🇷', '🇳🇮', '🇭🇳', '🇬🇹',
-  '🇲🇽',
-];
 
 export interface LeaderRow { id: string; name: string; points: number; gold: number; silver: number; bronze: number; isMe?: boolean }
 export interface OpenTableRow { code: string; name: string; mode: LobbyMode; seats: number; maxSeats: number; rowBoxes?: number; turnSeconds?: number }
@@ -49,6 +41,7 @@ export interface LobbyScreenProps {
   onViewLeaderboard?: () => void;
   /** Tap on "Lakou Domino" (back to the top of the lobby / refresh). */
   onHome?: () => void;
+  onNavigate?: (target: string) => void;
   // guest
   onSignIn?: () => void;
   onSignUp?: () => void;
@@ -71,6 +64,17 @@ export interface LobbyScreenProps {
 
 export function LobbyScreen(p: LobbyScreenProps) {
   const signedIn = !!p.profile;
+  const navigateTo = (target: string) => {
+    if (target === 'lk-nav-profile' && !signedIn) { p.onSignIn?.(); return; }
+    if (p.onNavigate) { p.onNavigate(target); return; }
+    const destinations: Record<string, string> = {
+      'lk-nav-games': '/games',
+      'lk-nav-friends': '/friends',
+      'lk-nav-leaderboard': '/leaderboard',
+      'lk-nav-profile': '/profile',
+    };
+    window.location.assign(destinations[target] ?? '/');
+  };
   const right = signedIn
     ? <ProfileChip name={p.profile!.name} flag={p.profile!.flag} color={p.profile!.color} onClick={p.onProfileMenu} />
     : <>
@@ -79,20 +83,19 @@ export function LobbyScreen(p: LobbyScreenProps) {
       </>;
 
   return (
-    <Page right={right} onHome={p.onHome}>
+    <Page right={right} onHome={p.onHome} navigation={<SiteNavigation onHome={p.onHome} onNavigate={navigateTo} />}>
       <OnlineLine players={p.onlinePlayers} tables={p.tablesPlaying} />
-      <RegionalFlagTicker />
       <main className={`lk-home${signedIn ? ' lk-home-in' : ''}`}>
         {signedIn ? (
           <aside className="lk-col lk-col-left">
             <ProfileCard profile={p.profile!} onEdit={p.onEditProfile} />
             <button className="lk-bigbtn lk-bigbtn-gold" onClick={p.onPlayFriends}>Play with friends</button>
             <button className="lk-bigbtn" onClick={p.onPracticeBots}>Practice vs bots</button>
-            <Leaderboard rows={p.leaderboard} onViewAll={p.onViewLeaderboard} compact />
+            <Leaderboard id="lk-nav-leaderboard" rows={p.leaderboard} onViewAll={p.onViewLeaderboard} compact />
           </aside>
         ) : (
           <aside className="lk-col lk-col-left">
-            <Leaderboard rows={p.leaderboard} onViewAll={p.onViewLeaderboard} onSignIn={p.onSignIn} />
+            <Leaderboard id="lk-nav-leaderboard" rows={p.leaderboard} onViewAll={p.onViewLeaderboard} onSignIn={p.onSignIn} />
           </aside>
         )}
 
@@ -108,7 +111,7 @@ export function LobbyScreen(p: LobbyScreenProps) {
             onInvite={p.onInviteFriend} onWatch={p.onWatchFriend}
           />
         ) : (
-          <aside className="lk-col lk-quick">
+          <aside id="lk-nav-quick" className="lk-col lk-quick">
             <p className="lk-eyebrow">QUICK PLAY</p>
             <QuickCard tile={[6, 6]} title="Play with friends" sub="Invite with a link or code" onClick={p.onPlayFriends} />
             <QuickCard tile={[5, 4]} title="Practice vs bots" sub="Easy or Hard, start instantly" onClick={p.onPracticeBots} />
@@ -122,23 +125,6 @@ export function LobbyScreen(p: LobbyScreenProps) {
   );
 }
 
-function RegionalFlagTicker() {
-  const flagSet = (copy: string) => (
-    <div className="lk-flag-set" key={copy} aria-hidden="true">
-      {regionalFlags.map((flag, index) => <span className="lk-regional-flag" key={`${flag}-${index}`}>{flag}</span>)}
-    </div>
-  );
-
-  return (
-    <div className="lk-flag-bar" role="img" aria-label="Caribbean and nearby regional flags">
-      <div className="lk-flag-track">
-        {flagSet('first')}
-        {flagSet('second')}
-      </div>
-    </div>
-  );
-}
-
 function Crowns({ gold, silver, bronze, words, size = 8 }: { gold: number; silver: number; bronze: number; words?: boolean; size?: number }) {
   const one = (cls: string, n: number, w: string) => (
     <span className="lk-crownct"><i className={`lk-dot ${cls}`} style={{ width: size, height: size }} /><span>{words ? `${n} ${w}` : n}</span></span>
@@ -146,9 +132,9 @@ function Crowns({ gold, silver, bronze, words, size = 8 }: { gold: number; silve
   return <span className="lk-crowns">{one('lk-dot-gold', gold, 'gold')}{one('lk-dot-silver', silver, 'silver')}{one('lk-dot-bronze', bronze, 'bronze')}</span>;
 }
 
-export function Leaderboard({ rows, onViewAll, compact, onSignIn }: { rows: LeaderRow[]; onViewAll?: () => void; compact?: boolean; onSignIn?: () => void }) {
+export function Leaderboard({ rows, onViewAll, compact, onSignIn, id }: { rows: LeaderRow[]; onViewAll?: () => void; compact?: boolean; onSignIn?: () => void; id?: string }) {
   return (
-    <section className={`lk-panel lk-board${compact ? ' lk-board-compact' : ''}`}>
+    <section id={id} className={`lk-panel lk-board${compact ? ' lk-board-compact' : ''}`}>
       <div className="lk-row-between">
         <p className="lk-eyebrow">LEADERBOARD</p>
         {onViewAll && <button className="lk-link" onClick={onViewAll}>View all</button>}
@@ -187,11 +173,11 @@ function QuickCard({ tile, title, sub, onClick }: { tile: [number, number]; titl
 
 function ProfileCard({ profile, onEdit }: { profile: Profile; onEdit?: () => void }) {
   return (
-    <section className="lk-panel lk-profile">
+    <section id="lk-nav-profile" className="lk-panel lk-profile">
       <div className="lk-inline">
         <Avatar seat={profile.color ?? 0} name={profile.name} size={44} />
         <span className="lk-profile-id">
-          <b className="lk-h16">{profile.name} {profile.flag && <span className="lk-flag">{profile.flag}</span>}</b>
+          <b className="lk-h16">{profile.name}</b>
           <span className="lk-gold lk-small">{profile.crownPoints} crown points</span>
         </span>
       </div>
@@ -227,7 +213,7 @@ function LiveLobby({ connected, tables, onJoin, onOpen, askName, defaultName, on
   const shown = tables.filter((t) => (filter === 'all' || t.mode === filter) && (filter !== 'points' || boxFilter === 'any' || t.rowBoxes === boxFilter));
 
   return (
-    <section className="lk-panel lk-live">
+    <section id="lk-nav-games" className="lk-panel lk-live">
       <div className="lk-live-top">
         <div className="lk-live-head">
           <h1 className="lk-h20">Live lobby</h1>
@@ -371,7 +357,7 @@ function FriendsPanel({ friends, requests, onAdd, onAccept, onDecline, onInvite,
   const offline = friends.filter((f) => f.status === 'offline');
   const invite = onInvite && ((id: string) => { onInvite(id); setInvited((s) => new Set(s).add(id)); });
   return (
-    <aside className="lk-panel lk-friends">
+    <aside id="lk-nav-friends" className="lk-panel lk-friends">
       <div className="lk-row-between"><b className="lk-h16">Friends</b><span className="lk-green lk-small">{online.length} online</span></div>
       <form className="lk-add" onSubmit={(e) => { e.preventDefault(); const u = draft.trim(); if (u) { onAdd?.(u); setDraft(''); } }}>
         <input id="lk-add-friend" className="lk-input" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add by username" maxLength={24} aria-label="Add by username" />

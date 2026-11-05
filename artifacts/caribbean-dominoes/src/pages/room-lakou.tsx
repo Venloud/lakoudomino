@@ -295,7 +295,9 @@ export default function RoomPage() {
   };
 
   const confirmLeave = () => {
-    if (window.confirm('Leave this table?')) void leaveWaitingRoom();
+    if (window.confirm('Leave this table? If a match is active, a bot will take over your seat and your result will count as a loss.')) {
+      void leaveWaitingRoom();
+    }
   };
 
   const changeSettings = (settings: { mode: 'regular' | 'points'; rowBoxes: number; turnSeconds: number; isPrivate: boolean }) => {
@@ -420,7 +422,7 @@ export default function RoomPage() {
       onLeave: leaveWaitlist,
     } : undefined}
     seatOffer={offer ? {
-      tableName: room.hostName || 'Lakou Domino',
+      tableName: room.hostName || 'Domino',
       seatNumber: offer.seat ?? 0,
       reason: 'A seat opened at the table.',
       expiresAt: offer.expiresAt ?? Date.now() + 60000,

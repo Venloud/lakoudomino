@@ -15,6 +15,7 @@ import {
   useGetAuthMe,
   useGetLobby,
   useJoinRoom,
+  useJoinTicTacToeRoom,
   useListFriends,
   useLogout,
 } from '@workspace/api-client-react';
@@ -51,6 +52,7 @@ export default function Home() {
   });
   const createRoom = useCreateRoom();
   const joinRoom = useJoinRoom();
+  const joinTicTacToeRoom = useJoinTicTacToeRoom();
   const logout = useLogout();
   const addFriend = useCreateFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
@@ -243,8 +245,8 @@ export default function Home() {
   };
 
   const goHome = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
     refreshSocial();
+    setLocation('/');
   };
 
   const enterRoom = (code: string, reconnectToken: string, displayName: string, isHost: boolean) => {
@@ -341,6 +343,17 @@ export default function Home() {
       onSuccess: (result) => {
         setLiveInvites((current) => current.filter((invite) => invite.id !== id));
         const name = profile?.name || 'Guest';
+        if (result.game === 'tic-tac-toe') {
+          joinTicTacToeRoom.mutate({ code: result.roomCode, data: { displayName: name } }, {
+            onSuccess: (room) => {
+              sessionStorage.setItem(`tic-tac-toe-reconnect-${room.code}`, room.reconnectToken);
+              sessionStorage.setItem(`tic-tac-toe-display-name-${room.code}`, name);
+              setLocation(`/games/tic-tac-toe/${room.code}`);
+            },
+            onError: () => setNotice('The invite was accepted, but the Tic-Tac-Toe room could not be joined.'),
+          });
+          return;
+        }
         joinRoom.mutate({ code: result.roomCode, data: { displayName: name } }, {
           onSuccess: (room) => {
             if (!room.reconnectToken) {
@@ -403,11 +416,20 @@ export default function Home() {
         onSignIn={() => setLocation('/sign-in')}
         onSignUp={() => setLocation('/sign-up')}
         onHome={goHome}
+        onNavigate={(target) => {
+          const routes: Record<string, string> = {
+            'lk-nav-games': '/games',
+            'lk-nav-friends': '/friends',
+            'lk-nav-leaderboard': '/leaderboard',
+            'lk-nav-profile': '/profile',
+          };
+          setLocation(routes[target] ?? '/');
+        }}
         onHowToPlay={() => setLocation('/how-to-play')}
         onPlayFriends={() => createTable({ name: defaultName || 'Guest', mode: 'regular', rowBoxes: 10, turnSeconds: 30, private: true })}
         onPracticeBots={() => createTable({ name: defaultName || 'Guest', mode: 'regular', rowBoxes: 10, turnSeconds: 30, private: true }, true)}
         onProfileMenu={handleLogout}
-        onEditProfile={() => setNotice('Your username and record come from your Lakou account.')}
+        onEditProfile={() => setNotice('Your username and record come from your 509 Yard account.')}
         friends={signedIn ? friendViews : []}
         requests={signedIn ? requests : []}
         onAddFriend={(username) => addFriend.mutate({ data: { username } }, { onSuccess: refreshSocial, onError: () => setNotice('We could not send that friend request.') })}
@@ -425,7 +447,7 @@ export default function Home() {
             <div className="social-notice" key={invite.id} data-testid={`invite-${invite.id}`}>
               <div className="social-notice-copy"><b>{invite.inviterName} invited you to a table</b><span>Table code: {invite.roomCode}</span></div>
               <div className="social-notice-actions">
-                <button type="button" data-testid={`accept-invite-${invite.id}`} onClick={() => acceptRoomInvite(invite.id)} disabled={acceptInvite.isPending || joinRoom.isPending}>Join table</button>
+                <button type="button" data-testid={`accept-invite-${invite.id}`} onClick={() => acceptRoomInvite(invite.id)} disabled={acceptInvite.isPending || joinRoom.isPending || joinTicTacToeRoom.isPending}>Join table</button>
                 <button type="button" data-testid={`dismiss-invite-${invite.id}`} onClick={() => dismissInvite.mutate({ id: invite.id }, { onSuccess: () => { setLiveInvites((current) => current.filter((item) => item.id !== invite.id)); refreshSocial(); } })}>Dismiss</button>
               </div>
             </div>

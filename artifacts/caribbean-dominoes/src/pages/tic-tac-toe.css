@@ -1,0 +1,75 @@
+.yard-tic-main { max-width: 1080px; }
+.yard-tic-back { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 22px; color: var(--yard-muted); font-size: 12px; text-decoration: none; }
+.yard-tic-back:hover { color: var(--yard-text); }
+.yard-tic-layout { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; align-items: start; }
+.yard-tic-board-card, .yard-tic-info { border: 1px solid var(--yard-line); border-radius: 10px; background: var(--yard-panel); }
+.yard-tic-board-card { padding: clamp(18px, 4vw, 30px); }
+.yard-tic-status { min-height: 24px; margin: 0 0 18px; color: var(--yard-muted); font-size: 13px; font-weight: 600; text-align: center; }
+.yard-tic-status strong { color: var(--yard-accent); }
+.yard-tic-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(100%, 390px); margin: 0 auto; }
+.yard-tic-cell { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid #3a3b40; border-radius: 10px; background: #17181c; color: var(--yard-text); font-size: clamp(40px, 9vw, 76px); font-weight: 700; cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+.yard-tic-cell:hover:enabled { transform: translateY(-2px); border-color: var(--yard-accent); background: #1d201d; }
+.yard-tic-cell:focus-visible { outline: 2px solid var(--yard-accent); outline-offset: 2px; }
+.yard-tic-cell[data-mark="X"] { color: var(--yard-accent); }
+.yard-tic-cell[data-mark="O"] { color: #e9e8e2; }
+.yard-tic-cell:disabled { cursor: default; }
+.yard-tic-actions { display: flex; justify-content: center; margin-top: 20px; }
+.yard-tic-info { padding: 18px; }
+.yard-tic-info h2 { margin: 0 0 10px; font-size: 13px; }
+.yard-tic-info p { margin: 0; color: var(--yard-muted); font-size: 12px; line-height: 1.6; }
+.yard-tic-players { display: grid; gap: 8px; margin-top: 17px; }
+.yard-tic-player { display: flex; align-items: center; gap: 9px; padding: 10px; border: 1px solid var(--yard-line); border-radius: 7px; color: var(--yard-muted); font-size: 12px; }
+.yard-tic-player.is-active { border-color: #527b43; background: #202820; color: var(--yard-text); }
+.yard-tic-player b { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 6px; background: #2b2d32; color: var(--yard-text); }
+.yard-tic-player.is-active b { background: var(--yard-accent); color: #11170f; }
+.yard-tic-note { display: block; margin-top: 16px; color: #85868b; font-size: 10px; line-height: 1.5; }
+.yard-tic-mode-picker { display: flex; gap: 8px; margin: 0 0 16px; }
+.yard-tic-mode-picker button { display: grid; gap: 4px; min-width: 142px; padding: 10px 13px; border: 1px solid var(--yard-line); border-radius: 8px; background: #1a1b1f; color: var(--yard-muted); text-align: left; cursor: pointer; }
+.yard-tic-mode-picker button b { color: var(--yard-text); font-size: 12px; }
+.yard-tic-mode-picker button span { font-size: 10px; }
+.yard-tic-mode-picker button.is-selected { border-color: #507b42; background: #202720; }
+.yard-tic-mode-picker button.is-selected b { color: var(--yard-accent); }
+.yard-tic-rule-note { margin-top: 10px !important; padding-top: 10px; border-top: 1px solid var(--yard-line); }
+.yard-tic-main.is-yard-mode .yard-tic-layout { grid-template-columns: minmax(0, 1fr) 240px; }
+.yard-ultimate-scroll { width: 100%; overflow-x: auto; padding: 3px 1px 8px; }
+.yard-ultimate-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; width: min(100%, 660px); min-width: 480px; margin: 0 auto; aspect-ratio: 1; }
+.yard-ultimate-mini { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; min-width: 0; padding: 5px; border: 1px solid #3a3b40; border-radius: 8px; background: #191a1e; transition: opacity .16s, border-color .16s, background .16s; }
+.yard-ultimate-mini.is-target { border-color: #5c8d49; background: #202720; box-shadow: 0 0 0 1px #5c8d4933; }
+.yard-ultimate-mini.is-locked { opacity: .58; }
+.yard-ultimate-mini.is-resolved { background: #202126; }
+.yard-ultimate-cell { display: grid; place-items: center; min-width: 0; padding: 0; border: 1px solid #303137; border-radius: 3px; background: #151619; color: var(--yard-text); font-size: clamp(10px, 2.2vw, 24px); font-weight: 700; cursor: pointer; }
+.yard-ultimate-cell:hover:enabled { border-color: var(--yard-accent); background: #202720; }
+.yard-ultimate-cell:focus-visible { position: relative; z-index: 2; outline: 2px solid var(--yard-accent); outline-offset: 1px; }
+.yard-ultimate-cell:disabled { cursor: default; }
+.yard-ultimate-cell[data-mark="X"] { color: var(--yard-accent); }
+.yard-ultimate-cell[data-mark="O"] { color: #e9e8e2; }
+.yard-ultimate-result { position: absolute; inset: 0; display: grid; place-items: center; color: var(--yard-accent); font-size: clamp(38px, 7vw, 88px); font-weight: 800; line-height: 1; opacity: .34; pointer-events: none; }
+.yard-ultimate-result.is-draw { color: var(--yard-muted); }
+.yard-tic-status span { color: var(--yard-muted); font-weight: 500; }
+.yard-tic-lobby { max-width: 720px; }
+.yard-tic-name-field { display: grid; gap: 7px; max-width: 340px; color: var(--yard-muted); font-size: 12px; }
+.yard-tic-name-field .yard-input, .yard-tic-join-form .yard-input, .yard-tic-friend-invites .yard-input { width: 100%; box-sizing: border-box; }
+.yard-tic-room-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 0; }
+.yard-tic-or { color: var(--yard-muted); font-size: 11px; }
+.yard-tic-join-form { display: flex; width: min(100%, 440px); gap: 8px; }
+.yard-tic-join-form .yard-input { min-width: 0; }
+.yard-tic-room-copy { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--yard-line); }
+.yard-tic-room-copy h2 { margin: 0 0 7px; font-size: 13px; }
+.yard-tic-room-copy p { max-width: 520px; margin: 0; color: var(--yard-muted); font-size: 12px; line-height: 1.6; }
+.yard-tic-local-link { margin-top: 22px; padding: 0; border: 0; background: none; color: var(--yard-muted); font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; }
+.yard-tic-local-link:hover { color: var(--yard-text); }
+.yard-tic-notice { margin: 16px 0 0; color: #dca7a0; font-size: 12px; }
+.yard-tic-room-heading { align-items: center; }
+.yard-tic-room-heading .yard-button { flex: 0 0 auto; }
+.yard-tic-friend-invites { display: grid; gap: 7px; margin-top: 18px; color: var(--yard-muted); font-size: 11px; }
+.yard-tic-friend-invites select { color: var(--yard-text); }
+@media (max-width: 680px) {
+  .yard-tic-main { width: min(100% - 32px, 820px); padding-top: 26px; }
+  .yard-tic-layout { grid-template-columns: 1fr; }
+  .yard-tic-info { order: -1; }
+  .yard-tic-main.is-yard-mode .yard-tic-layout { grid-template-columns: 1fr; }
+  .yard-ultimate-board { width: 540px; min-width: 480px; }
+  .yard-tic-mode-picker button { flex: 1; }
+  .yard-tic-join-form { flex-direction: column; }
+  .yard-tic-room-heading { align-items: flex-start; flex-direction: column; }
+}

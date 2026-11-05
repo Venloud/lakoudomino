@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { FriendInviteNotificationGame } from './friendInviteNotificationGame';
 import type { FriendInviteNotificationStatus } from './friendInviteNotificationStatus';
 
 export interface FriendInviteNotification {
@@ -12,5 +13,6 @@ export interface FriendInviteNotification {
   inviterId: string;
   inviterName: string;
   roomCode: string;
+  game: FriendInviteNotificationGame;
   status: FriendInviteNotificationStatus;
 }
