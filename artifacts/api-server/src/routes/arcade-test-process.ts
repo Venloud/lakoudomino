@@ -1,7 +1,12 @@
 import { createServer } from "node:http";
 import express from "express";
 import { WebSocketServer } from "ws";
-import arcadeRouter, { handleArcadeSocket, initializeArcadeRooms } from "./arcade.ts";
+import arcadeRouter, {
+  handleArcadeSocket,
+  initializeArcadeRooms,
+  interruptArcadeNotificationListenerForTest,
+  resumeArcadeNotificationListenerForTest,
+} from "./arcade.ts";
 
 const port = Number(process.env.PORT);
 if (!Number.isInteger(port) || port <= 0) {
@@ -11,6 +16,14 @@ if (!Number.isInteger(port) || port <= 0) {
 const app = express();
 app.use(express.json());
 app.get("/healthz", (_request, response) => response.json({ status: "ok" }));
+app.post("/__test/interrupt-notification-listener", (_request, response) => {
+  const interrupted = interruptArcadeNotificationListenerForTest();
+  response.status(interrupted ? 200 : 409).json({ interrupted });
+});
+app.post("/__test/resume-notification-listener", (_request, response) => {
+  resumeArcadeNotificationListenerForTest();
+  response.json({ resumed: true });
+});
 app.use("/api", arcadeRouter);
 
 const server = createServer(app);

@@ -387,6 +387,47 @@ test("arcade seats, concurrent joins, and room updates stay consistent across AP
     assert.equal(stateMessage.type, "state", JSON.stringify(stateMessage));
     assert.equal((stateMessage.room as JsonRecord).turn, 1);
 
+    const observerOnTwo = await connectArcadeSocket(
+      processTwo.baseUrl,
+      String(matchOne.code),
+      String(seatZero.room.reconnectToken),
+    );
+    sockets.push(observerOnTwo.socket);
+    const interrupted = await fetch(`${processTwo.baseUrl}/__test/interrupt-notification-listener`, {
+      method: "POST",
+    });
+    assert.equal(interrupted.status, 200, "instance two should interrupt its notification listener");
+
+    const writerOnOne = await connectArcadeSocket(
+      processOne.baseUrl,
+      String(matchOne.code),
+      String(seatOne.room.reconnectToken),
+    );
+    sockets.push(writerOnOne.socket);
+    const afterFirstMove = stateMessage.room as JsonRecord;
+    const afterFirstState = afterFirstMove.state as JsonRecord;
+    const nextBoard = [...afterFirstState.board as unknown[]];
+    nextBoard[4] = "O";
+    const recoveredSnapshot = nextSocketMessage(observerOnTwo.socket);
+    const writerAcknowledgement = nextSocketMessage(writerOnOne.socket);
+    writerOnOne.socket.send(JSON.stringify({
+      type: "state",
+      state: { ...afterFirstState, board: nextBoard, currentPlayer: "X", lastMove: 4 },
+      turn: 0,
+    }));
+    const committedMove = await writerAcknowledgement;
+    assert.equal(committedMove.type, "state");
+    const resumed = await fetch(`${processTwo.baseUrl}/__test/resume-notification-listener`, {
+      method: "POST",
+    });
+    assert.equal(resumed.status, 200);
+    const recovered = await recoveredSnapshot;
+    assert.equal(recovered.type, "room", JSON.stringify(recovered));
+    const recoveredRoom = recovered.room as JsonRecord;
+    assert.equal(recoveredRoom.turn, 0);
+    assert.equal((recoveredRoom.state as JsonRecord).board instanceof Array, true);
+    assert.equal(((recoveredRoom.state as JsonRecord).board as unknown[])[4], "O");
+
     const privateRoom = await postRoom(processOne.baseUrl, "rooms", {
       game: "mopyon",
       displayName: "Private host",

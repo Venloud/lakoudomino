@@ -36,7 +36,8 @@ type SqlExecutor = {
 type ArcadeNotificationClient = {
   query: (text: string) => Promise<unknown>;
   on: (event: "notification", listener: (notification: { channel?: string; payload?: string }) => void) => unknown;
-  once: (event: "error", listener: (error: Error) => void) => unknown;
+  once(event: "error", listener: (error: Error) => void): unknown;
+  once(event: "end", listener: () => void): unknown;
   release: (destroy?: boolean) => void;
 };
 
@@ -45,6 +46,8 @@ const router = Router();
 const instanceId = randomUUID();
 let listenerStarted = false;
 let listenerRetry: NodeJS.Timeout | undefined;
+let listenerClient: ArcadeNotificationClient | undefined;
+let listenerRetryPausedForTest = false;
 let pendingBroadcasts: Promise<void> = Promise.resolve();
 
 function recordFromRow(row: Record<string, unknown>): ArcadeRoomRecord {
@@ -168,16 +171,36 @@ async function broadcastRoomEvent(event: RoomEvent): Promise<void> {
   for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.send(message);
 }
 
+async function resyncConnectedRooms(): Promise<void> {
+  for (const [code, sockets] of socketsByRoom) {
+    const liveSockets = [...sockets].filter((socket) => socket.readyState === WebSocket.OPEN);
+    if (!liveSockets.length) continue;
+    const room = await fetchRoom(code);
+    if (!room) continue;
+    const message = JSON.stringify({ type: "room", room: roomSummary(room) });
+    for (const socket of liveSockets) socket.send(message);
+  }
+}
+
 function queueRoomEvent(event: RoomEvent): void {
   pendingBroadcasts = pendingBroadcasts
     .then(() => broadcastRoomEvent(event))
     .catch((error) => logger.error({ err: error, code: event.code }, "Failed to broadcast arcade room update"));
 }
 
+function handleListenerDisconnect(client: ArcadeNotificationClient, error?: Error): void {
+  if (listenerClient !== client) return;
+  listenerClient = undefined;
+  if (error) logger.error({ err: error }, "Arcade room notification connection failed");
+  client.release(true);
+  scheduleListenerRetry();
+}
+
 async function listenForRoomEvents(): Promise<void> {
   let client: ArcadeNotificationClient | undefined;
   try {
     client = await pool.connect() as unknown as ArcadeNotificationClient;
+    listenerClient = client;
     client.on("notification", (notification: { channel?: string; payload?: string }) => {
       if (notification.channel !== NOTIFY_CHANNEL || !notification.payload) return;
       try {
@@ -191,27 +214,44 @@ async function listenForRoomEvents(): Promise<void> {
         logger.warn({ err: error }, "Ignoring malformed arcade room notification");
       }
     });
-    client.once("error", (error: Error) => {
-      logger.error({ err: error }, "Arcade room notification connection failed");
-      client?.release(true);
-      client = undefined;
-      scheduleListenerRetry();
-    });
+    client.once("error", (error: Error) => handleListenerDisconnect(client!, error));
+    client.once("end", () => handleListenerDisconnect(client!));
     await client.query(`LISTEN ${NOTIFY_CHANNEL}`);
+    await resyncConnectedRooms();
   } catch (error) {
     logger.error({ err: error }, "Could not listen for arcade room updates");
-    client?.release(true);
+    if (client && listenerClient === client) {
+      listenerClient = undefined;
+      client.release(true);
+    }
     scheduleListenerRetry();
   }
 }
 
 function scheduleListenerRetry(): void {
-  if (listenerRetry) return;
+  if (listenerRetry || listenerRetryPausedForTest) return;
   listenerRetry = setTimeout(() => {
     listenerRetry = undefined;
     void listenForRoomEvents();
   }, 1_000);
   listenerRetry.unref();
+}
+
+export function interruptArcadeNotificationListenerForTest(): boolean {
+  const client = listenerClient;
+  if (!client) return false;
+  listenerRetryPausedForTest = true;
+  handleListenerDisconnect(client);
+  return true;
+}
+
+export function resumeArcadeNotificationListenerForTest(): void {
+  listenerRetryPausedForTest = false;
+  if (listenerRetry) {
+    clearTimeout(listenerRetry);
+    listenerRetry = undefined;
+  }
+  if (!listenerClient) void listenForRoomEvents();
 }
 
 export async function initializeArcadeRooms(): Promise<void> {
