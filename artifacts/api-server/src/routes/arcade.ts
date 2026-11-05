@@ -2,7 +2,12 @@ import { randomBytes, createHash, randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { Router } from "express";
 import { WebSocket } from "ws";
-import { CreateArcadeRoomBody, JoinArcadeRoomBody, QuickMatchArcadeRoomBody } from "@workspace/api-zod";
+import {
+  ARCADE_ROOM_RETENTION_MS,
+  CreateArcadeRoomBody,
+  JoinArcadeRoomBody,
+  QuickMatchArcadeRoomBody,
+} from "@workspace/api-zod";
 import { pool, type ArcadeRoomRecord } from "@workspace/db";
 import { getIdentityFromRequest } from "../lib/auth-session";
 import { logger } from "../lib/logger";
@@ -15,7 +20,6 @@ import {
 } from "../lib/arcade-validation.ts";
 
 const GAME_IDS = new Set<string>(ARCADE_GAME_IDS);
-const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
 const NOTIFY_CHANNEL = "arcade_room_updates";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const STORED_RESULT_KEY = "__509YardArcadeResult";
@@ -202,7 +206,8 @@ function roomSummary(room: ArcadeRoom, seat: number | null = null) {
     code: room.code,
     game: room.game,
     capacity: room.capacity,
-    reconnectDeadline: room.updatedAt + ROOM_TTL_MS,
+    updatedAt: room.updatedAt,
+    reconnectDeadline: room.updatedAt + ARCADE_ROOM_RETENTION_MS,
     status: isArcadeGameFinished(room) ? "finished" : room.players.length === room.capacity ? "playing" : "waiting",
     players: room.players.map((player, seat) => ({
       name: player.name,
@@ -386,7 +391,7 @@ export function resumeArcadeNotificationListenerForTest(): void {
 }
 
 export async function initializeArcadeRooms(): Promise<void> {
-  await pool.query("DELETE FROM arcade_rooms WHERE updated_at < $1", [new Date(Date.now() - ROOM_TTL_MS)]);
+  await pool.query("DELETE FROM arcade_rooms WHERE updated_at < $1", [new Date(Date.now() - ARCADE_ROOM_RETENTION_MS)]);
   const records = await pool.query(
     `SELECT code, game, capacity, is_private AS "isPrivate", players, state, turn, updated_at AS "updatedAt"
      FROM arcade_rooms`,
@@ -742,7 +747,7 @@ async function maintainArcadeRooms(afterActivityRefresh?: () => Promise<void>): 
       await client.query("UPDATE arcade_rooms SET updated_at = now() WHERE code = ANY($1::text[])", [activeCodes]);
     }
     await afterActivityRefresh?.();
-    await client.query("DELETE FROM arcade_rooms WHERE updated_at < $1", [new Date(Date.now() - ROOM_TTL_MS)]);
+    await client.query("DELETE FROM arcade_rooms WHERE updated_at < $1", [new Date(Date.now() - ARCADE_ROOM_RETENTION_MS)]);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);

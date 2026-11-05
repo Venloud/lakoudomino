@@ -7,6 +7,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { WebSocket } from "ws";
+import { ARCADE_ROOM_RETENTION_MS } from "@workspace/api-zod";
 import { pool } from "@workspace/db";
 
 type JsonRecord = Record<string, unknown>;
@@ -521,7 +522,8 @@ test("signed-in arcade results remain in profile history after room deletion and
       playerCount: 2,
       isPrivate: true,
     }, hostCookie);
-    assert.ok(typeof host.reconnectDeadline === "number" && host.reconnectDeadline > Date.now());
+    assert.ok(typeof host.updatedAt === "number");
+    assert.equal(host.reconnectDeadline, host.updatedAt + ARCADE_ROOM_RETENTION_MS);
     const guest = await postRoom(processOne.baseUrl, `rooms/${String(host.code)}/join`, {
       displayName: "History guest",
     }, guestCookie);
