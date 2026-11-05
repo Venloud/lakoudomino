@@ -700,7 +700,7 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
       playerCount: 2,
       isPrivate: true,
     });
-    await postRoom(processOne.baseUrl, `rooms/${String(room.code)}/join`, {
+    const opponent = await postRoom(processOne.baseUrl, `rooms/${String(room.code)}/join`, {
       displayName: "Idle opponent",
     });
     const connection = await connectArcadeSocket(
@@ -710,6 +710,31 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
     );
     sockets.push(connection.socket);
     assert.equal((connection.firstMessage.room as JsonRecord).status, "playing");
+    const opponentConnection = await connectArcadeSocket(
+      processTwo.baseUrl,
+      String(room.code),
+      String(opponent.reconnectToken),
+    );
+    sockets.push(opponentConnection.socket);
+    assert.equal((opponentConnection.firstMessage.room as JsonRecord).status, "playing");
+
+    const initialState = (connection.firstMessage.room as JsonRecord).state as JsonRecord;
+    const firstBoard = [...initialState.board as unknown[]];
+    firstBoard[112] = "X";
+    const firstMove = {
+      ...initialState,
+      board: firstBoard,
+      currentPlayer: "O",
+      lastMove: 112,
+    };
+    const hostFirstMove = nextSocketMessage(connection.socket);
+    const opponentFirstMove = nextSocketMessage(opponentConnection.socket);
+    connection.socket.send(JSON.stringify({ type: "state", state: firstMove, turn: 1 }));
+    const firstMoveMessages = await Promise.all([hostFirstMove, opponentFirstMove]);
+    for (const message of firstMoveMessages) {
+      assert.equal(message.type, "state");
+      assert.equal((((message.room as JsonRecord).state as JsonRecord).board as unknown[])[112], "X");
+    }
 
     const disconnectedRoom = await postRoom(processTwo.baseUrl, "rooms", {
       game: "mopyon",
@@ -734,11 +759,43 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
         [room.code, staleTimestamp],
       );
 
-      const refreshed = await fetch(
-        `${processOne.baseUrl}/__test/maintain-rooms?pauseAfterRefreshMs=250`,
-        { method: "POST" },
-      );
-      assert.equal(refreshed.status, 200);
+      if (attempt === 0) {
+        const refreshed = await fetch(
+          `${processOne.baseUrl}/__test/maintain-rooms?pauseAfterRefreshMs=1000`,
+          { method: "POST" },
+        );
+        assert.equal(refreshed.status, 200);
+
+        const currentState = (firstMoveMessages[1].room as JsonRecord).state as JsonRecord;
+        const secondBoard = [...currentState.board as unknown[]];
+        secondBoard[113] = "O";
+        const secondMove = {
+          ...currentState,
+          board: secondBoard,
+          currentPlayer: "X",
+          lastMove: 113,
+        };
+        const hostSecondMove = nextSocketMessage(connection.socket);
+        const opponentSecondMove = nextSocketMessage(opponentConnection.socket);
+        opponentConnection.socket.send(JSON.stringify({ type: "state", state: secondMove, turn: 0 }));
+        const secondMoveMessages = await Promise.all([hostSecondMove, opponentSecondMove]);
+        for (const message of secondMoveMessages) {
+          assert.equal(message.type, "state");
+          assert.equal((((message.room as JsonRecord).state as JsonRecord).board as unknown[])[113], "O");
+        }
+        const persisted = await pool.query(
+          `SELECT state FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
+          [room.code],
+        );
+        assert.equal((persisted.rows[0].state as JsonRecord).currentPlayer, "X");
+        assert.equal(((persisted.rows[0].state as JsonRecord).board as unknown[])[113], "O");
+      } else {
+        const refreshed = await fetch(
+          `${processOne.baseUrl}/__test/maintain-rooms?pauseAfterRefreshMs=250`,
+          { method: "POST" },
+        );
+        assert.equal(refreshed.status, 200);
+      }
       const cleaned = fetch(`${processTwo.baseUrl}/__test/maintain-rooms`, { method: "POST" });
       const cleanupResponse = await cleaned;
       assert.equal(cleanupResponse.status, 200);
