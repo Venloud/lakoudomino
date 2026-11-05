@@ -463,16 +463,6 @@ function validateFiller(current: unknown, proposed: unknown, seat: number, capac
   return reject("That Filler color choice is not legal.");
 }
 
-function multiset(values: string[]): Map<string, number> {
-  const result = new Map<string, number>();
-  for (const value of values) result.set(value, (result.get(value) ?? 0) + 1);
-  return result;
-}
-
-function sameMultiset(left: string[], right: string[]): boolean {
-  return equal([...multiset(left)].sort(), [...multiset(right)].sort());
-}
-
 function premiumAt(index: number): "TW" | "DW" | "TL" | "DL" | null {
   const row = Math.floor(index / 15), col = index % 15;
   const key = `${row},${col}`;
@@ -514,6 +504,22 @@ function wordScore(board: (RecordValue | null)[], indexes: number[], fresh: Set<
   return sum * multiplier;
 }
 
+function matchesScrabbleProjection(
+  proposed: RecordValue,
+  expected: RecordValue,
+  seat: number,
+  projectedRack?: string[],
+): boolean {
+  if (!Array.isArray(expected.racks) || !Array.isArray(expected.bag)) return false;
+  const projected = {
+    ...expected,
+    racks: (expected.racks as string[][]).map((rack, index) =>
+      index === seat ? projectedRack ?? rack : []),
+    bag: (expected.bag as string[]).map(() => ""),
+  };
+  return equal({ ...proposed, scores: expected.scores, winner: expected.winner }, projected);
+}
+
 function validateScrabble(current: unknown, proposed: unknown, seat: number, capacity: number): ValidationResult {
   if (!isRecord(current) || !isRecord(proposed) || !Array.isArray(current.board) || !Array.isArray(proposed.board) ||
       !Array.isArray(current.racks) || !Array.isArray(proposed.racks) || !Array.isArray(current.bag) ||
@@ -527,15 +533,16 @@ function validateScrabble(current: unknown, proposed: unknown, seat: number, cap
   const oldBoard = current.board as (RecordValue | null)[];
   const nextBoard = proposed.board as (RecordValue | null)[];
   const oldBag = current.bag as string[];
-  const nextBag = proposed.bag as string[];
+  const hiddenBag = proposed.bag as unknown[];
   const oldScores = current.scores as number[];
-  const nextScores = proposed.scores as number[];
   if (oldRacks.length !== capacity || nextRacks.length !== capacity || oldScores.length !== capacity ||
-      nextScores.length !== capacity || oldRacks.some((rack) => !Array.isArray(rack))) return reject("Invalid Scrabble racks.");
+      oldRacks.some((rack) => !Array.isArray(rack)) ||
+      hiddenBag.some((tile) => tile !== "") ||
+      nextRacks.some((rack, index) => !Array.isArray(rack) || (index !== seat && rack.length !== 0))) {
+    return reject("Invalid Scrabble racks.");
+  }
 
   const unchangedBoard = equal(oldBoard, nextBoard);
-  const unchangedNonTurnRacks = oldRacks.every((rack, index) => index === seat || equal(rack, nextRacks[index]));
-  const unchangedScores = equal(oldScores, nextScores);
   const winnerAfterPass = (passes: number, scores: number[]) => {
     if (passes < capacity * 2) return null;
     const finalScores = scores.map((score, player) =>
@@ -545,55 +552,62 @@ function validateScrabble(current: unknown, proposed: unknown, seat: number, cap
     return { scores: finalScores, winner: leaders.length === 1 ? leaders[0] : "draw" };
   };
 
-  // Passing is a legal move only when the full board, racks, and bag remain unchanged.
-  if (unchangedBoard && unchangedNonTurnRacks && equal(oldBag, nextBag) && unchangedScores &&
+  // Rebuild pass results from the trusted racks, including end-of-game scoring.
+  if (unchangedBoard && hiddenBag.length === oldBag.length &&
       equal(nextRacks[seat], oldRacks[seat]) && proposed.turn === nextTurn &&
       proposed.passes === (current.passes as number) + 1) {
     const finished = winnerAfterPass(proposed.passes as number, oldScores);
     const scores = finished?.scores ?? oldScores;
     const winner = finished?.winner ?? null;
     const expected = { ...current, turn: nextTurn, passes: proposed.passes, scores, winner };
-    return equal(proposed, expected) ? accept(expected, nextTurn) : reject("That Scrabble pass is invalid.");
+    return matchesScrabbleProjection(proposed, expected, seat)
+      ? accept(expected, nextTurn) : reject("That Scrabble pass is invalid.");
   }
 
   if (unchangedBoard) {
     const before = oldRacks[seat];
     const after = nextRacks[seat];
     if (!Array.isArray(before) || !Array.isArray(after) || oldBag.length < 7 ||
-        after.length !== before.length || !unchangedNonTurnRacks || !unchangedScores ||
+        after.length !== before.length || hiddenBag.length !== oldBag.length ||
         proposed.turn !== nextTurn || proposed.passes !== 0) {
       return reject("That Scrabble exchange is not legal.");
     }
     let exchange: string[] | null = null;
+    let keptRack: string[] | null = null;
     for (let count = 1; count <= Math.min(7, before.length); count += 1) {
       if (count > oldBag.length) break;
       for (let mask = 1; mask < (1 << before.length); mask += 1) {
         if (mask.toString(2).replaceAll("0", "").length !== count) continue;
         const kept = before.filter((_, index) => (mask & (1 << index)) === 0);
         const exchanged = before.filter((_, index) => (mask & (1 << index)) !== 0);
-        if (equal(after, [...kept, ...oldBag.slice(0, count)]) &&
-            sameMultiset(nextBag, [...oldBag.slice(count), ...exchanged])) {
+        if (equal(after.slice(0, kept.length), kept) &&
+            after.slice(kept.length).length === count &&
+            after.slice(kept.length).every((tile) => tile === "")) {
           exchange = exchanged;
+          keptRack = kept;
           break;
         }
       }
       if (exchange) break;
     }
-    if (!exchange) return reject("That Scrabble exchange is invalid.");
+    if (!exchange || !keptRack) return reject("That Scrabble exchange is invalid.");
     const expected = {
       ...current,
-      racks: nextRacks,
+      racks: oldRacks.map((rack, index) =>
+        index === seat ? [...keptRack!, ...oldBag.slice(0, exchange!.length)] : [...rack]),
       bag: shuffle([...oldBag.slice(exchange.length), ...exchange]),
       turn: nextTurn,
       passes: 0,
     };
-    const proposedWithoutBag = { ...proposed, bag: expected.bag };
-    return equal(proposedWithoutBag, expected) ? accept(expected, nextTurn) : reject("That Scrabble exchange is invalid.");
+    return matchesScrabbleProjection(proposed, expected, seat, [
+      ...keptRack!,
+      ...Array.from({ length: exchange.length }, () => ""),
+    ])
+      ? accept(expected, nextTurn) : reject("That Scrabble exchange is invalid.");
   }
 
   const fresh = nextBoard.flatMap((tile, index) => oldBoard[index] === null && tile !== null ? [index] : []);
   if (fresh.length < 1 || fresh.length > 7 || oldBoard.some((tile, index) => tile !== null && !equal(tile, nextBoard[index])) ||
-      !unchangedNonTurnRacks ||
       proposed.turn !== nextTurn || proposed.passes !== 0) return reject("That Scrabble word placement is not legal.");
   const freshSet = new Set(fresh);
   const allFreshSameRow = fresh.every((index) => Math.floor(index / 15) === Math.floor(fresh[0] / 15));
@@ -613,22 +627,14 @@ function validateScrabble(current: unknown, proposed: unknown, seat: number, cap
     }
     rack.splice(rackIndex, 1);
   }
-  const combinedBefore = [...oldBag, ...oldRacks[seat]];
-  for (const index of fresh) {
-    const letter = String(nextBoard[index]?.letter);
-    const fromRackIndex = Number(nextBoard[index]?.points) === 0 ? -1 : combinedBefore.indexOf(letter);
-    if (fromRackIndex >= 0) combinedBefore.splice(fromRackIndex, 1);
-    else {
-      const blankIndex = combinedBefore.indexOf("?");
-      if (blankIndex < 0) return reject("That tile is not available.");
-      combinedBefore.splice(blankIndex, 1);
-    }
-  }
   const drawCount = Math.min(7 - rack.length, oldBag.length);
   const expectedBag = oldBag.slice(drawCount);
   const expectedRack = [...rack, ...oldBag.slice(0, drawCount)];
-  if (!equal(nextBag, expectedBag) || !equal(nextRacks[seat], expectedRack) ||
-      !sameMultiset([...nextBag, ...nextRacks[seat]], combinedBefore)) {
+  const submittedRack = nextRacks[seat];
+  if (hiddenBag.length !== expectedBag.length ||
+      submittedRack.length !== expectedRack.length ||
+      !equal(submittedRack.slice(0, rack.length), rack) ||
+      submittedRack.slice(rack.length).some((tile) => tile !== "")) {
     return reject("The Scrabble rack refill is invalid.");
   }
 
@@ -664,8 +670,7 @@ function validateScrabble(current: unknown, proposed: unknown, seat: number, cap
   if (fresh.length === 7) gained += 50;
   const scores = [...oldScores];
   scores[seat] += gained;
-  const finalRack = nextRacks[seat];
-  const emptied = nextBag.length === 0 && finalRack.length === 0;
+  const emptied = expectedBag.length === 0 && expectedRack.length === 0;
   let winner: number | string | null = null;
   if (emptied) {
     let opponentLeftover = 0;
@@ -683,14 +688,18 @@ function validateScrabble(current: unknown, proposed: unknown, seat: number, cap
   const expected = {
     ...current,
     board: nextBoard,
-    racks: nextRacks,
-    bag: nextBag,
+    racks: oldRacks.map((oldRack, index) => index === seat ? expectedRack : [...oldRack]),
+    bag: expectedBag,
     scores,
     turn: nextTurn,
     passes: 0,
     winner,
   };
-  return equal(proposed, expected) ? accept(expected, nextTurn) : reject("The Scrabble score or state does not match that word.");
+  return matchesScrabbleProjection(proposed, expected, seat, [
+    ...rack,
+    ...Array.from({ length: drawCount }, () => ""),
+  ])
+    ? accept(expected, nextTurn) : reject("The Scrabble score or state does not match that word.");
 }
 
 function barricadeTarget(position: number | null, roll: number, direction: number): number | null {

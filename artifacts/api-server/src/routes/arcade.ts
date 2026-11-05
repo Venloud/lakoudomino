@@ -16,8 +16,10 @@ const GAME_IDS = new Set<string>(ARCADE_GAME_IDS);
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
 const NOTIFY_CHANNEL = "arcade_room_updates";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const STORED_RESULT_KEY = "__509YardArcadeResult";
 
 type ArcadePlayer = { name: string; tokenHash: string };
+type ArcadeResult = { winnerSeat: number; resignedSeat: number; endedAt: number };
 type ArcadeRoom = {
   code: string;
   game: string;
@@ -27,6 +29,7 @@ type ArcadeRoom = {
   state: unknown;
   turn: number;
   updatedAt: number;
+  result?: ArcadeResult | null;
 };
 type RoomInput = { game: string; name: string; capacity: number; isPrivate: boolean };
 type RoomEvent = { code: string; type: "room" | "state" | "resigned"; seat?: number; origin?: string };
@@ -41,7 +44,7 @@ type ArcadeNotificationClient = {
   release: (destroy?: boolean) => void;
 };
 
-const socketsByRoom = new Map<string, Set<WebSocket>>();
+const socketsByRoom = new Map<string, Map<WebSocket, number>>();
 const router = Router();
 const instanceId = randomUUID();
 let listenerStarted = false;
@@ -79,11 +82,27 @@ function restoreRoom(record: ArcadeRoomRecord): ArcadeRoom | null {
       !Number.isInteger(record.turn) || record.turn < 0 || record.turn >= record.capacity ||
       !(record.updatedAt instanceof Date) || !Number.isFinite(record.updatedAt.getTime())) return null;
   const players: ArcadePlayer[] = [];
-  for (const value of record.players) {
+  let result: ArcadeResult | null = null;
+  for (const [index, value] of record.players.entries()) {
     if (!value || typeof value !== "object") return null;
     const player = value as Record<string, unknown>;
     if (typeof player.name !== "string" || !player.name.trim() ||
         typeof player.tokenHash !== "string" || !/^[a-f0-9]{64}$/.test(player.tokenHash)) return null;
+    const savedResult = index === 0 ? player[STORED_RESULT_KEY] : undefined;
+    if (savedResult && typeof savedResult === "object" && !Array.isArray(savedResult)) {
+      const value = savedResult as Record<string, unknown>;
+      if (typeof value.winnerSeat === "number" && Number.isInteger(value.winnerSeat) &&
+          value.winnerSeat >= 0 && value.winnerSeat < 2 &&
+          typeof value.resignedSeat === "number" && Number.isInteger(value.resignedSeat) &&
+          value.resignedSeat >= 0 && value.resignedSeat < 2 &&
+          value.winnerSeat !== value.resignedSeat && Number.isFinite(value.endedAt)) {
+        result = {
+          winnerSeat: value.winnerSeat as number,
+          resignedSeat: value.resignedSeat as number,
+          endedAt: value.endedAt as number,
+        };
+      }
+    }
     players.push({ name: player.name, tokenHash: player.tokenHash });
   }
   return {
@@ -95,7 +114,15 @@ function restoreRoom(record: ArcadeRoomRecord): ArcadeRoom | null {
     state: record.state,
     turn: record.turn,
     updatedAt: record.updatedAt.getTime(),
+    result,
   };
+}
+
+function storedRoomPlayers(room: ArcadeRoom): ArcadePlayer[] {
+  // Keep this server-owned outcome beside room players in JSONB; snapshots only expose public player fields.
+  return room.players.map((player, index) => index === 0 && room.result
+    ? { ...player, [STORED_RESULT_KEY]: room.result } as ArcadePlayer
+    : player);
 }
 
 async function insertRoom(executor: SqlExecutor, room: ArcadeRoom): Promise<void> {
@@ -103,7 +130,7 @@ async function insertRoom(executor: SqlExecutor, room: ArcadeRoom): Promise<void
     `INSERT INTO arcade_rooms (code, game, capacity, is_private, players, state, turn, updated_at)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
     [
-      room.code, room.game, room.capacity, room.isPrivate, JSON.stringify(room.players),
+      room.code, room.game, room.capacity, room.isPrivate, JSON.stringify(storedRoomPlayers(room)),
       JSON.stringify(room.state), room.turn, new Date(room.updatedAt),
     ],
   );
@@ -114,7 +141,7 @@ async function updateRoom(executor: SqlExecutor, room: ArcadeRoom): Promise<void
     `UPDATE arcade_rooms
      SET players = $2::jsonb, state = $3::jsonb, turn = $4, updated_at = $5
      WHERE code = $1`,
-    [room.code, JSON.stringify(room.players), JSON.stringify(room.state), room.turn, new Date(room.updatedAt)],
+    [room.code, JSON.stringify(storedRoomPlayers(room)), JSON.stringify(room.state), room.turn, new Date(room.updatedAt)],
   );
 }
 
@@ -145,15 +172,28 @@ async function fetchRoom(code: string): Promise<ArcadeRoom | null> {
   return record ? restoreRoom(record) : null;
 }
 
-function roomSummary(room: ArcadeRoom) {
+function privateScrabbleState(state: unknown, seat: number | null): unknown {
+  if (!state || typeof state !== "object" || Array.isArray(state)) return null;
+  const gameState = state as Record<string, unknown>;
+  if (!Array.isArray(gameState.racks) || !Array.isArray(gameState.bag)) return null;
+  return {
+    ...gameState,
+    racks: gameState.racks.map((rack, index) => seat === index && Array.isArray(rack) ? [...rack] : []),
+    // Keep only the public count; never send the hidden tile order or identities.
+    bag: gameState.bag.map(() => ""),
+  };
+}
+
+function roomSummary(room: ArcadeRoom, seat: number | null = null) {
   return {
     code: room.code,
     game: room.game,
     capacity: room.capacity,
-    status: room.players.length === room.capacity ? "playing" : "waiting",
+    status: room.result ? "finished" : room.players.length === room.capacity ? "playing" : "waiting",
     players: room.players.map((player, seat) => ({ name: player.name, seat })),
-    state: room.state,
+    state: room.game === "scrabble" ? privateScrabbleState(room.state, seat) : room.state,
     turn: room.turn,
+    result: room.result ?? null,
   };
 }
 
@@ -162,23 +202,27 @@ async function broadcastRoomEvent(event: RoomEvent): Promise<void> {
   if (!sockets?.size) return;
   if (event.type === "resigned") {
     const message = JSON.stringify({ type: "resigned", seat: event.seat });
-    for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.send(message);
+    for (const socket of sockets.keys()) if (socket.readyState === WebSocket.OPEN) socket.send(message);
     return;
   }
   const room = await fetchRoom(event.code);
   if (!room) return;
-  const message = JSON.stringify({ type: event.type, room: roomSummary(room) });
-  for (const socket of sockets) if (socket.readyState === WebSocket.OPEN) socket.send(message);
+  for (const [socket, seat] of sockets) {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: event.type, room: roomSummary(room, seat) }));
+    }
+  }
 }
 
 async function resyncConnectedRooms(): Promise<void> {
   for (const [code, sockets] of socketsByRoom) {
-    const liveSockets = [...sockets].filter((socket) => socket.readyState === WebSocket.OPEN);
+    const liveSockets = [...sockets.entries()].filter(([socket]) => socket.readyState === WebSocket.OPEN);
     if (!liveSockets.length) continue;
     const room = await fetchRoom(code);
     if (!room) continue;
-    const message = JSON.stringify({ type: "room", room: roomSummary(room) });
-    for (const socket of liveSockets) socket.send(message);
+    for (const [socket, seat] of liveSockets) {
+      socket.send(JSON.stringify({ type: "room", room: roomSummary(room, seat) }));
+    }
   }
 }
 
@@ -315,7 +359,7 @@ function makeRoom(input: RoomInput): { room: ArcadeRoom; token: string } {
 }
 
 function roomResponse(room: ArcadeRoom, seat: number, reconnectToken: string) {
-  return { ...roomSummary(room), seat, reconnectToken };
+  return { ...roomSummary(room, seat), seat, reconnectToken };
 }
 
 function parseCreate(body: unknown): RoomInput | null {
@@ -444,15 +488,15 @@ export async function handleArcadeSocket(socket: WebSocket, request: IncomingMes
     return;
   }
 
-  const connections = socketsByRoom.get(room.code) ?? new Set<WebSocket>();
-  connections.add(socket);
+  const connections = socketsByRoom.get(room.code) ?? new Map<WebSocket, number>();
+  connections.set(socket, seat);
   socketsByRoom.set(room.code, connections);
-  send(socket, { type: "room", room: roomSummary(room), seat });
+  send(socket, { type: "room", room: roomSummary(room, seat), seat });
 
   socket.on("message", async (raw) => {
     const rejectUpdate = (message: string, currentRoom: ArcadeRoom = room!) => {
       send(socket, { type: "error", message });
-      send(socket, { type: "room", room: roomSummary(currentRoom), seat });
+      send(socket, { type: "room", room: roomSummary(currentRoom, seat), seat });
     };
     const rawText = raw.toString();
     if (rawText.length > 64 * 1024) {
@@ -473,11 +517,20 @@ export async function handleArcadeSocket(socket: WebSocket, request: IncomingMes
         const current = record ? restoreRoom(record) : null;
         if (!current || current.players[seat]?.tokenHash !== hashToken(token)) return { error: "missing" as const };
         if (event.type === "resign") {
-          current.updatedAt = Date.now();
-          await updateRoom(client, current);
-          await notifyRoom(client, { code: current.code, type: "resigned", seat });
+          if (current.result) return { room: current };
+          if (current.capacity === 2 && current.players.length === 2) {
+            current.result = { winnerSeat: 1 - seat, resignedSeat: seat, endedAt: Date.now() };
+            current.updatedAt = current.result.endedAt;
+            await updateRoom(client, current);
+            await notifyRoom(client, { code: current.code, type: "room" });
+          } else {
+            current.updatedAt = Date.now();
+            await updateRoom(client, current);
+            await notifyRoom(client, { code: current.code, type: "resigned", seat });
+          }
           return { room: current };
         }
+        if (current.result) return { error: "finished" as const, room: current };
         if (current.players.length !== current.capacity) {
           return { error: "not-full" as const, room: current };
         }
@@ -502,13 +555,14 @@ export async function handleArcadeSocket(socket: WebSocket, request: IncomingMes
         const errors: Record<string, string> = {
           missing: "Room access expired. Rejoin the room to continue.",
           "not-full": "Wait for all players to join before moving.",
+          finished: "This match has ended. Start a new room to play again.",
         };
         const errorKey = typeof outcome.error === "string" ? outcome.error : "missing";
         rejectUpdate(errors[errorKey] ?? errorKey, "room" in outcome ? outcome.room : room);
       } else {
         queueRoomEvent({
           code: room!.code,
-          type: event.type === "resign" ? "resigned" : "state",
+          type: event.type === "resign" ? outcome.room.result ? "room" : "resigned" : "state",
           ...(event.type === "resign" ? { seat } : {}),
         });
       }
@@ -529,7 +583,7 @@ function send(socket: WebSocket, message: unknown) {
 
 setInterval(() => {
   const activeCodes = [...socketsByRoom.entries()]
-    .filter(([, sockets]) => [...sockets].some((socket) => socket.readyState === WebSocket.OPEN))
+    .filter(([, sockets]) => [...sockets.keys()].some((socket) => socket.readyState === WebSocket.OPEN))
     .map(([code]) => code);
   void (async () => {
     if (activeCodes.length) {

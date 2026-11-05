@@ -454,3 +454,102 @@ test("arcade seats, concurrent joins, and room updates stay consistent across AP
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });
+
+test("resignation records one winner and survives duplicate requests and reconnects", {
+  timeout: 60_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade resignation integration tests.");
+
+  const schema = `arcade_resign_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let server: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY,
+        game text NOT NULL,
+        capacity integer NOT NULL,
+        is_private boolean NOT NULL,
+        players jsonb NOT NULL,
+        state jsonb,
+        turn integer NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    server = await startArcadeProcess(isolatedDatabaseUrl.toString());
+
+    const host = await postRoom(server.baseUrl, "rooms", {
+      game: "mopyon",
+      displayName: "Player one",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    const guest = await postRoom(server.baseUrl, `rooms/${String(host.code)}/join`, {
+      displayName: "Player two",
+    });
+    assert.equal(host.seat, 0);
+    assert.equal(guest.seat, 1);
+
+    const playerOne = await connectArcadeSocket(
+      server.baseUrl,
+      String(host.code),
+      String(host.reconnectToken),
+    );
+    const playerTwo = await connectArcadeSocket(
+      server.baseUrl,
+      String(host.code),
+      String(guest.reconnectToken),
+    );
+    sockets.push(playerOne.socket, playerTwo.socket);
+
+    const firstResultForOne = nextSocketMessage(playerOne.socket);
+    const firstResultForTwo = nextSocketMessage(playerTwo.socket);
+    playerOne.socket.send(JSON.stringify({ type: "resign" }));
+    const [oneMessage, twoMessage] = await Promise.all([firstResultForOne, firstResultForTwo]);
+    assert.equal(oneMessage.type, "room");
+    assert.equal(twoMessage.type, "room");
+    const oneRoom = oneMessage.room as JsonRecord;
+    const twoRoom = twoMessage.room as JsonRecord;
+    assert.equal(oneRoom.status, "finished");
+    const result = oneRoom.result as JsonRecord;
+    assert.equal(result.winnerSeat, 1);
+    assert.equal(result.resignedSeat, 0);
+    assert.equal(Number.isFinite(result.endedAt), true);
+    assert.deepEqual(twoRoom.result, result);
+
+    const duplicateForOne = nextSocketMessage(playerOne.socket);
+    const duplicateForTwo = nextSocketMessage(playerTwo.socket);
+    playerOne.socket.send(JSON.stringify({ type: "resign" }));
+    const [duplicateOne, duplicateTwo] = await Promise.all([duplicateForOne, duplicateForTwo]);
+    assert.deepEqual((duplicateOne.room as JsonRecord).result, oneRoom.result);
+    assert.deepEqual((duplicateTwo.room as JsonRecord).result, oneRoom.result);
+
+    playerOne.socket.close();
+    playerTwo.socket.close();
+    const reconnectOne = await connectArcadeSocket(
+      server.baseUrl,
+      String(host.code),
+      String(host.reconnectToken),
+    );
+    const reconnectTwo = await connectArcadeSocket(
+      server.baseUrl,
+      String(host.code),
+      String(guest.reconnectToken),
+    );
+    sockets.push(reconnectOne.socket, reconnectTwo.socket);
+    for (const reconnect of [reconnectOne, reconnectTwo]) {
+      const room = reconnect.firstMessage.room as JsonRecord;
+      assert.equal(room.status, "finished");
+      assert.deepEqual(room.result, oneRoom.result);
+    }
+  } finally {
+    sockets.forEach((socket) => socket.close());
+    if (server) await stopArcadeProcess(server.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});

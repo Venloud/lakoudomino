@@ -4,10 +4,11 @@ type PublicRoom = {
   code: string;
   game: string;
   capacity: number;
-  status: "waiting" | "playing";
+  status: "waiting" | "playing" | "finished";
   players: { name: string; seat: number }[];
   state: unknown;
   turn: number;
+  result?: { winnerSeat: number; resignedSeat: number; endedAt: number } | null;
 };
 type Access = { code: string; reconnectToken: string; seat: number };
 type Props = {
@@ -38,10 +39,22 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
   const [room, setRoom] = useState<PublicRoom | null>(null);
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [notice, setNotice] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
   const lastReceivedRef = useRef("");
   const stateJson = useMemo(() => JSON.stringify(state), [state]);
+  const outgoingState = useMemo(() => {
+    if (game !== "scrabble" || !access || !state || typeof state !== "object" || Array.isArray(state)) return state;
+    const gameState = state as Record<string, unknown>;
+    return {
+      ...gameState,
+      racks: Array.isArray(gameState.racks)
+        ? gameState.racks.map((rack, index) => index === access.seat && Array.isArray(rack) ? rack : [])
+        : [],
+      bag: Array.isArray(gameState.bag) ? gameState.bag.map(() => "") : [],
+    };
+  }, [access, game, state]);
 
   useEffect(() => {
     onRoomChange?.(access ? { seat: access.seat, connected, turn: room?.turn ?? null } : null);
@@ -63,9 +76,14 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
       if (!message || typeof message !== "object") return;
       const data = message as Record<string, unknown>;
       if (data.type === "error" && typeof data.message === "string") {
+        setLeaving(false);
         setNotice(data.message);
       } else if ((data.type === "room" || data.type === "state") && isRoom(data.room)) {
         setRoom(data.room);
+        if (data.room.result) {
+          setLeaving(false);
+          setNotice("");
+        }
         if (data.room.state !== null && data.room.state !== undefined) {
             const ownState = game === "block-drop" && Array.isArray(data.room.state)
               ? data.room.state[access.seat]
@@ -75,7 +93,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
           onRemoteState(data.room.state);
         }
       } else if (data.type === "resigned") {
-        setNotice("Your opponent resigned.");
+        setNotice(data.seat === access.seat ? "You left the match." : "An opponent left the match.");
       }
     });
     return () => {
@@ -87,11 +105,11 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
 
   useEffect(() => {
     const socket = socketRef.current;
-    if (!access || !room || !connected || socket?.readyState !== WebSocket.OPEN ||
+    if (!access || !room || room.result || !connected || socket?.readyState !== WebSocket.OPEN ||
         (game !== "block-drop" && access.seat !== room.turn) || stateJson === lastReceivedRef.current) return;
     const publish = () => {
       if (socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify({ type: "state", state, turn }));
+      socket.send(JSON.stringify({ type: "state", state: outgoingState, turn }));
       lastReceivedRef.current = stateJson;
     };
     if (game === "block-drop") {
@@ -100,7 +118,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
     }
     publish();
     return undefined;
-  }, [access, room, connected, game, state, stateJson, turn]);
+  }, [access, room, connected, game, outgoingState, stateJson, turn]);
 
   const requestRoom = async (endpoint: string, payload: Record<string, unknown>) => {
     setBusy(true);
@@ -118,6 +136,7 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
       const next = { code: result.code, seat: result.seat, reconnectToken: result.reconnectToken };
       sessionStorage.setItem(storageKey(game), JSON.stringify(next));
       lastReceivedRef.current = "";
+      setLeaving(false);
       setAccess(next);
       setRoom(null);
     } catch (error) {
@@ -128,12 +147,35 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
   };
 
   const leaveRoom = () => {
+    if (room?.result) {
+      socketRef.current?.close();
+      sessionStorage.removeItem(storageKey(game));
+      setAccess(null);
+      setRoom(null);
+      setConnected(false);
+      setLeaving(false);
+      setNotice("");
+      lastReceivedRef.current = "";
+      return;
+    }
+    if (room?.capacity === 2 && room.status === "playing") {
+      if (!connected || socketRef.current?.readyState !== WebSocket.OPEN) {
+        setNotice("Reconnect before resigning so the result is recorded.");
+        return;
+      }
+      if (!window.confirm("Leaving now will count as a loss and give your opponent the win. Continue?")) return;
+      setLeaving(true);
+      setNotice("Recording your resignation…");
+      socketRef.current.send(JSON.stringify({ type: "resign" }));
+      return;
+    }
     socketRef.current?.send(JSON.stringify({ type: "resign" }));
     socketRef.current?.close();
     sessionStorage.removeItem(storageKey(game));
     setAccess(null);
     setRoom(null);
     setConnected(false);
+    setLeaving(false);
     lastReceivedRef.current = "";
   };
 
@@ -141,9 +183,18 @@ export function ArcadeOnlinePanel({ game, playerCount = 2, turn, state, onRemote
     {access ? <>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <strong>Room {access.code}</strong>
-        <span role="status">{connected ? room?.status === "playing" ? "Opponent connected" : "Waiting for players" : "Connecting…"}</span>
-        <button className="yard-button" type="button" onClick={leaveRoom}>Leave online game</button>
+        <span role="status">{room?.result
+          ? room.result.resignedSeat === access.seat ? "Match ended · Loss recorded" : "Match ended · Win recorded"
+          : connected ? room?.status === "playing" ? "Opponent connected" : "Waiting for players" : "Connecting…"}</span>
+        <button className="yard-button" type="button" disabled={leaving} onClick={leaveRoom}>
+          {leaving ? "Recording result…" : room?.result ? "Return to games" : "Resign & leave"}
+        </button>
       </div>
+      {room?.result && <p role="status" style={{ margin: "10px 0 0", color: room.result.resignedSeat === access.seat ? "#ef9b8d" : "#9be27d", fontWeight: 700 }}>
+        {room.result.resignedSeat === access.seat
+          ? "You resigned. This match is recorded as a loss."
+          : "Your opponent resigned. This match is recorded as a win."}
+      </p>}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, color: "#a6a6aa", fontSize: 12 }}>
         {room?.players.map((player) => <span key={player.seat}>{player.seat === access.seat ? "You" : player.name} · Player {player.seat + 1}</span>)}
       </div>
