@@ -5,10 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { FriendInviteAcceptResponseGame } from './friendInviteAcceptResponseGame';
+import type { FriendInviteGame } from './friendInviteGame';
 
 export interface FriendInviteAcceptResponse {
   /** @pattern ^[A-Z0-9]{4,8}$ */
   roomCode: string;
-  game: FriendInviteAcceptResponseGame;
+  game: FriendInviteGame;
 }

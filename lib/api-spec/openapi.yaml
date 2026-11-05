@@ -1241,13 +1241,17 @@ components:
             - { type: "null" }
     FriendInvite:
       type: object
-      required: [id, inviterId, inviteeId, roomCode, status]
+      required: [id, inviterId, inviteeId, roomCode, game, status]
       properties:
         id: { type: string, format: uuid }
         inviterId: { type: string, format: uuid }
         inviteeId: { type: string, format: uuid }
         roomCode: { type: string }
+        game: { $ref: "#/components/schemas/FriendInviteGame" }
         status: { type: string }
+    FriendInviteGame:
+      type: string
+      enum: [domino, tic-tac-toe, word-yard, mopyon, box, kay, chess, dame, scrabble, barricade, four-in-a-row, filler, block-drop]
     FriendInviteNotification:
       type: object
       required: [id, inviterId, inviterName, roomCode, game, status]
@@ -1256,14 +1260,14 @@ components:
         inviterId: { type: string, format: uuid }
         inviterName: { type: string }
         roomCode: { type: string }
-        game: { type: string, enum: [domino, tic-tac-toe, word-yard] }
+        game: { $ref: "#/components/schemas/FriendInviteGame" }
         status: { type: string, enum: [pending] }
     FriendInviteAcceptResponse:
       type: object
       required: [roomCode, game]
       properties:
         roomCode: { type: string, pattern: "^[A-Z0-9]{4,8}$" }
-        game: { type: string, enum: [domino, tic-tac-toe, word-yard] }
+        game: { $ref: "#/components/schemas/FriendInviteGame" }
     LeaderboardRow:
       type: object
       required: [id, name, points, gold, silver, bronze, isMe]

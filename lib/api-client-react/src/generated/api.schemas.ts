@@ -771,22 +771,33 @@ export interface Friend {
   status: Presence | null;
 }
 
+export type FriendInviteGame = typeof FriendInviteGame[keyof typeof FriendInviteGame];
+
+
+export const FriendInviteGame = {
+  domino: 'domino',
+  'tic-tac-toe': 'tic-tac-toe',
+  'word-yard': 'word-yard',
+  mopyon: 'mopyon',
+  box: 'box',
+  kay: 'kay',
+  chess: 'chess',
+  dame: 'dame',
+  scrabble: 'scrabble',
+  barricade: 'barricade',
+  'four-in-a-row': 'four-in-a-row',
+  filler: 'filler',
+  'block-drop': 'block-drop',
+} as const;
+
 export interface FriendInvite {
   id: string;
   inviterId: string;
   inviteeId: string;
   roomCode: string;
+  game: FriendInviteGame;
   status: string;
 }
-
-export type FriendInviteNotificationGame = typeof FriendInviteNotificationGame[keyof typeof FriendInviteNotificationGame];
-
-
-export const FriendInviteNotificationGame = {
-  domino: 'domino',
-  'tic-tac-toe': 'tic-tac-toe',
-  'word-yard': 'word-yard',
-} as const;
 
 export type FriendInviteNotificationStatus = typeof FriendInviteNotificationStatus[keyof typeof FriendInviteNotificationStatus];
 
@@ -800,23 +811,14 @@ export interface FriendInviteNotification {
   inviterId: string;
   inviterName: string;
   roomCode: string;
-  game: FriendInviteNotificationGame;
+  game: FriendInviteGame;
   status: FriendInviteNotificationStatus;
 }
-
-export type FriendInviteAcceptResponseGame = typeof FriendInviteAcceptResponseGame[keyof typeof FriendInviteAcceptResponseGame];
-
-
-export const FriendInviteAcceptResponseGame = {
-  domino: 'domino',
-  'tic-tac-toe': 'tic-tac-toe',
-  'word-yard': 'word-yard',
-} as const;
 
 export interface FriendInviteAcceptResponse {
   /** @pattern ^[A-Z0-9]{4,8}$ */
   roomCode: string;
-  game: FriendInviteAcceptResponseGame;
+  game: FriendInviteGame;
 }
 
 export interface FriendsResponse {
