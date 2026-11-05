@@ -7,10 +7,14 @@ import { CreateArcadeRoomBody, JoinArcadeRoomBody, QuickMatchArcadeRoomBody } fr
 import { arcadeRooms, db, type ArcadeRoomRecord } from "@workspace/db";
 import { logger } from "../lib/logger";
 
-const GAME_IDS = new Set([
-  "mopyon", "box", "kay", "chess", "dame", "scrabble",
-  "barricade", "four-in-a-row", "filler", "block-drop",
-]);
+import {
+  ARCADE_GAME_IDS,
+  createArcadeInitialState,
+  validateArcadeTransition,
+  type ArcadeGameId,
+} from "../lib/arcade-validation.ts";
+
+const GAME_IDS = new Set<string>(ARCADE_GAME_IDS);
 
 type ArcadePlayer = { name: string; tokenHash: string };
 type ArcadeRoom = {
@@ -146,7 +150,8 @@ function makeRoom(game: string, name: string, capacity: number, isPrivate: boole
   const room: ArcadeRoom = {
     code, game, capacity, isPrivate,
     players: [{ name, tokenHash: hashToken(token) }],
-    state: null, turn: 0, sockets: new Map(), updatedAt: Date.now(),
+    state: createArcadeInitialState(game as ArcadeGameId, capacity), turn: 0,
+    sockets: new Map(), updatedAt: Date.now(),
   };
   rooms.set(code, room);
   return { room, seat: 0, reconnectToken: token };
@@ -251,23 +256,43 @@ export function handleArcadeSocket(socket: WebSocket, request: IncomingMessage):
   send(socket, { type: "room", room: roomSummary(room), seat });
 
   socket.on("message", async (raw) => {
+    const rejectUpdate = (message: string) => {
+      send(socket, { type: "error", message });
+      send(socket, { type: "room", room: roomSummary(room), seat });
+    };
     let message: unknown;
-    try { message = JSON.parse(raw.toString()); } catch { return; }
+    const rawText = raw.toString();
+    if (rawText.length > 64 * 1024) {
+      rejectUpdate("That game update is too large.");
+      return;
+    }
+    try { message = JSON.parse(rawText); } catch {
+      rejectUpdate("That game update could not be read.");
+      return;
+    }
     if (!message || typeof message !== "object") return;
     const event = message as Record<string, unknown>;
     if (event.type === "state") {
-      const previous = { state: room.state, turn: room.turn, updatedAt: room.updatedAt };
-      if (room.game === "block-drop") {
-        const boards = Array.isArray(room.state) ? [...room.state] : Array(room.capacity).fill(null);
-        boards[seat] = event.state;
-        room.state = boards;
-      } else if (seat !== room.turn || !Number.isInteger(event.turn) || (event.turn as number) < 0 || (event.turn as number) >= room.capacity) {
-        send(socket, { type: "error", message: "Wait for your turn before sending a move." });
+      if (room.players.length !== room.capacity) {
+        rejectUpdate("Wait for all players to join before moving.");
         return;
-      } else {
-        room.state = event.state;
-        room.turn = event.turn as number;
       }
+      const result = validateArcadeTransition(
+        room.game as ArcadeGameId,
+        room.state,
+        event.state,
+        seat,
+        room.capacity,
+        room.turn,
+        event.turn,
+      );
+      if (!result.ok) {
+        rejectUpdate(result.error);
+        return;
+      }
+      const previous = { state: room.state, turn: room.turn, updatedAt: room.updatedAt };
+      room.state = result.state;
+      room.turn = result.turn;
       room.updatedAt = Date.now();
       try {
         await persistRoom(room);
@@ -276,7 +301,7 @@ export function handleArcadeSocket(socket: WebSocket, request: IncomingMessage):
         room.turn = previous.turn;
         room.updatedAt = previous.updatedAt;
         logger.error({ err: error, code: room.code }, "Failed to persist arcade game state");
-        send(socket, { type: "error", message: "Your move could not be saved. Please try again." });
+        rejectUpdate("Your move could not be saved. Please try again.");
         return;
       }
       publish(room, { type: "state", room: roomSummary(room) });
