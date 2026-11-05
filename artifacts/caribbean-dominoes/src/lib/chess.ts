@@ -8,8 +8,10 @@ export type ChessGame = {
   turn: ChessSide;
   castling: CastlingRights;
   enPassant: number | null;
+  halfmoveClock?: number;
+  positionHistory?: string[];
 };
-export type ChessStatus = 'playing' | 'check' | 'checkmate' | 'stalemate';
+export type ChessStatus = 'playing' | 'check' | 'checkmate' | 'stalemate' | 'threefold-repetition' | 'fifty-move-rule' | 'insufficient-material';
 
 const STARTING_ROW: ChessPieceKind[] = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
 const PROMOTIONS: ChessPieceKind[] = ['Q', 'R', 'B', 'N'];
@@ -22,7 +24,7 @@ export function createChessGame(): ChessGame {
     board[48 + col] = { side: 0, kind: 'P' };
     board[56 + col] = { side: 0, kind: STARTING_ROW[col] };
   }
-  return {
+  const game: ChessGame = {
     board,
     turn: 0,
     castling: {
@@ -30,7 +32,20 @@ export function createChessGame(): ChessGame {
       1: { kingSide: true, queenSide: true },
     },
     enPassant: null,
+    halfmoveClock: 0,
+    positionHistory: [],
   };
+  game.positionHistory = [positionKey(game)];
+  return game;
+}
+
+function positionKey(game: ChessGame): string {
+  const board = game.board.map((piece) => piece ? `${piece.side}${piece.kind}` : '--').join('');
+  const castling = [0, 1].map((side) => {
+    const rights = game.castling[side as ChessSide];
+    return `${rights.kingSide ? 'k' : ''}${rights.queenSide ? 'q' : ''}`;
+  }).join('|');
+  return `${board}/${game.turn}/${castling}/${game.enPassant ?? '-'}`;
 }
 
 function inBounds(row: number, col: number): boolean {
@@ -217,9 +232,12 @@ export function playChessMove(
   const moving = game.board[move.from];
   if (!moving) return null;
   const fromRow = Math.floor(move.from / 8);
+  const fromCol = move.from % 8;
   const toRow = Math.floor(move.to / 8);
   const toCol = move.to % 8;
   const captured = game.board[move.to];
+  const enPassantCapture = moving.kind === 'P' && move.to === game.enPassant
+    && fromCol !== toCol && !captured;
   const nextBoard = applyBoardMove(game.board, move, game.enPassant);
   if (moving.kind === 'P' && (toRow === 0 || toRow === 7)) {
     nextBoard[move.to] = { side: moving.side, kind: PROMOTIONS.includes(promotion) ? promotion : 'Q' };
@@ -243,16 +261,38 @@ export function playChessMove(
   const enPassant = moving.kind === 'P' && Math.abs(toRow - fromRow) === 2
     ? ((fromRow + toRow) / 2) * 8 + toCol
     : null;
-  return {
+  const next: ChessGame = {
     board: nextBoard,
     turn: moving.side === 0 ? 1 : 0,
     castling,
     enPassant,
+    halfmoveClock: moving.kind === 'P' || captured || enPassantCapture ? 0 : (game.halfmoveClock ?? 0) + 1,
   };
+  next.positionHistory = [
+    ...(game.positionHistory ?? [positionKey(game)]),
+    positionKey(next),
+  ];
+  return next;
 }
 
 export function getChessStatus(game: ChessGame): ChessStatus {
   const inCheck = isKingInCheck(game.board, game.turn);
-  if (getLegalChessMoves(game).length > 0) return inCheck ? 'check' : 'playing';
-  return inCheck ? 'checkmate' : 'stalemate';
+  const legalMoves = getLegalChessMoves(game);
+  if (legalMoves.length === 0) return inCheck ? 'checkmate' : 'stalemate';
+  const nonKings = game.board.filter((piece): piece is Exclude<ChessPiece, null> => piece !== null && piece.kind !== 'K');
+  if (!nonKings.length ||
+      (nonKings.length === 1 && ['B', 'N'].includes(nonKings[0].kind)) ||
+      (nonKings.every((piece) => piece.kind === 'B') &&
+        new Set(nonKings.map((_, index) => {
+          const square = game.board.findIndex((piece) => piece === nonKings[index]);
+          return (Math.floor(square / 8) + square % 8) % 2;
+        })).size === 1)) {
+    return 'insufficient-material';
+  }
+  if ((game.halfmoveClock ?? 0) >= 100) return 'fifty-move-rule';
+  const currentPosition = positionKey(game);
+  if ((game.positionHistory ?? [currentPosition]).filter((position) => position === currentPosition).length >= 3) {
+    return 'threefold-repetition';
+  }
+  return inCheck ? 'check' : 'playing';
 }

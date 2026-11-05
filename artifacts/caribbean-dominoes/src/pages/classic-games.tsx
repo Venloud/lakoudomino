@@ -8,7 +8,7 @@ import { loadWordDictionary, lookupWordDefinitions } from '../lib/word-yard-dict
 import type { WordDefinition } from '../lib/word-yard-dictionary';
 import { createFillerBoard, playFillerMove, type FillerPlayer } from '@/lib/filler';
 import { chooseChessBotMove } from '@/lib/chess-bot';
-import { canClaimChessDraw, hasAutomaticChessDraw } from '@/lib/chess-rules';
+import { getAutomaticChessDrawReason, hasAutomaticChessDraw } from '@/lib/chess-rules';
 import { createChessGame, type ChessGame, type ChessMove, type ChessPieceKind } from '@/lib/chess';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
@@ -354,6 +354,7 @@ export default function ClassicGamesPage() {
   const chessStatus = id === 'chess'
     ? chessGame.isCheckmate() ? 'checkmate' : chessGame.isStalemate() ? 'stalemate' : chessGame.isCheck() ? 'check' : 'playing'
     : null;
+  const chessDrawReason = id === 'chess' && winner === 2 ? getAutomaticChessDrawReason(chessGame) : null;
   const arcadeSnapshot = useMemo(() => {
     if (id === 'chess') return { fen: chessGame.fen(), turn, winner, clocks: chessClockRef.current };
     if (id === 'box') return { turn, winner, dots: [...dots], edgeOwners: [...edgeOwners], claimed };
@@ -410,7 +411,7 @@ export default function ClassicGamesPage() {
     : id === 'chess'
       ? winner === null
         ? `${playVsBot ? chessState.turn === humanChessSide ? 'Your turn' : 'Yard bot to move' : `${chessState.turn === 0 ? 'White' : 'Black'} to move`}${chessStatus === 'check' ? ' · Check' : ''}`
-        : winner === 2 ? 'Draw' : chessStatus === 'checkmate'
+        : winner === 2 ? chessDrawReason ? `Draw — ${chessDrawReason}` : 'Draw by agreement' : chessStatus === 'checkmate'
           ? `Checkmate — ${playVsBot ? winner === humanChessSide ? 'You win' : 'Bot wins' : `${winner === 0 ? 'White' : 'Black'} wins`}`
           : playVsBot ? winner === humanChessSide ? 'You win' : 'Bot wins' : `${winner === 0 ? 'White' : 'Black'} wins`
     : id === 'words' && wordGame.status === 'finished'
@@ -523,8 +524,6 @@ export default function ClassicGamesPage() {
       setDrawOfferBy(drawOfferBy === turn ? null : turn);
     }
   };
-
-  const mayClaimDraw = canClaimChessDraw(chessGame);
 
   useEffect(() => {
     if (id !== 'chess' || !playVsBot || turn !== botChessSide || winner !== null) return;
@@ -850,7 +849,7 @@ export default function ClassicGamesPage() {
     <main className="yard-main" style={{ maxWidth: 980 }}>
       <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
       <header className="yard-heading" style={{ marginTop: 16 }}>
-        <div><p className="yard-kicker">509 YARD / CHESS</p><h1>Chess</h1><p className="yard-subtitle">Full legal moves, check, checkmate, and a bot opponent.</p></div>
+        <div><p className="yard-kicker">509 YARD / CHESS</p><h1>Chess</h1><p className="yard-subtitle">Full legal moves, checkmate, automatic draws, and a bot opponent.</p></div>
       </header>
       <ArcadeOnlinePanel game="chess" turn={turn} state={arcadeSnapshot} onRemoteState={applyArcadeSnapshot} onRoomChange={handleArcadeRoomChange} />
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
@@ -900,7 +899,6 @@ export default function ClassicGamesPage() {
             {!playVsBot && <button className="yard-button" type="button" onClick={drawOfferAction} disabled={winner !== null}>
               {drawOfferBy !== null && drawOfferBy !== turn ? 'Accept draw' : drawOfferBy === turn ? 'Withdraw draw offer' : 'Offer draw'}
             </button>}
-            <button className="yard-button" type="button" onClick={() => setWinner(2)} disabled={winner !== null || !mayClaimDraw}>Claim draw</button>
             <button className="yard-button" type="button" onClick={() => setWinner(turn === 0 ? 1 : 0)} disabled={winner !== null || (playVsBot && turn !== humanChessSide)}>Resign</button>
             <button className="yard-button" type="button" onClick={exportChessPgn} disabled={!chessGame.history().length}>Export PGN</button>
           </div>
