@@ -23,6 +23,8 @@ import {
 } from "@workspace/api-zod";
 import type { Seat } from "../lib/room-types";
 import { handleTicTacToeSocket } from "./tic-tac-toe";
+import { handleWordYardSocket } from "./word-yard";
+import { handleArcadeSocket } from "./arcade";
 import { getIdentityFromCookieHeader, getIdentityFromRequest } from "../lib/auth-session";
 import { getLeaderboard } from "../lib/leaderboard";
 import {
@@ -1359,8 +1361,12 @@ export function attachRoomWebSocket(server: HttpServer) {
     }
     webSocketServer.handleUpgrade(request, socket, head, (client) => {
       const upgradedUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-      if (upgradedUrl.searchParams.has("ticCode")) {
+      if (upgradedUrl.searchParams.has("wordCode")) {
+        void handleWordYardSocket(client, request);
+      } else if (upgradedUrl.searchParams.has("ticCode")) {
         void handleTicTacToeSocket(client, request);
+      } else if (upgradedUrl.searchParams.has("arcadeCode")) {
+        handleArcadeSocket(client, request);
       } else if (upgradedUrl.searchParams.get("lobby") === "1") {
         void handleLobbySocket(client, request);
       } else {

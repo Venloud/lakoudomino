@@ -15,6 +15,8 @@ import MopyonPage from '@/pages/mopyon';
 import BlockDropPage from '@/pages/block-drop';
 import ClassicGamesPage from '@/pages/classic-games';
 import ScrabblePage from '@/pages/scrabble';
+import WordYardGamePage from '@/pages/word-yard-game';
+import WordYardPracticePage from '@/pages/word-yard-practice';
 import BarricadePage from '@/pages/barricade';
 import AboutPage from '@/pages/about';
 import {
@@ -42,7 +44,9 @@ function Router() {
          <Route path="/games/kay" component={ClassicGamesPage} />
          <Route path="/games/chess" component={ClassicGamesPage} />
          <Route path="/games/dame" component={ClassicGamesPage} />
-         <Route path="/games/words" component={ClassicGamesPage} />
+          <Route path="/games/words/practice" component={WordYardPracticePage} />
+          <Route path="/games/words/:code" component={WordYardGamePage} />
+          <Route path="/games/words" component={WordYardGamePage} />
          <Route path="/games/four-in-a-row" component={ClassicGamesPage} />
          <Route path="/games/filler" component={ClassicGamesPage} />
          <Route path="/games/scrabble" component={ScrabblePage} />

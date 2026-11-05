@@ -12,4 +12,5 @@ export type FriendInviteNotificationGame = typeof FriendInviteNotificationGame[k
 export const FriendInviteNotificationGame = {
   domino: 'domino',
   'tic-tac-toe': 'tic-tac-toe',
+  'word-yard': 'word-yard',
 } as const;

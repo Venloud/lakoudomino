@@ -85,6 +85,200 @@ paths:
           description: Room not found
         "409":
           description: Room is full or already started
+  /word-yard/rooms:
+    get:
+      operationId: listWordYardRooms
+      tags: [rooms]
+      summary: List public Word Yard rooms with open seats
+      responses:
+        "200":
+          description: Public waiting rooms
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WordYardRoomList"
+    post:
+      operationId: createWordYardRoom
+      tags: [rooms]
+      summary: Create a Word Yard room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WordYardRoomSettings"
+      responses:
+        "201":
+          description: Room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WordYardRoomAccess"
+  /word-yard/quick-match:
+    post:
+      operationId: quickMatchWordYard
+      tags: [rooms]
+      summary: Join or create a compatible public Word Yard room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WordYardRoomSettings"
+      responses:
+        "200":
+          description: Existing room joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WordYardRoomAccess"
+        "201":
+          description: Waiting room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WordYardRoomAccess"
+  /word-yard/rooms/{code}/join:
+    post:
+      operationId: joinWordYardRoom
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WordYardRoomJoinInput"
+      responses:
+        "200":
+          description: Room joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WordYardRoomAccess"
+        "404":
+          description: Room not found or has no open seats
+  /word-yard/rooms/{code}/ready:
+    post:
+      operationId: readyWordYardRoom
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WordYardReadyInput"
+      responses:
+        "200":
+          description: Ready state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WordYardRoomActionResponse"
+  /word-yard/rooms/{code}/guess:
+    post:
+      operationId: submitWordYardGuess
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WordYardGuessInput"
+      responses:
+        "200":
+          description: Guess accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WordYardRoomActionResponse"
+        "400":
+          description: Invalid or duplicate guess
+  /arcade/rooms:
+    post:
+      operationId: createArcadeRoom
+      tags: [rooms]
+      summary: Create a private room for a supported game
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcadeRoomInput"
+      responses:
+        "201":
+          description: Private room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoomAccess"
+  /arcade/quick-match:
+    post:
+      operationId: quickMatchArcadeRoom
+      tags: [rooms]
+      summary: Join or create a compatible room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcadeRoomInput"
+      responses:
+        "200":
+          description: Existing room joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoomAccess"
+        "201":
+          description: Waiting room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoomAccess"
+  /arcade/rooms/{code}/join:
+    post:
+      operationId: joinArcadeRoom
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArcadeRoomJoinInput"
+      responses:
+        "200":
+          description: Joined room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoomAccess"
+        "404":
+          description: Room not found
+        "409":
+          description: Room is full
+  /arcade/rooms/{code}:
+    get:
+      operationId: getArcadeRoom
+      tags: [rooms]
+      parameters:
+        - $ref: "#/components/parameters/RoomCode"
+      responses:
+        "200":
+          description: Room summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArcadeRoom"
+        "404":
+          description: Room not found
   /lobby:
     get:
       operationId: getLobby
@@ -417,6 +611,85 @@ components:
         type: string
         pattern: "^[A-Z0-9]{4,8}$"
   schemas:
+    ArcadeGameId:
+      type: string
+      enum: [mopyon, box, kay, chess, dame, scrabble, barricade, four-in-a-row, filler, block-drop]
+    ArcadeRoomInput:
+      type: object
+      required: [game, displayName]
+      properties:
+        game:
+          $ref: "#/components/schemas/ArcadeGameId"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
+        playerCount:
+          type: integer
+          enum: [2, 3, 4]
+          default: 2
+        isPrivate:
+          type: boolean
+          default: false
+    ArcadeRoomJoinInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 24
+    ArcadeRoomPlayer:
+      type: object
+      required: [name, seat]
+      properties:
+        name:
+          type: string
+        seat:
+          type: integer
+          minimum: 0
+          maximum: 3
+    ArcadeRoom:
+      type: object
+      required: [code, game, capacity, status, players, state, turn]
+      properties:
+        code:
+          type: string
+        game:
+          $ref: "#/components/schemas/ArcadeGameId"
+        capacity:
+          type: integer
+          enum: [2, 3, 4]
+        status:
+          type: string
+          enum: [waiting, playing]
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArcadeRoomPlayer"
+        state:
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items: {}
+            - type: "null"
+        turn:
+          type: integer
+          minimum: 0
+          maximum: 3
+    ArcadeRoomAccess:
+      allOf:
+        - $ref: "#/components/schemas/ArcadeRoom"
+        - type: object
+          required: [seat, reconnectToken]
+          properties:
+            seat:
+              type: integer
+              minimum: 0
+              maximum: 3
+            reconnectToken:
+              type: string
     HealthStatus:
       type: object
       properties:
@@ -572,6 +845,81 @@ components:
           type: string
           minLength: 1
           maxLength: 24
+    WordYardRoomSettings:
+      type: object
+      required: [mode, playerCount, wordLength, timeLimitMs, roundsToPlay, isPrivate, displayName]
+      properties:
+        mode: { type: string, enum: [classic, speed, party] }
+        playerCount: { type: integer, enum: [2, 3, 4] }
+        wordLength: { type: integer, minimum: 4, maximum: 7 }
+        timeLimitMs: { type: integer, minimum: 10000, maximum: 600000 }
+        roundsToPlay: { type: integer, minimum: 1, maximum: 10 }
+        isPrivate: { type: boolean }
+        displayName: { type: string, minLength: 1, maxLength: 24 }
+    WordYardRoomJoinInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 24 }
+    WordYardReadyInput:
+      type: object
+      required: [reconnectToken]
+      properties:
+        reconnectToken: { type: string }
+    WordYardGuessInput:
+      type: object
+      required: [reconnectToken, guess]
+      properties:
+        reconnectToken: { type: string }
+        guess: { type: string, minLength: 4, maxLength: 7 }
+    WordYardPublicRoom:
+      type: object
+      required: [code, mode, playerCount, wordLength, seatsTaken]
+      properties:
+        code: { type: string }
+        mode: { type: string, enum: [classic, speed, party] }
+        playerCount: { type: integer, enum: [2, 3, 4] }
+        wordLength: { type: integer }
+        seatsTaken: { type: integer }
+    WordYardRoomList:
+      type: object
+      required: [rooms]
+      properties:
+        rooms:
+          type: array
+          items: { $ref: "#/components/schemas/WordYardPublicRoom" }
+    WordYardRoomSnapshot:
+      type: object
+      required: [code, mode, status, playerCount, wordLength, timeLimitMs, roundsToPlay, isPrivate, players, match]
+      properties:
+        code: { type: string }
+        mode: { type: string, enum: [classic, speed, party] }
+        status: { type: string, enum: [waiting, playing, round-complete, finished] }
+        playerCount: { type: integer, enum: [2, 3, 4] }
+        wordLength: { type: integer }
+        timeLimitMs: { type: integer }
+        roundsToPlay: { type: integer }
+        isPrivate: { type: boolean }
+        players:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        match:
+          type: [object, "null"]
+          additionalProperties: true
+    WordYardRoomAccess:
+      type: object
+      required: [room, seat, reconnectToken]
+      properties:
+        room: { $ref: "#/components/schemas/WordYardRoomSnapshot" }
+        seat: { type: integer, minimum: 0, maximum: 3 }
+        reconnectToken: { type: string }
+    WordYardRoomActionResponse:
+      type: object
+      required: [room]
+      properties:
+        room: { $ref: "#/components/schemas/WordYardRoomSnapshot" }
     RoomJoinInput:
       type: object
       required: [displayName]
@@ -908,14 +1256,14 @@ components:
         inviterId: { type: string, format: uuid }
         inviterName: { type: string }
         roomCode: { type: string }
-        game: { type: string, enum: [domino, tic-tac-toe] }
+        game: { type: string, enum: [domino, tic-tac-toe, word-yard] }
         status: { type: string, enum: [pending] }
     FriendInviteAcceptResponse:
       type: object
       required: [roomCode, game]
       properties:
         roomCode: { type: string, pattern: "^[A-Z0-9]{4,8}$" }
-        game: { type: string, enum: [domino, tic-tac-toe] }
+        game: { type: string, enum: [domino, tic-tac-toe, word-yard] }
     LeaderboardRow:
       type: object
       required: [id, name, points, gold, silver, bronze, isMe]

@@ -12,4 +12,5 @@ export type FriendInviteAcceptResponseGame = typeof FriendInviteAcceptResponseGa
 export const FriendInviteAcceptResponseGame = {
   domino: 'domino',
   'tic-tac-toe': 'tic-tac-toe',
+  'word-yard': 'word-yard',
 } as const;

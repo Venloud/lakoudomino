@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { and, eq, inArray, ne, or } from "drizzle-orm";
-import { db, dominoFriendInvites, dominoFriendships, dominoRooms, dominoUsers, ticTacToeRooms } from "@workspace/db";
+import { db, dominoFriendInvites, dominoFriendships, dominoRooms, dominoUsers, ticTacToeRooms, wordYardRooms } from "@workspace/db";
 import { getIdentityFromRequest } from "../lib/auth-session";
 import { getPresenceForUser, sendToUser } from "../lib/presence";
 
@@ -39,6 +39,10 @@ router.get("/friends", async (req, res): Promise<void> => {
     ? await db.select({ code: ticTacToeRooms.code }).from(ticTacToeRooms).where(inArray(ticTacToeRooms.code, inviteCodes))
     : [];
   const ticTacToeCodeSet = new Set(ticTacToeCodes.map((room) => room.code));
+  const wordYardCodes = inviteCodes.length
+    ? await db.select({ code: wordYardRooms.code }).from(wordYardRooms).where(inArray(wordYardRooms.code, inviteCodes))
+    : [];
+  const wordYardCodeSet = new Set(wordYardCodes.map((room) => room.code));
   res.json({
     friends: users.map((u) => ({ id: u.id, username: u.username, status: getPresenceForUser(u.id) })),
     requests: inbound.map((request) => ({
@@ -52,7 +56,7 @@ router.get("/friends", async (req, res): Promise<void> => {
       inviterId: x.invite.inviterId,
       inviterName: x.username,
       roomCode: x.invite.roomCode,
-      game: ticTacToeCodeSet.has(x.invite.roomCode) ? "tic-tac-toe" : "domino",
+      game: wordYardCodeSet.has(x.invite.roomCode) ? "word-yard" : ticTacToeCodeSet.has(x.invite.roomCode) ? "tic-tac-toe" : "domino",
       status: "pending" as const,
     })),
   });
@@ -110,8 +114,13 @@ router.post("/friends/invites", async (req, res): Promise<void> => {
     eq(ticTacToeRooms.code, roomCode),
     eq(ticTacToeRooms.status, "waiting"),
   ));
-  if (!room && !ticRoom) { res.status(404).json({ error: "Waiting room not found" }); return; }
-  const game = ticRoom ? "tic-tac-toe" : "domino";
+  const [wordRoom] = await db.select({ code: wordYardRooms.code, players: wordYardRooms.players, playerCount: wordYardRooms.playerCount }).from(wordYardRooms).where(and(
+    eq(wordYardRooms.code, roomCode),
+    eq(wordYardRooms.status, "waiting"),
+  ));
+  const wordRoomHasSpace = Boolean(wordRoom && Array.isArray(wordRoom.players) && wordRoom.players.length < wordRoom.playerCount);
+  if (!room && !ticRoom && !wordRoomHasSpace) { res.status(404).json({ error: "Waiting room not found" }); return; }
+  const game = wordRoomHasSpace ? "word-yard" : ticRoom ? "tic-tac-toe" : "domino";
   const invitee = friend.userLow === me.userId ? friend.userHigh : friend.userLow;
   const [invite] = await db.insert(dominoFriendInvites).values({ inviterId: me.userId, inviteeId: invitee, roomCode }).returning();
   sendToUser(invitee, { type: "roomInvite", roomCode: invite.roomCode, game, id: invite.id });
@@ -126,7 +135,9 @@ async function inviteAction(req: any, res: any, status: string) {
   if (status !== "accepted") { res.json({ ok: true }); return; }
   const [ticRoom] = await db.select({ code: ticTacToeRooms.code }).from(ticTacToeRooms)
     .where(eq(ticTacToeRooms.code, invite.roomCode));
-  res.json({ roomCode: invite.roomCode, game: ticRoom ? "tic-tac-toe" : "domino" });
+  const [wordRoom] = await db.select({ code: wordYardRooms.code }).from(wordYardRooms)
+    .where(eq(wordYardRooms.code, invite.roomCode));
+  res.json({ roomCode: invite.roomCode, game: wordRoom ? "word-yard" : ticRoom ? "tic-tac-toe" : "domino" });
 }
 export { pair };
 export default router;

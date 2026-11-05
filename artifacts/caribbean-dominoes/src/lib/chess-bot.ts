@@ -32,13 +32,18 @@ function search(game: Chess, depth: number, alpha: number, beta: number, botColo
   return best;
 }
 
-export function chooseChessBotMove(fen: string, color: 'w' | 'b' = 'b'): Move | null {
+export function chooseChessBotMove(
+  fen: string,
+  color: 'w' | 'b' = 'b',
+  difficulty: 'easy' | 'medium' | 'hard' = 'medium',
+): Move | null {
   const game = new Chess(fen);
+  const searchDepth = { easy: 0, medium: 1, hard: 2 }[difficulty];
   let bestScore = -Infinity;
   let choices: Move[] = [];
   for (const move of game.moves({ verbose: true })) {
     game.move(move);
-    const score = search(game, 1, -Infinity, Infinity, color);
+    const score = search(game, searchDepth, -Infinity, Infinity, color);
     game.undo();
     if (score > bestScore) { bestScore = score; choices = [move]; }
     else if (score === bestScore) choices.push(move);
