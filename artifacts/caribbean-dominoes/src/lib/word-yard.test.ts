@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createWordGame,
+  clearSavedWordGame,
   evaluateWordPlay,
+  loadSavedWordGame,
   passWordTurn,
   playWordTurn,
+  saveWordGame,
+  WORD_GAME_STORAGE_KEY,
   WORD_CENTER,
   WORD_RACK_SIZE,
 } from './word-yard.ts';
@@ -14,6 +18,14 @@ const dictionary = new Set(['AR', 'ARC', 'AT', 'CAT', 'DOG', 'GO', 'GOD', 'HI', 
 const blankBoard = (): WordBoard => Array(225).fill(null);
 const position = (row: number, col: number) => row * 15 + col;
 const tile = (letter: string, owner: WordPlayer = 0) => ({ letter, owner, blank: false });
+function memoryStorage() {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  };
+}
 
 test('creates a complete 100-tile bag and two seven-tile racks', () => {
   const game = createWordGame(() => 0.5);
@@ -134,4 +146,51 @@ test('draws replacement tiles and ends after two passes with leftover tile deduc
   assert.equal(ended.endReason, 'passes');
   assert.deepEqual(ended.scores, [9, 9]);
   assert.equal(ended.winner, 2);
+});
+
+test('saves and restores the complete in-progress match state', () => {
+  const storage = memoryStorage();
+  const initial = createWordGame(() => 0.5);
+  const match: WordGameState = {
+    ...initial,
+    turn: 1,
+    scores: [24, 11],
+    consecutivePasses: 1,
+    board: [...initial.board],
+  };
+  match.board[WORD_CENTER] = tile('A');
+  match.racks[0].pop();
+
+  assert.equal(saveWordGame(match, storage), true);
+  assert.deepEqual(loadSavedWordGame(storage), match);
+});
+
+test('a new match replaces the saved match and can be explicitly cleared', () => {
+  const storage = memoryStorage();
+  const first = createWordGame(() => 0);
+  const next: WordGameState = { ...createWordGame(() => 0.5), scores: [6, 2], turn: 1 };
+  assert.equal(saveWordGame(first, storage), true);
+  assert.equal(saveWordGame(next, storage), true);
+  assert.deepEqual(loadSavedWordGame(storage), next);
+
+  assert.equal(clearSavedWordGame(storage), true);
+  assert.equal(storage.getItem(WORD_GAME_STORAGE_KEY), null);
+  assert.equal(loadSavedWordGame(storage), null);
+});
+
+test('finished and malformed saved matches are never restored', () => {
+  const storage = memoryStorage();
+  const game = createWordGame(() => 0);
+  const finished = passWordTurn(passWordTurn(game));
+  assert.equal(finished.status, 'finished');
+  assert.equal(saveWordGame(finished, storage), true);
+  assert.equal(loadSavedWordGame(storage), null);
+
+  storage.setItem(WORD_GAME_STORAGE_KEY, '{broken json');
+  assert.equal(loadSavedWordGame(storage), null);
+  assert.equal(storage.getItem(WORD_GAME_STORAGE_KEY), null);
+
+  storage.setItem(WORD_GAME_STORAGE_KEY, JSON.stringify({ version: 1, state: finished }));
+  assert.equal(loadSavedWordGame(storage), null);
+  assert.equal(storage.getItem(WORD_GAME_STORAGE_KEY), null);
 });

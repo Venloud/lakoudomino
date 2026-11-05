@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as R
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Chess, type Square } from 'chess.js';
-import { LETTER_POINTS, WORD_BONUSES, WORD_BOARD_SIZE, createWordGame, passWordTurn, playWordTurn } from '../lib/word-yard';
+import { LETTER_POINTS, WORD_BONUSES, WORD_BOARD_SIZE, clearSavedWordGame, createWordGame, loadSavedWordGame, passWordTurn, playWordTurn, saveWordGame } from '../lib/word-yard';
 import type { WordDirection, WordPlacement } from '../lib/word-yard';
 import { loadWordDictionary } from '../lib/word-yard-dictionary';
 import { createFillerBoard, playFillerMove, type FillerPlayer } from '@/lib/filler';
@@ -78,6 +78,16 @@ function chessIndexToSquare(index: number) {
 }
 function chessSquareToIndex(square: Square) {
   return (8 - Number(square[1])) * 8 + square.charCodeAt(0) - 97;
+}
+function hasSavedWordYardOnlineSession() {
+  if (typeof window === 'undefined') return false;
+  try { return Boolean(window.sessionStorage.getItem('509-yard-arcade-room:words')); }
+  catch { return true; }
+}
+function initialWordGame() {
+  if (typeof window === 'undefined' || hasSavedWordYardOnlineSession()) return createWordGame();
+  try { return loadSavedWordGame(window.localStorage) ?? createWordGame(); }
+  catch { return createWordGame(); }
 }
 function chessPieces(game: Chess): Piece[] {
   return game.board().flat().map((piece) => piece ? { side: piece.color === 'w' ? 0 : 1, kind: piece.type.toUpperCase() } : null);
@@ -173,10 +183,14 @@ export default function ClassicGamesPage() {
   const [chessVersion, setChessVersion] = useState(0);
   const [playVsBot, setPlayVsBot] = useState(false);
   const [onlineSession, setOnlineSession] = useState<{ seat: number; connected: boolean; turn: number | null } | null>(null);
+  const wordYardUsedOnlineRef = useRef(hasSavedWordYardOnlineSession());
   const handleArcadeRoomChange = useCallback((session: { seat: number; connected: boolean; turn: number | null } | null) => {
     setOnlineSession(session);
-    if (session) setPlayVsBot(false);
-  }, []);
+    if (session) {
+      setPlayVsBot(false);
+      if (id === 'words') wordYardUsedOnlineRef.current = true;
+    }
+  }, [id]);
   const [chessBotDifficulty, setChessBotDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [humanChessColor, setHumanChessColor] = useState<'w' | 'b'>('w');
   const [chessState, setChessState] = useState<ChessGame>(createChessGame);
@@ -202,7 +216,7 @@ export default function ClassicGamesPage() {
   const chessClockUpdatedAtRef = useRef(Date.now());
   const [promotionMove, setPromotionMove] = useState<ChessMove | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  const [wordGame, setWordGame] = useState(createWordGame);
+  const [wordGame, setWordGame] = useState(initialWordGame);
   const [wordDictionary, setWordDictionary] = useState<ReadonlySet<string> | null>(null);
   const [wordPlacements, setWordPlacements] = useState<WordPlacement[]>([]);
   const [selectedRackIndex, setSelectedRackIndex] = useState<number | null>(null);
@@ -233,6 +247,17 @@ export default function ClassicGamesPage() {
     });
     return () => { active = false; };
   }, [id]);
+  useEffect(() => {
+    if (id !== 'words' || onlineSession !== null || wordYardUsedOnlineRef.current ||
+        hasSavedWordYardOnlineSession() || typeof window === 'undefined') return;
+    try {
+      if (!saveWordGame(wordGame, window.localStorage)) {
+        setWordFeedback('This browser could not save the match. It may not survive a refresh.');
+      }
+    } catch {
+      setWordFeedback('This browser could not save the match. It may not survive a refresh.');
+    }
+  }, [id, onlineSession, wordGame]);
   useEffect(() => () => { if (kayTimerRef.current !== null) window.clearTimeout(kayTimerRef.current); }, []);
 
   const advanceChessClock = useCallback(() => {
@@ -258,6 +283,16 @@ export default function ClassicGamesPage() {
   }, [advanceChessClock, id, winner]);
 
   const reset = () => {
+    if (id === 'words' && onlineSession === null && !hasSavedWordYardOnlineSession()) {
+      try { clearSavedWordGame(window.localStorage); } catch { /* The next save reports storage failures. */ }
+      setWordGame(createWordGame());
+      setWordPlacements([]);
+      setSelectedRackIndex(null);
+      setWordDirection('horizontal');
+      setBlankLetter('A');
+      setWordFeedback('New game started. Select a rack tile, then choose an empty board square.');
+      return;
+    }
     if (id === 'filler') {
       setFillerBoard(createFillerBoard(Math.random, fillerPlayerCount));
       setFillerTurn(0);

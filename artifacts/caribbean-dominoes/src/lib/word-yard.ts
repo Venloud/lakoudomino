@@ -30,6 +30,75 @@ export type WordGameState = {
   endReason: 'rack-empty' | 'passes' | null;
 };
 
+export const WORD_GAME_STORAGE_KEY = '509-yard-word-game:v1';
+const WORD_GAME_STORAGE_VERSION = 1;
+export type WordGameStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+function isWordGameState(value: unknown): value is WordGameState {
+  if (!value || typeof value !== 'object') return false;
+  const state = value as Partial<WordGameState>;
+  const isLetter = (letter: unknown) => typeof letter === 'string' && /^(?:[A-Z]|\?)$/.test(letter);
+  const validTile = (tile: unknown): tile is WordBoardTile | null =>
+    tile === null || (!!tile && typeof tile === 'object' &&
+      typeof (tile as WordBoardTile).letter === 'string' &&
+      /^[A-Z]$/.test((tile as WordBoardTile).letter) &&
+      ((tile as WordBoardTile).owner === 0 || (tile as WordBoardTile).owner === 1) &&
+      typeof (tile as WordBoardTile).blank === 'boolean');
+  if (state.status !== 'playing' || state.winner !== null || state.endReason !== null ||
+      !Array.isArray(state.board) || state.board.length !== WORD_BOARD_SIZE * WORD_BOARD_SIZE ||
+      !state.board.every(validTile) ||
+      !Array.isArray(state.racks) || state.racks.length !== 2 ||
+      !state.racks.every((rack) => Array.isArray(rack) && rack.length <= WORD_RACK_SIZE && rack.every(isLetter)) ||
+      !Array.isArray(state.bag) || !state.bag.every(isLetter) ||
+      !Array.isArray(state.scores) || state.scores.length !== 2 ||
+      !state.scores.every((score) => Number.isInteger(score)) ||
+      (state.turn !== 0 && state.turn !== 1) ||
+      (state.consecutivePasses !== 0 && state.consecutivePasses !== 1)) return false;
+  const tileCount = state.board.filter(Boolean).length + state.racks[0].length + state.racks[1].length + state.bag.length;
+  return tileCount === 100;
+}
+
+export function loadSavedWordGame(storage: WordGameStorage): WordGameState | null {
+  try {
+    const raw = storage.getItem(WORD_GAME_STORAGE_KEY);
+    if (!raw) return null;
+    const saved: unknown = JSON.parse(raw);
+    if (!saved || typeof saved !== 'object' ||
+        (saved as { version?: unknown }).version !== WORD_GAME_STORAGE_VERSION ||
+        !isWordGameState((saved as { state?: unknown }).state)) {
+      storage.removeItem(WORD_GAME_STORAGE_KEY);
+      return null;
+    }
+    return (saved as { state: WordGameState }).state;
+  } catch {
+    try { storage.removeItem(WORD_GAME_STORAGE_KEY); } catch { /* Storage may be unavailable. */ }
+    return null;
+  }
+}
+
+export function saveWordGame(state: WordGameState, storage: WordGameStorage): boolean {
+  try {
+    if (state.status !== 'playing') {
+      storage.removeItem(WORD_GAME_STORAGE_KEY);
+      return true;
+    }
+    if (!isWordGameState(state)) return false;
+    storage.setItem(WORD_GAME_STORAGE_KEY, JSON.stringify({ version: WORD_GAME_STORAGE_VERSION, state }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearSavedWordGame(storage: WordGameStorage): boolean {
+  try {
+    storage.removeItem(WORD_GAME_STORAGE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type WordPlayResult =
   | { ok: true; board: WordBoard; score: number; words: string[]; usedRack: number[] }
   | { ok: false; reason: string };
