@@ -9,6 +9,7 @@ import type { WordDefinition } from '../lib/word-yard-dictionary';
 import { createFillerBoard, playFillerMove, type FillerPlayer } from '@/lib/filler';
 import { chooseChessBotMove } from '@/lib/chess-bot';
 import { getAutomaticChessDrawReason, hasAutomaticChessDraw } from '@/lib/chess-rules';
+import { clearSavedChessMatch, loadSavedChessMatch, saveChessMatch } from '@/lib/chess-persistence';
 import { createChessGame, type ChessGame, type ChessMove, type ChessPieceKind } from '@/lib/chess';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
@@ -85,6 +86,11 @@ function hasSavedWordYardOnlineSession() {
   if (typeof window === 'undefined') return false;
   try { return Boolean(window.sessionStorage.getItem('509-yard-arcade-room:words')); }
   catch { return true; }
+}
+function hasSavedChessOnlineSession() {
+  if (typeof window === 'undefined') return false;
+  try { return Boolean(window.sessionStorage.getItem('509-yard-arcade-room:chess')); }
+  catch { return false; }
 }
 function initialWordGame() {
   if (typeof window === 'undefined' || hasSavedWordYardOnlineSession()) return createWordGame();
@@ -164,7 +170,11 @@ export default function ClassicGamesPage() {
   const rawGame = location.split(/[?#]/, 1)[0].split('/').filter(Boolean).at(-1);
   const id = (rawGame ?? 'box') as GameId;
   const info = GAME_INFO[id] ?? GAME_INFO.box;
-  const [turn, setTurn] = useState<0 | 1>(0);
+  const [restoredChessMatch] = useState(() => {
+    if (id !== 'chess' || typeof window === 'undefined' || hasSavedChessOnlineSession()) return null;
+    try { return loadSavedChessMatch(window.localStorage); } catch { return null; }
+  });
+  const [turn, setTurn] = useState<0 | 1>(() => restoredChessMatch?.game.turn() === 'b' ? 1 : 0);
   const [winner, setWinner] = useState<number | null>(null);
   const [four, setFour] = useState<(number | null)[]>(Array(42).fill(null));
   const [fourHoverCol, setFourHoverCol] = useState<number | null>(null);
@@ -180,10 +190,10 @@ export default function ClassicGamesPage() {
   const [fillerBoard, setFillerBoard] = useState(() => createFillerBoard(Math.random, 2));
   const [fillerTurn, setFillerTurn] = useState<FillerPlayer>(0);
   const [fillerWinner, setFillerWinner] = useState<FillerPlayer | 'draw' | null>(null);
-  const [pieces, setPieces] = useState<Piece[]>(() => initialBoard(id === 'chess' ? 'chess' : 'dame'));
-  const chessRef = useRef(new Chess());
+  const [pieces, setPieces] = useState<Piece[]>(() => id === 'chess' && restoredChessMatch ? chessPieces(restoredChessMatch.game) : initialBoard(id === 'chess' ? 'chess' : 'dame'));
+  const chessRef = useRef(restoredChessMatch?.game ?? new Chess());
   const [chessVersion, setChessVersion] = useState(0);
-  const [playVsBot, setPlayVsBot] = useState(false);
+  const [playVsBot, setPlayVsBot] = useState(restoredChessMatch?.playVsBot ?? false);
   const [onlineSession, setOnlineSession] = useState<{ seat: number; connected: boolean; turn: number | null } | null>(null);
   const wordYardUsedOnlineRef = useRef(hasSavedWordYardOnlineSession());
   const handleArcadeRoomChange = useCallback((session: { seat: number; connected: boolean; turn: number | null } | null) => {
@@ -193,15 +203,15 @@ export default function ClassicGamesPage() {
       if (id === 'words') wordYardUsedOnlineRef.current = true;
     }
   }, [id]);
-  const [chessBotDifficulty, setChessBotDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
-  const [humanChessColor, setHumanChessColor] = useState<'w' | 'b'>('w');
-  const [chessState, setChessState] = useState<ChessGame>(createChessGame);
-  const [chessClockMs, setChessClockMs] = useState<[number, number]>([CHESS_CLOCK_START_MS, CHESS_CLOCK_START_MS]);
-  const chessClockRef = useRef<[number, number]>([CHESS_CLOCK_START_MS, CHESS_CLOCK_START_MS]);
+  const [chessBotDifficulty, setChessBotDifficulty] = useState<'easy' | 'medium' | 'hard'>(restoredChessMatch?.botDifficulty ?? 'medium');
+  const [humanChessColor, setHumanChessColor] = useState<'w' | 'b'>(restoredChessMatch?.humanColor ?? 'w');
+  const [chessState, setChessState] = useState<ChessGame>(() => restoredChessMatch ? chessStateFromEngine(restoredChessMatch.game) : createChessGame());
+  const [chessClockMs, setChessClockMs] = useState<[number, number]>(() => restoredChessMatch?.clocks ?? [CHESS_CLOCK_START_MS, CHESS_CLOCK_START_MS]);
+  const chessClockRef = useRef<[number, number]>(restoredChessMatch?.clocks ?? [CHESS_CLOCK_START_MS, CHESS_CLOCK_START_MS]);
   const chessClockHistoryRef = useRef<[number, number][]>([]);
-  const [chessClockPreset, setChessClockPreset] = useState('rapid-10');
-  const [customClockMinutes, setCustomClockMinutes] = useState(20);
-  const [customClockIncrement, setCustomClockIncrement] = useState(0);
+  const [chessClockPreset, setChessClockPreset] = useState(restoredChessMatch?.clockPreset ?? 'rapid-10');
+  const [customClockMinutes, setCustomClockMinutes] = useState(restoredChessMatch?.customClockMinutes ?? 20);
+  const [customClockIncrement, setCustomClockIncrement] = useState(restoredChessMatch?.customClockIncrement ?? 0);
   const [drawOfferBy, setDrawOfferBy] = useState<0 | 1 | null>(null);
   const [reviewPly, setReviewPly] = useState<number | null>(null);
   const [chessArchive, setChessArchive] = useState<ChessArchive[]>(() => {
@@ -214,9 +224,9 @@ export default function ClassicGamesPage() {
   });
   const chessRecordIdRef = useRef(String(Date.now()));
   const recordedChessGameRef = useRef<string | null>(null);
-  const chessTurnRef = useRef<0 | 1>(0);
+  const chessTurnRef = useRef<0 | 1>(restoredChessMatch?.game.turn() === 'b' ? 1 : 0);
   const chessClockUpdatedAtRef = useRef(Date.now());
-  const [promotionMove, setPromotionMove] = useState<ChessMove | null>(null);
+  const [promotionMove, setPromotionMove] = useState<ChessMove | null>(restoredChessMatch?.promotionMove ?? null);
   const [selected, setSelected] = useState<number | null>(null);
   const [wordGame, setWordGame] = useState(initialWordGame);
   const [wordDictionary, setWordDictionary] = useState<ReadonlySet<string> | null>(null);
@@ -310,6 +320,7 @@ export default function ClassicGamesPage() {
       return;
     }
     if (id === 'chess') {
+      try { clearSavedChessMatch(window.localStorage); } catch { /* Storage may be unavailable. */ }
       chessRef.current = new Chess();
       chessRecordIdRef.current = `${Date.now()}-${Math.random()}`;
       recordedChessGameRef.current = null;
@@ -336,6 +347,34 @@ export default function ClassicGamesPage() {
   const wordDefinitionSource = wordLookupResult?.definitions.find((item) => item.sourceUrl)?.sourceUrl;
   const safeWordDefinitionSource = wordDefinitionSource?.startsWith('https://') ? wordDefinitionSource : undefined;
   const chessGame = chessRef.current;
+  useEffect(() => {
+    if (id !== 'chess') return;
+    if (onlineSession !== null || hasSavedChessOnlineSession() || winner !== null) {
+      try { clearSavedChessMatch(window.localStorage); } catch { /* Storage may be unavailable. */ }
+      return;
+    }
+    const persist = () => {
+      try {
+        saveChessMatch(window.localStorage, chessGame, {
+          promotionMove,
+          clocks: [...chessClockRef.current],
+          playVsBot,
+          humanColor: humanChessColor,
+          botDifficulty: chessBotDifficulty,
+          clockPreset: chessClockPreset,
+          customClockMinutes,
+          customClockIncrement,
+        });
+      } catch { /* Storage may be unavailable. */ }
+    };
+    persist();
+    const timer = window.setInterval(persist, 1000);
+    window.addEventListener('pagehide', persist);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('pagehide', persist);
+    };
+  }, [id, onlineSession, winner, chessVersion, promotionMove, playVsBot, humanChessColor, chessBotDifficulty, chessClockPreset, customClockMinutes, customClockIncrement]);
   const chessHistoryMoves = chessGame.history({ verbose: true });
   const displayChessGame = reviewPly === null ? chessGame : (() => {
     const replay = new Chess();
