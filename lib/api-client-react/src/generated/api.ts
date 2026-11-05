@@ -44,7 +44,14 @@ import type {
   TicTacToeRoomJoinInput,
   WaitlistInput,
   WaitlistNotifyInput,
-  WaitlistPosition
+  WaitlistPosition,
+  WordYardGuessInput,
+  WordYardReadyInput,
+  WordYardRoomAccess,
+  WordYardRoomActionResponse,
+  WordYardRoomJoinInput,
+  WordYardRoomList,
+  WordYardRoomSettings
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -409,6 +416,508 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getJoinTicTacToeRoomMutationOptions(options));
+    }
+
+export const getListWordYardRoomsUrl = () => {
+
+
+
+
+  return `/api/word-yard/rooms`
+}
+
+/**
+ * @summary List public Word Yard rooms with open seats
+ */
+export const listWordYardRooms = async ( options?: Parameters<typeof customFetch>[1]): Promise<WordYardRoomList> => {
+
+  return customFetch<WordYardRoomList>(getListWordYardRoomsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListWordYardRoomsQueryKey = () => {
+    return [
+    `/api/word-yard/rooms`
+    ] as const;
+    }
+
+
+export const getListWordYardRoomsQueryOptions = <TData = Awaited<ReturnType<typeof listWordYardRooms>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWordYardRooms>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListWordYardRoomsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listWordYardRooms>>> = ({ signal }) => listWordYardRooms({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listWordYardRooms>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListWordYardRoomsQueryResult = NonNullable<Awaited<ReturnType<typeof listWordYardRooms>>>
+export type ListWordYardRoomsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List public Word Yard rooms with open seats
+ */
+
+export function useListWordYardRooms<TData = Awaited<ReturnType<typeof listWordYardRooms>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listWordYardRooms>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListWordYardRoomsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateWordYardRoomUrl = () => {
+
+
+
+
+  return `/api/word-yard/rooms`
+}
+
+/**
+ * @summary Create a Word Yard room
+ */
+export const createWordYardRoom = async (wordYardRoomSettings: WordYardRoomSettings, options?: Parameters<typeof customFetch>[1]): Promise<WordYardRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WordYardRoomAccess>(getCreateWordYardRoomUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(wordYardRoomSettings)
+  }
+);}
+
+
+
+
+
+export const getCreateWordYardRoomMutationKey = () => ['createWordYardRoom'] as const;
+
+export const getCreateWordYardRoomMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWordYardRoom>>, TError,CreateWordYardRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createWordYardRoom>>, TError,CreateWordYardRoomMutationVariables, TContext> => {
+
+const mutationKey = getCreateWordYardRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createWordYardRoom>>, CreateWordYardRoomMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createWordYardRoom(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateWordYardRoomMutationResult = NonNullable<Awaited<ReturnType<typeof createWordYardRoom>>>
+    export type CreateWordYardRoomMutationBody = BodyType<WordYardRoomSettings>
+    export type CreateWordYardRoomMutationError = ErrorType<unknown>
+    export type CreateWordYardRoomMutationVariables = {data: BodyType<WordYardRoomSettings>}
+
+    /**
+ * @summary Create a Word Yard room
+ */
+export const useCreateWordYardRoom = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createWordYardRoom>>, TError,CreateWordYardRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createWordYardRoom>>,
+        TError,
+        CreateWordYardRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateWordYardRoomMutationOptions(options));
+    }
+
+export const getQuickMatchWordYardUrl = () => {
+
+
+
+
+  return `/api/word-yard/quick-match`
+}
+
+/**
+ * @summary Join or create a compatible public Word Yard room
+ */
+export const quickMatchWordYard = async (wordYardRoomSettings: WordYardRoomSettings, options?: Parameters<typeof customFetch>[1]): Promise<WordYardRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WordYardRoomAccess>(getQuickMatchWordYardUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(wordYardRoomSettings)
+  }
+);}
+
+
+
+
+
+export const getQuickMatchWordYardMutationKey = () => ['quickMatchWordYard'] as const;
+
+export const getQuickMatchWordYardMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quickMatchWordYard>>, TError,QuickMatchWordYardMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof quickMatchWordYard>>, TError,QuickMatchWordYardMutationVariables, TContext> => {
+
+const mutationKey = getQuickMatchWordYardMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof quickMatchWordYard>>, QuickMatchWordYardMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  quickMatchWordYard(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QuickMatchWordYardMutationResult = NonNullable<Awaited<ReturnType<typeof quickMatchWordYard>>>
+    export type QuickMatchWordYardMutationBody = BodyType<WordYardRoomSettings>
+    export type QuickMatchWordYardMutationError = ErrorType<unknown>
+    export type QuickMatchWordYardMutationVariables = {data: BodyType<WordYardRoomSettings>}
+
+    /**
+ * @summary Join or create a compatible public Word Yard room
+ */
+export const useQuickMatchWordYard = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof quickMatchWordYard>>, TError,QuickMatchWordYardMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof quickMatchWordYard>>,
+        TError,
+        QuickMatchWordYardMutationVariables,
+        TContext
+      > => {
+      return useMutation(getQuickMatchWordYardMutationOptions(options));
+    }
+
+export const getJoinWordYardRoomUrl = (code: string,) => {
+
+
+
+
+  return `/api/word-yard/rooms/${code}/join`
+}
+
+export const joinWordYardRoom = async (code: string,
+    wordYardRoomJoinInput: WordYardRoomJoinInput, options?: Parameters<typeof customFetch>[1]): Promise<WordYardRoomAccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WordYardRoomAccess>(getJoinWordYardRoomUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(wordYardRoomJoinInput)
+  }
+);}
+
+
+
+
+
+export const getJoinWordYardRoomMutationKey = () => ['joinWordYardRoom'] as const;
+
+export const getJoinWordYardRoomMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinWordYardRoom>>, TError,JoinWordYardRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof joinWordYardRoom>>, TError,JoinWordYardRoomMutationVariables, TContext> => {
+
+const mutationKey = getJoinWordYardRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof joinWordYardRoom>>, JoinWordYardRoomMutationVariables> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  joinWordYardRoom(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type JoinWordYardRoomMutationResult = NonNullable<Awaited<ReturnType<typeof joinWordYardRoom>>>
+    export type JoinWordYardRoomMutationBody = BodyType<WordYardRoomJoinInput>
+    export type JoinWordYardRoomMutationError = ErrorType<void>
+    export type JoinWordYardRoomMutationVariables = {code: string;data: BodyType<WordYardRoomJoinInput>}
+
+    export const useJoinWordYardRoom = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinWordYardRoom>>, TError,JoinWordYardRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof joinWordYardRoom>>,
+        TError,
+        JoinWordYardRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getJoinWordYardRoomMutationOptions(options));
+    }
+
+export const getReadyWordYardRoomUrl = (code: string,) => {
+
+
+
+
+  return `/api/word-yard/rooms/${code}/ready`
+}
+
+export const readyWordYardRoom = async (code: string,
+    wordYardReadyInput: WordYardReadyInput, options?: Parameters<typeof customFetch>[1]): Promise<WordYardRoomActionResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WordYardRoomActionResponse>(getReadyWordYardRoomUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(wordYardReadyInput)
+  }
+);}
+
+
+
+
+
+export const getReadyWordYardRoomMutationKey = () => ['readyWordYardRoom'] as const;
+
+export const getReadyWordYardRoomMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof readyWordYardRoom>>, TError,ReadyWordYardRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof readyWordYardRoom>>, TError,ReadyWordYardRoomMutationVariables, TContext> => {
+
+const mutationKey = getReadyWordYardRoomMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof readyWordYardRoom>>, ReadyWordYardRoomMutationVariables> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  readyWordYardRoom(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReadyWordYardRoomMutationResult = NonNullable<Awaited<ReturnType<typeof readyWordYardRoom>>>
+    export type ReadyWordYardRoomMutationBody = BodyType<WordYardReadyInput>
+    export type ReadyWordYardRoomMutationError = ErrorType<unknown>
+    export type ReadyWordYardRoomMutationVariables = {code: string;data: BodyType<WordYardReadyInput>}
+
+    export const useReadyWordYardRoom = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof readyWordYardRoom>>, TError,ReadyWordYardRoomMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof readyWordYardRoom>>,
+        TError,
+        ReadyWordYardRoomMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReadyWordYardRoomMutationOptions(options));
+    }
+
+export const getSubmitWordYardGuessUrl = (code: string,) => {
+
+
+
+
+  return `/api/word-yard/rooms/${code}/guess`
+}
+
+export const submitWordYardGuess = async (code: string,
+    wordYardGuessInput: WordYardGuessInput, options?: Parameters<typeof customFetch>[1]): Promise<WordYardRoomActionResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<WordYardRoomActionResponse>(getSubmitWordYardGuessUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(wordYardGuessInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitWordYardGuessMutationKey = () => ['submitWordYardGuess'] as const;
+
+export const getSubmitWordYardGuessMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitWordYardGuess>>, TError,SubmitWordYardGuessMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitWordYardGuess>>, TError,SubmitWordYardGuessMutationVariables, TContext> => {
+
+const mutationKey = getSubmitWordYardGuessMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitWordYardGuess>>, SubmitWordYardGuessMutationVariables> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  submitWordYardGuess(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitWordYardGuessMutationResult = NonNullable<Awaited<ReturnType<typeof submitWordYardGuess>>>
+    export type SubmitWordYardGuessMutationBody = BodyType<WordYardGuessInput>
+    export type SubmitWordYardGuessMutationError = ErrorType<void>
+    export type SubmitWordYardGuessMutationVariables = {code: string;data: BodyType<WordYardGuessInput>}
+
+    export const useSubmitWordYardGuess = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitWordYardGuess>>, TError,SubmitWordYardGuessMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitWordYardGuess>>,
+        TError,
+        SubmitWordYardGuessMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitWordYardGuessMutationOptions(options));
     }
 
 export const getGetLobbyUrl = () => {

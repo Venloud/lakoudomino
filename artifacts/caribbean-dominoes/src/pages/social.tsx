@@ -1,9 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
-import { Domino } from '../../../../lakou-engine/ui/Domino';
 import {
-  Bell, ChevronDown, CircleHelp, Crosshair, Gamepad2, Grid3X3, LogOut, MessageCircle, Plus,
+  Bell, ChevronDown, CircleHelp, Gamepad2, LogOut, MessageCircle, Plus,
   Trophy, ArrowUpRight,
 } from 'lucide-react';
 import {
@@ -18,23 +17,18 @@ import { TicTacToeProfileResults } from './tic-tac-toe-profile';
 type Destination = 'home' | 'games' | 'friends' | 'leaderboard' | 'profile' | 'about';
 
 function GameMark({ game }: { game: string }) {
-  const color = game === 'four-in-a-row' ? '#236fb5'
-    : game === 'filler' ? '#27342d'
-    : game === 'block-drop' ? '#29263f'
-    : game === 'words' || game === 'scrabble' ? '#b69b68'
-    : '#29312b';
   return <span className={`yard-game-mark yard-mark-${game}`} aria-hidden="true">
     <svg viewBox="0 0 40 40" role="presentation">
-      <rect x="1" y="1" width="38" height="38" rx="10" fill={color} />
+      <rect x="1" y="1" width="38" height="38" rx="5.5" fill="#f0ead8" stroke="#383832" strokeWidth="1.2" />
       {game === 'tic-tac-toe' && <>
         <path d="M14 8v24M26 8v24M8 14h24M8 26h24" stroke="#dfe7d5" strokeOpacity=".5" strokeWidth="1.5" />
-        <path d="m10 10 7 7m0-7-7 7" stroke="#a2e56e" strokeWidth="2.5" strokeLinecap="round" />
+        <path d="m10 10 7 7m0-7-7 7" stroke="#91bd78" strokeWidth="2.5" strokeLinecap="round" />
         <circle cx="26" cy="26" r="4" fill="none" stroke="#f1d983" strokeWidth="2.5" />
       </>}
       {game === 'mopyon' && <>
         <path d="M9 9h22M9 20h22M9 31h22M9 9v22M20 9v22M31 9v22" stroke="#dce6d3" strokeOpacity=".52" strokeWidth="1.5" />
-        <circle cx="9" cy="9" r="3" fill="#a2e56e" /><circle cx="20" cy="20" r="3" fill="#f1d983" />
-        <circle cx="31" cy="31" r="3" fill="#a2e56e" /><circle cx="31" cy="9" r="3" fill="#e67870" />
+        <circle cx="9" cy="9" r="3" fill="#91bd78" /><circle cx="20" cy="20" r="3" fill="#f1d983" />
+        <circle cx="31" cy="31" r="3" fill="#91bd78" /><circle cx="31" cy="9" r="3" fill="#e67870" />
       </>}
       {game === 'box' && <>
         <path d="M10 10h20v20H10z" fill="#d5a75c" fillOpacity=".24" stroke="#e8bc70" strokeWidth="2" />
@@ -58,10 +52,19 @@ function GameMark({ game }: { game: string }) {
         <circle cx="15" cy="25" r="4.5" fill="none" stroke="#e79585" strokeWidth="1" />
         <circle cx="27" cy="13" r="5" fill="#f0e8d6" stroke="#b5a778" strokeWidth="1.5" />
       </>}
-      {(game === 'words' || game === 'scrabble') && <>
-        <rect x="8" y="7" width="24" height="26" rx="3" fill={game === 'words' ? '#c7e2a5' : '#e8d7ac'} stroke="#fff4d2" strokeWidth="1.3" />
-        <text x="20" y="26" textAnchor="middle" fontFamily="Georgia,serif" fontSize="18" fontWeight="bold" fill="#302b20">{game === 'words' ? 'W' : 'A'}</text>
-        <text x="28" y="30" textAnchor="middle" fontFamily="sans-serif" fontSize="6" fontWeight="bold" fill="#302b20">{game === 'words' ? '4' : '1'}</text>
+      {(game === 'words' || game === 'word-yard') && <>
+        <path d="M14 14 21 11 25 23" stroke="#45453f" strokeWidth="1.3" />
+        <rect x="6" y="10" width="11" height="11" rx="2" fill="#f8f3e5" stroke="#45453f" strokeWidth="1.3" />
+        <rect x="16" y="6" width="11" height="11" rx="2" fill="#d5ceb9" stroke="#45453f" strokeWidth="1.3" />
+        <rect x="21" y="21" width="11" height="11" rx="2" fill="#d5ceb9" stroke="#45453f" strokeWidth="1.3" />
+        <circle cx="21.5" cy="11.5" r="1.5" fill="#729e63" />
+      </>}
+      {game === 'scrabble' && <>
+        <rect x="7" y="7" width="26" height="26" rx="2" fill="#d5ceb9" stroke="#45453f" strokeWidth="1.3" />
+        <path d="M20 7v26M7 20h26" stroke="#45453f" strokeWidth="1.1" />
+        <rect x="9" y="9" width="9" height="9" rx="1.3" fill="#f8f3e5" stroke="#45453f" strokeWidth="1" />
+        <rect x="22" y="22" width="9" height="9" rx="1.3" fill="#f8f3e5" stroke="#45453f" strokeWidth="1" />
+        <circle cx="24.5" cy="11.5" r="1.7" fill="#729e63" />
       </>}
       {game === 'barricade' && <>
         <path d="M9 10h22M9 20h22M9 30h22M10 9v22M20 9v22M30 9v22" stroke="#d9e6ca" strokeOpacity=".48" strokeWidth="1" />
@@ -84,12 +87,21 @@ function GameMark({ game }: { game: string }) {
         <path d="M15 8h9v9h-9zM6 17h9v9H6zM15 17h9v9h-9zM24 17h9v9h-9zM15 26h9v8h-9z" fill="#a98ae9" stroke="#e2d6ff" strokeWidth="1" />
         <path d="M17 10h5v2h-5zM8 19h5v2H8z" fill="#e6dcff" fillOpacity=".7" />
       </>}
-      {!['tic-tac-toe', 'mopyon', 'box', 'kay', 'chess', 'dame', 'words', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop'].includes(game) && <>
+      {!['tic-tac-toe', 'mopyon', 'box', 'kay', 'chess', 'dame', 'words', 'word-yard', 'scrabble', 'barricade', 'four-in-a-row', 'filler', 'block-drop'].includes(game) && <>
         <path d="M10 11h20v18H10z" fill="none" stroke="#dbe9d0" strokeWidth="2" />
-        <circle cx="15" cy="20" r="3" fill="#a2e56e" /><circle cx="25" cy="20" r="3" fill="#f1d983" />
+        <circle cx="15" cy="20" r="3" fill="#91bd78" /><circle cx="25" cy="20" r="3" fill="#f1d983" />
       </>}
     </svg>
   </span>;
+}
+
+function GameIcon({ slug }: { slug: string }) {
+  if (slug === 'domino') return <img src="/domino-logo.webp" alt="" />;
+  if (slug === 'mopyon') return <img src="/mopyon-logo.webp" alt="" />;
+  if (slug === 'box') return <img src="/box-logo.webp" alt="" />;
+  if (slug === 'kay') return <img src="/kay-logo.webp" alt="" />;
+  if (slug === 'chess') return <img src="/chess-logo.webp" alt="" />;
+  return <GameMark game={slug} />;
 }
 
 const navItems: { label: string; href: string; key: Destination }[] = [
@@ -138,9 +150,11 @@ function Panel({ title, action, children, className = '' }: { title: string; act
 }
 
 function EmptyHistory({ onGames }: { onGames: () => void }) {
-  return <div className="yard-empty" data-testid="empty-recent-matches">
-    <strong>No recorded matches yet</strong>
-    <p>Your completed Domino matches will appear here. Start a game to put your first result on the board.</p>
+  return <div className="yard-empty yard-empty-history" data-testid="empty-recent-matches">
+    <div>
+      <strong>No recorded matches yet</strong>
+      <p>Your completed Domino matches will appear here.</p>
+    </div>
     <button type="button" className="yard-button" onClick={onGames} data-testid="button-play-first-match">Find a game <ArrowUpRight size={14} /></button>
   </div>;
 }
@@ -190,6 +204,22 @@ export default function SocialPage({ page }: { page: Destination }) {
   const joinInvite = (id: string) => acceptInvite.mutate({ id }, {
     onSuccess: (result) => {
       const displayName = user?.username ?? 'Guest';
+      if (result.game === 'word-yard') {
+        void fetch(`/api/word-yard/rooms/${encodeURIComponent(result.roomCode)}/join`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ displayName }),
+        }).then(async (response) => {
+          if (!response.ok) throw new Error('Invite accepted, but the Word Yard room could not be joined.');
+          const room = await response.json() as { room: { code: string }; reconnectToken: string };
+          sessionStorage.setItem(`word-yard-reconnect-${room.room.code}`, room.reconnectToken);
+          sessionStorage.setItem(`word-yard-display-name-${room.room.code}`, displayName);
+          setLocation(`/games/words/${room.room.code}`);
+        }).catch((error: unknown) => {
+          setNotice(error instanceof Error ? error.message : 'Invite accepted, but the Word Yard room could not be joined.');
+        });
+        return;
+      }
       if (result.game === 'tic-tac-toe') {
         joinTicTacToeRoom.mutate({ code: result.roomCode, data: { displayName } }, {
           onSuccess: (room) => {
@@ -215,9 +245,24 @@ export default function SocialPage({ page }: { page: Destination }) {
     onError: () => setNotice('That invite is no longer available.'),
   });
   const title = page === 'home' ? 'Meet at the table.' : page === 'games' ? 'Games' : page === 'friends' ? 'Friends' : page === 'leaderboard' ? 'Leaderboard' : 'Your profile';
-  const subtitle = page === 'home' ? 'Find your crew, jump into a match, and see who takes the points.' : page === 'games' ? 'Play local foundations now. Domino and Tic-Tac-Toe also support online rooms.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Domino record and recent results.';
+  const subtitle = page === 'home' ? 'Find your crew, jump into a match, and see who takes the points.' : page === 'games' ? 'Play local foundations now. Domino, Tic-Tac-Toe, and Word Yard also support online rooms.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Domino record and recent results.';
   const recentMatches = recent.data?.matches ?? [];
   const friendRows = friendData?.friends ?? [];
+  const gameCatalog = [
+    { name: 'Domino', slug: 'domino', description: 'Live tables · Regular and Points', online: true },
+    { name: 'Tic-Tac-Toe', slug: 'tic-tac-toe', description: 'Regular and Yard Mode', online: true },
+    { name: 'Mòpyon', slug: 'mopyon', description: 'Five in a row', online: false },
+    { name: 'Box', slug: 'box', description: 'Dots and Boxes', online: false },
+    { name: 'Kay', slug: 'kay', description: 'Mancala-style seed game', online: false },
+    { name: 'Chess', slug: 'chess', description: 'Classic chess', online: false },
+    { name: 'Dame', slug: 'dame', description: 'Checkers', online: false },
+    { name: 'Word Yard', slug: 'words', description: 'Multiplayer word game', online: true },
+    { name: 'Scrabble', slug: 'scrabble', description: 'Build words on a shared board', online: false },
+    { name: 'Barricade', slug: 'barricade', description: 'Race and block the path', online: false },
+    { name: 'Four in a Row', slug: 'four-in-a-row', description: 'Connect four pieces', online: false },
+    { name: 'Filler', slug: 'filler', description: 'Claim more of the board', online: false },
+    { name: 'Block Drop', slug: 'block-drop', description: 'Falling-block puzzle', online: false },
+  ];
    const goGames = () => setLocation('/games/domino');
   const renderHistory = () => {
      if (!signedIn) return <div className="yard-empty" data-testid="empty-history-sign-in"><strong>Sign in to see your match history</strong><p>Recorded results belong to your 509 Yard account. Sign in to see your recent games and standings.</p><Link href="/sign-in" className="yard-button primary" data-testid="link-history-sign-in">Sign in</Link></div>;
@@ -262,16 +307,14 @@ export default function SocialPage({ page }: { page: Destination }) {
           <Panel title="Recent matches" action={<Link href="/profile" className="yard-panel-link" data-testid="link-all-matches">Match history</Link>}>
             {renderHistory()}
           </Panel>
-          <Panel title="Available games">
-            <div className="yard-available-game" data-testid="card-featured-game">
-              <div className="yard-game-tile" aria-hidden="true"><Domino first={6} second={6} orientation="v" unit={26} /></div>
-              <div className="yard-available-copy"><strong>Domino</strong><span>Multiplayer dominoes</span></div>
-              <Link href="/games/domino" className="yard-button primary" data-testid="button-open-lobby">Play</Link>
+          <Panel title="Available games" action={<Link href="/games" className="yard-panel-link yard-games-all-link">All games <ArrowUpRight size={12} /></Link>}>
+            <div className="yard-home-game-list">
+              {gameCatalog.slice(0, 4).map((game) => <Link key={game.slug} href={`/games/${game.slug}`} className="yard-game-card" data-testid={`home-game-${game.slug}`}>
+                <span className="yard-game-card-mark"><GameIcon slug={game.slug} /></span>
+                <span className="yard-game-card-copy"><strong>{game.name}</strong><small>{game.description}</small></span>
+                <span className={`yard-game-badge${game.online ? ' is-online' : ''}`}>{game.online ? 'Online' : 'Local'}</span>
+              </Link>)}
             </div>
-            <div className="yard-coming-soon"><Crosshair size={17} /><span>Mòpyon is up next</span><Link href="/games/mopyon" className="yard-panel-link">Preview</Link></div>
-            <div className="yard-coming-soon yard-games-queue"><Gamepad2 size={17} /><span>Coming after: Box (Dots and Boxes-style) → Kay (Mancala-style) → Chess → Dame (Checkers) → Word games (Scrabble-style) → Four in a Row → Filler → Block Drop</span></div>
-            <div className="yard-coming-soon"><Gamepad2 size={17} /><span>Block Drop foundation</span><Link href="/games/block-drop" className="yard-panel-link">Play</Link></div>
-            <div className="yard-coming-soon"><Grid3X3 size={17} /><span>Tic-Tac-Toe · Regular and Yard Mode</span><Link href="/games/tic-tac-toe" className="yard-panel-link">Play online</Link></div>
           </Panel>
         </div>
         <div className="yard-home-status">
@@ -283,10 +326,14 @@ export default function SocialPage({ page }: { page: Destination }) {
         </div>
       </>}
       {page === 'games' && <div className="yard-dashboard-grid">
-        <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/domino" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true"><Domino first={6} second={6} orientation="v" unit={58} /></div></section>
-            <section className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">PLAYABLE FOUNDATIONS</p><h2 style={{ fontSize: 17, margin: '0 0 8px' }}>Choose a game</h2><p className="yard-subtitle" style={{ margin: 0 }}>Local play is ready for the games in the yard. Online rooms can come next.</p>
+        <div><section className="yard-featured-game"><div><p className="yard-kicker">AVAILABLE NOW</p><h2 className="yard-game-title">Domino</h2><p className="yard-game-copy">Classic table play with Regular and Points modes, live matchmaking, private rooms, and friends.</p><Link className="yard-button primary" href="/games/domino" data-testid="button-play-lakou-card"><Gamepad2 size={15} /> Play now</Link></div><div className="yard-domino-mark" aria-hidden="true"><img src="/domino-logo.webp" alt="" /></div></section>
+             <section className="yard-panel yard-section-space"><div className="yard-panel-body"><p className="yard-kicker">THE GAME YARD</p><h2 style={{ fontSize: 17, margin: '0 0 8px' }}>Choose a game</h2><p className="yard-subtitle" style={{ margin: 0 }}>Online rooms are available for Domino, Tic-Tac-Toe, and Word Yard. The rest are ready for local play.</p>
               <div className="yard-game-foundation-list">
-                 {[['Tic-Tac-Toe', '/games/tic-tac-toe'], ['Mòpyon', '/games/mopyon'], ['Box · Dots and Boxes', '/games/box'], ['Kay · Mancala', '/games/kay'], ['Chess', '/games/chess'], ['Dame · Checkers', '/games/dame'], ['Word Yard', '/games/words'], ['Scrabble', '/games/scrabble'], ['Barricade', '/games/barricade'], ['Four in a Row', '/games/four-in-a-row'], ['Filler', '/games/filler'], ['Block Drop', '/games/block-drop']].map(([name, href]) => <Link key={href} href={href} className="yard-coming-soon"><GameMark game={href.split('/').at(-1) ?? ''} /><span>{name}</span><span className="yard-status">Play</span></Link>)}
+                  {gameCatalog.filter((game) => game.slug !== 'domino').map((game) => <Link key={game.slug} href={`/games/${game.slug}`} className="yard-game-card" data-testid={`game-card-${game.slug}`}>
+                    <span className="yard-game-card-mark"><GameIcon slug={game.slug} /></span>
+                    <span className="yard-game-card-copy"><strong>{game.name}</strong><small>{game.description}</small></span>
+                    <span className={`yard-game-badge${game.online ? ' is-online' : ''}`}>{game.online ? 'Online' : 'Local'}</span>
+                  </Link>)}
               </div>
             </div></section>
         </div>

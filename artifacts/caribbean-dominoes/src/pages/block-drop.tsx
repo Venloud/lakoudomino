@@ -42,10 +42,53 @@ function getVisibleBoard(game: BlockDropState): BlockDropCell[][] {
   return board;
 }
 
+function chooseBlockDropBotPlacement(state: BlockDropState): BlockDropState {
+  if (!state.active || state.status !== 'playing') return state;
+  let best = state;
+  let bestScore = -Infinity;
+  for (let rotation = 0; rotation < 4; rotation++) {
+    let rotated = state;
+    for (let turn = 0; turn < rotation; turn++) rotated = rotateBlockDrop(rotated);
+    const shape = getBlockDropShape(rotated.active!);
+    for (let x = 0; x <= BLOCK_DROP_COLUMNS - shape.width; x++) {
+      let candidate = rotated;
+      while (candidate.active && candidate.active.x !== x) {
+        const next = moveBlockDrop(candidate, candidate.active.x < x ? 1 : -1, 0);
+        if (next === candidate) break;
+        candidate = next;
+      }
+      if (!candidate.active || candidate.active.x !== x) continue;
+      const landed = hardDropBlockDrop(candidate);
+      let holes = 0, aggregateHeight = 0, bumpiness = 0;
+      const heights = Array.from({ length: BLOCK_DROP_COLUMNS }, (_, column) => {
+        const first = landed.board.findIndex((row) => row[column] !== null);
+        const height = first < 0 ? 0 : BLOCK_DROP_ROWS - first;
+        aggregateHeight += height;
+        let occupied = false;
+        for (const row of landed.board) {
+          if (row[column] !== null) occupied = true;
+          else if (occupied) holes++;
+        }
+        return height;
+      });
+      for (let column = 1; column < heights.length; column++) bumpiness += Math.abs(heights[column] - heights[column - 1]);
+      const lines = landed.lines - state.lines;
+      const score = lines * 500 - holes * 55 - aggregateHeight * 4 - bumpiness * 3;
+      if (score > bestScore) { best = landed; bestScore = score; }
+    }
+  }
+  return best;
+}
+
 export default function BlockDropPage() {
   const [game, setGame] = useState(createBlockDropState);
+  const [botGame, setBotGame] = useState(createBlockDropState);
+  const [practiceBot, setPracticeBot] = useState(false);
   const visibleBoard = useMemo(() => getVisibleBoard(game), [game]);
+  const botVisibleBoard = useMemo(() => getVisibleBoard(botGame), [botGame]);
   const nextShape = getBlockDropShape({ type: game.nextPiece, rotation: 0 });
+  const matchOver = game.status === 'gameover' || (practiceBot && botGame.status === 'gameover');
+  const practiceWinner = game.score === botGame.score ? 'draw' : game.score > botGame.score ? 'You' : 'Yard bot';
 
   useEffect(() => {
     if (game.status !== 'playing') return;
@@ -53,6 +96,18 @@ export default function BlockDropPage() {
     const timer = window.setInterval(() => setGame((current) => tickBlockDrop(current)), speed);
     return () => window.clearInterval(timer);
   }, [game.level, game.status]);
+
+  useEffect(() => {
+    if (!practiceBot || game.status !== 'playing' || botGame.status !== 'playing') return;
+    const timer = window.setTimeout(() => setBotGame((current) => chooseBlockDropBotPlacement(current)), 950);
+    return () => window.clearTimeout(timer);
+  }, [practiceBot, game.status, botGame]);
+
+  useEffect(() => {
+    if (practiceBot && botGame.status === 'gameover' && game.status === 'playing') {
+      setGame((current) => toggleBlockDropPause(current));
+    }
+  }, [practiceBot, botGame.status, game.status]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -78,13 +133,19 @@ export default function BlockDropPage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const freshGame = () => setGame(createBlockDropState());
+  const freshGame = () => { setGame(createBlockDropState()); setBotGame(createBlockDropState()); };
+  const chooseOpponent = (enabled: boolean) => { setPracticeBot(enabled); freshGame(); };
 
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
-    {game.status === 'gameover' && <GameEndSequence gameName="Block Drop" perspective="solo-loss" score={`${game.score.toLocaleString()} points · ${game.lines} lines`} detail="Your stack reached the top. Take a breath, then try for a new high score." onPlayAgain={freshGame} />}
+    {matchOver && <GameEndSequence gameName="Block Drop" perspective={practiceBot ? practiceWinner === 'draw' ? 'draw' : practiceWinner === 'You' ? 'winner' : 'opponent' : 'solo-loss'} winnerName={practiceBot ? practiceWinner === 'draw' ? 'Draw game' : practiceWinner : undefined} opponentName={practiceBot ? practiceWinner === 'You' ? 'Yard bot' : 'You' : undefined} score={practiceBot ? `You ${game.score.toLocaleString()} · Yard bot ${botGame.score.toLocaleString()}` : `${game.score.toLocaleString()} points · ${game.lines} lines`} detail={practiceBot ? 'The first stack to top out ends the practice round.' : 'Your stack reached the top. Take a breath, then try for a new high score.'} onPlayAgain={freshGame} />}
     <main className="yard-main yard-block-drop-main">
       <Link href="/games" className="yard-mopyon-back"><ArrowLeft size={14} /> All games</Link>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, margin: '0 0 14px' }} role="group" aria-label="Choose opponent">
+        <button type="button" className={`yard-button${!practiceBot ? ' primary' : ''}`} aria-pressed={!practiceBot} onClick={() => chooseOpponent(false)}>Solo practice</button>
+        <button type="button" className={`yard-button${practiceBot ? ' primary' : ''}`} aria-pressed={practiceBot} onClick={() => chooseOpponent(true)}>Race the Yard bot</button>
+      </div>
+      {practiceBot && <p role="status" style={{ textAlign: 'center', margin: '0 0 14px', color: '#a6a6aa', fontSize: 12 }}>Yard bot: {botGame.score.toLocaleString()} points · {botGame.lines} lines · level {botGame.level}</p>}
       <div className="yard-heading">
         <div>
           <p className="yard-kicker">509 YARD / ARCADE</p>
@@ -124,6 +185,13 @@ export default function BlockDropPage() {
           <div className="yard-block-drop-stat"><span>Score</span><strong>{game.score.toLocaleString()}</strong></div>
           <div className="yard-block-drop-stat"><span>Lines</span><strong>{game.lines}</strong></div>
           <div className="yard-block-drop-stat"><span>Level</span><strong>{game.level}</strong></div>
+          {practiceBot && <div style={{ gridColumn: '1 / -1', display: 'grid', justifyItems: 'center', gap: 6 }}>
+            <strong style={{ fontSize: 12 }}>Yard bot · {botGame.score.toLocaleString()}</strong>
+            <div aria-label="Yard bot board" style={{ width: 'min(100%, 170px)', display: 'grid', gridTemplateColumns: `repeat(${BLOCK_DROP_COLUMNS}, minmax(0, 1fr))`, gap: 1, padding: 3, borderRadius: 4, background: '#101312' }}>
+              {botVisibleBoard.flatMap((row, rowIndex) => row.map((cell, columnIndex) => <i key={`${rowIndex}-${columnIndex}`} className={`yard-block-drop-cell${cell ? ` ${PIECE_COLORS[cell]}` : ' is-empty'}`} />))}
+            </div>
+            <small>{botGame.lines} lines · level {botGame.level}</small>
+          </div>}
           <div className="yard-block-drop-next">
             <span>Next piece</span>
             <div className="yard-block-drop-preview" style={{ gridTemplateColumns: `repeat(${nextShape.width}, 1fr)` }}>

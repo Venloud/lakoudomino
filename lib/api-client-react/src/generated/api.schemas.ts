@@ -201,6 +201,164 @@ export interface TicTacToeRoomJoinInput {
   displayName: string;
 }
 
+export type WordYardRoomSettingsMode = typeof WordYardRoomSettingsMode[keyof typeof WordYardRoomSettingsMode];
+
+
+export const WordYardRoomSettingsMode = {
+  classic: 'classic',
+  speed: 'speed',
+  party: 'party',
+} as const;
+
+export type WordYardRoomSettingsPlayerCount = typeof WordYardRoomSettingsPlayerCount[keyof typeof WordYardRoomSettingsPlayerCount];
+
+
+export const WordYardRoomSettingsPlayerCount = {
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+  NUMBER_4: 4,
+} as const;
+
+export interface WordYardRoomSettings {
+  mode: WordYardRoomSettingsMode;
+  playerCount: WordYardRoomSettingsPlayerCount;
+  /**
+     * @minimum 4
+     * @maximum 7
+     */
+  wordLength: number;
+  /**
+     * @minimum 10000
+     * @maximum 600000
+     */
+  timeLimitMs: number;
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  roundsToPlay: number;
+  isPrivate: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 24
+     */
+  displayName: string;
+}
+
+export interface WordYardRoomJoinInput {
+  /**
+     * @minLength 1
+     * @maxLength 24
+     */
+  displayName: string;
+}
+
+export interface WordYardReadyInput {
+  reconnectToken: string;
+}
+
+export interface WordYardGuessInput {
+  reconnectToken: string;
+  /**
+     * @minLength 4
+     * @maxLength 7
+     */
+  guess: string;
+}
+
+export type WordYardPublicRoomMode = typeof WordYardPublicRoomMode[keyof typeof WordYardPublicRoomMode];
+
+
+export const WordYardPublicRoomMode = {
+  classic: 'classic',
+  speed: 'speed',
+  party: 'party',
+} as const;
+
+export type WordYardPublicRoomPlayerCount = typeof WordYardPublicRoomPlayerCount[keyof typeof WordYardPublicRoomPlayerCount];
+
+
+export const WordYardPublicRoomPlayerCount = {
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+  NUMBER_4: 4,
+} as const;
+
+export interface WordYardPublicRoom {
+  code: string;
+  mode: WordYardPublicRoomMode;
+  playerCount: WordYardPublicRoomPlayerCount;
+  wordLength: number;
+  seatsTaken: number;
+}
+
+export interface WordYardRoomList {
+  rooms: WordYardPublicRoom[];
+}
+
+export type WordYardRoomSnapshotMode = typeof WordYardRoomSnapshotMode[keyof typeof WordYardRoomSnapshotMode];
+
+
+export const WordYardRoomSnapshotMode = {
+  classic: 'classic',
+  speed: 'speed',
+  party: 'party',
+} as const;
+
+export type WordYardRoomSnapshotStatus = typeof WordYardRoomSnapshotStatus[keyof typeof WordYardRoomSnapshotStatus];
+
+
+export const WordYardRoomSnapshotStatus = {
+  waiting: 'waiting',
+  playing: 'playing',
+  'round-complete': 'round-complete',
+  finished: 'finished',
+} as const;
+
+export type WordYardRoomSnapshotPlayerCount = typeof WordYardRoomSnapshotPlayerCount[keyof typeof WordYardRoomSnapshotPlayerCount];
+
+
+export const WordYardRoomSnapshotPlayerCount = {
+  NUMBER_2: 2,
+  NUMBER_3: 3,
+  NUMBER_4: 4,
+} as const;
+
+export type WordYardRoomSnapshotPlayersItem = { [key: string]: unknown };
+
+/**
+ * @nullable
+ */
+export type WordYardRoomSnapshotMatch = { [key: string]: unknown } | null;
+
+export interface WordYardRoomSnapshot {
+  code: string;
+  mode: WordYardRoomSnapshotMode;
+  status: WordYardRoomSnapshotStatus;
+  playerCount: WordYardRoomSnapshotPlayerCount;
+  wordLength: number;
+  timeLimitMs: number;
+  roundsToPlay: number;
+  isPrivate: boolean;
+  players: WordYardRoomSnapshotPlayersItem[];
+  /** @nullable */
+  match: WordYardRoomSnapshotMatch;
+}
+
+export interface WordYardRoomAccess {
+  room: WordYardRoomSnapshot;
+  /**
+     * @minimum 0
+     * @maximum 3
+     */
+  seat: number;
+  reconnectToken: string;
+}
+
+export interface WordYardRoomActionResponse {
+  room: WordYardRoomSnapshot;
+}
+
 export interface RoomJoinInput {
   /**
      * @minLength 1
@@ -532,6 +690,7 @@ export type FriendInviteNotificationGame = typeof FriendInviteNotificationGame[k
 export const FriendInviteNotificationGame = {
   domino: 'domino',
   'tic-tac-toe': 'tic-tac-toe',
+  'word-yard': 'word-yard',
 } as const;
 
 export type FriendInviteNotificationStatus = typeof FriendInviteNotificationStatus[keyof typeof FriendInviteNotificationStatus];
@@ -556,6 +715,7 @@ export type FriendInviteAcceptResponseGame = typeof FriendInviteAcceptResponseGa
 export const FriendInviteAcceptResponseGame = {
   domino: 'domino',
   'tic-tac-toe': 'tic-tac-toe',
+  'word-yard': 'word-yard',
 } as const;
 
 export interface FriendInviteAcceptResponse {

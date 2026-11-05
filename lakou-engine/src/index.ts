@@ -11,3 +11,4 @@ export * from './runner';
 export * from './matchmaking';
 export * from './pacing';
 export * from './tic-tac-toe';
+export * from './word-yard';

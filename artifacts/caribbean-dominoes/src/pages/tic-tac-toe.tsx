@@ -58,6 +58,36 @@ function isRegularState(state: TicTacToeGameState): state is TicTacToeState {
   return 'board' in state;
 }
 
+function choosePracticeMove(state: TicTacToeState | YardTicTacToeState, mode: TicTacToeMode): number | { boardIndex: number; cellIndex: number } | null {
+  if (mode === 'regular' && 'board' in state) {
+    const empty = state.board.flatMap((mark, index) => mark === null ? [index] : []);
+    for (const mark of ['O', 'X'] as const) {
+      for (const index of empty) {
+        const next = playTicTacToeMove({ ...state, currentPlayer: mark }, index);
+        if (next.winner === mark) return index;
+      }
+    }
+    return [4, 0, 2, 6, 8, 1, 3, 5, 7].find((index) => state.board[index] === null) ?? null;
+  }
+  if (!('boards' in state)) return null;
+  const openBoards = state.nextBoard === null ? state.boards.map((_, index) => index) : [state.nextBoard];
+  const options = openBoards.flatMap((boardIndex) => {
+    if (state.gridResults[boardIndex]) return [];
+    return state.boards[boardIndex].flatMap((mark, cellIndex) => mark === null ? [{ boardIndex, cellIndex }] : []);
+  });
+  if (!options.length) return null;
+  let best = options[0];
+  let bestScore = -Infinity;
+  for (const move of options) {
+    const next = playYardTicTacToeMove({ ...state, currentPlayer: 'O' }, move.boardIndex, move.cellIndex);
+    const score = (next.winner === 'O' ? 1000 : next.winner === 'X' ? -1000 : 0)
+      + (next.gridResults[move.boardIndex] === 'O' ? 20 : next.gridResults[move.boardIndex] === 'X' ? -20 : 0)
+      + (move.cellIndex === 4 ? 2 : [0, 2, 6, 8].includes(move.cellIndex) ? 1 : 0);
+    if (score > bestScore) { best = move; bestScore = score; }
+  }
+  return best;
+}
+
 export default function TicTacToePage() {
   const { code: rawCode } = useParams<{ code?: string }>();
   const code = rawCode?.toUpperCase();
@@ -77,6 +107,7 @@ export default function TicTacToePage() {
   const [localMode, setLocalMode] = useState(false);
   const [localRegular, setLocalRegular] = useState(createTicTacToeState);
   const [localYard, setLocalYard] = useState(createYardTicTacToeState);
+  const [practiceBot, setPracticeBot] = useState(false);
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'reconnecting'>('connecting');
   const [joiningFromLink, setJoiningFromLink] = useState(false);
@@ -272,7 +303,7 @@ export default function TicTacToePage() {
   }
 
   if (localMode) {
-    return <LocalGame mode={mode} onModeChange={setMode} regular={localRegular} setRegular={setLocalRegular} yard={localYard} setYard={setLocalYard} onBack={() => setLocalMode(false)} />;
+    return <LocalGame mode={mode} onModeChange={setMode} practiceBot={practiceBot} onPracticeBotChange={setPracticeBot} regular={localRegular} setRegular={setLocalRegular} yard={localYard} setYard={setLocalYard} onBack={() => setLocalMode(false)} />;
   }
 
   if (code && snapshot) {
@@ -459,6 +490,8 @@ function OnlineGame(props: {
 function LocalGame(props: {
   mode: TicTacToeMode;
   onModeChange: (mode: TicTacToeMode) => void;
+  practiceBot: boolean;
+  onPracticeBotChange: (enabled: boolean) => void;
   regular: TicTacToeState;
   setRegular: Dispatch<SetStateAction<TicTacToeState>>;
   yard: YardTicTacToeState;
@@ -467,16 +500,34 @@ function LocalGame(props: {
 }) {
   const game = props.mode === 'regular' ? props.regular : props.yard;
   const finished = Boolean(game.winner || game.isDraw);
-  const localWinner = game.winner === 'X' ? 'Player 1 · X' : 'Player 2 · O';
+  const practiceBot = props.practiceBot;
+  const mode = props.mode;
+  const setRegular = props.setRegular;
+  const setYard = props.setYard;
+  useEffect(() => {
+    if (!practiceBot || finished || game.currentPlayer !== 'O') return;
+    const timer = window.setTimeout(() => {
+      const move = choosePracticeMove(game, mode);
+      if (move === null) return;
+      if (mode === 'regular' && typeof move === 'number') setRegular((current) => playTicTacToeMove(current, move));
+      else if (typeof move !== 'number') setYard((current) => playYardTicTacToeMove(current, move.boardIndex, move.cellIndex));
+    }, 420);
+    return () => window.clearTimeout(timer);
+  }, [finished, game, mode, practiceBot, setRegular, setYard]);
+  const localWinner = game.winner === 'X' ? 'You · X' : props.practiceBot ? 'Yard bot · O' : 'Player 2 · O';
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
-    {finished && <GameEndSequence gameName={props.mode === 'yard' ? 'Yard Mode' : 'Tic-Tac-Toe'} perspective={game.isDraw ? 'draw' : 'local'} winnerName={localWinner} opponentName={game.winner === 'X' ? 'Player 2 · O' : 'Player 1 · X'} onPlayAgain={() => props.mode === 'regular' ? props.setRegular(createTicTacToeState()) : props.setYard(createYardTicTacToeState())} />}
+      {finished && <GameEndSequence gameName={props.mode === 'yard' ? 'Yard Mode' : 'Tic-Tac-Toe'} perspective={game.isDraw ? 'draw' : props.practiceBot ? game.winner === 'X' ? 'winner' : 'opponent' : 'local'} winnerName={game.isDraw ? 'Draw game' : localWinner} opponentName={game.winner === 'X' ? 'Yard bot · O' : 'You · X'} onPlayAgain={() => props.mode === 'regular' ? props.setRegular(createTicTacToeState()) : props.setYard(createYardTicTacToeState())} />}
     <main className={`yard-main yard-tic-main${props.mode === 'yard' ? ' is-yard-mode' : ''}`}>
       <button type="button" className="yard-tic-back" onClick={props.onBack}><ArrowLeft size={14} /> Online rooms</button>
-      <div className="yard-heading"><div><p className="yard-kicker">509 YARD / LOCAL GAME</p><h1>Tic-Tac-Toe</h1><p className="yard-subtitle">Two players share this device.</p></div></div>
+        <div className="yard-heading"><div><p className="yard-kicker">509 YARD / PRACTICE</p><h1>Tic-Tac-Toe</h1><p className="yard-subtitle">{props.practiceBot ? 'Play against the Yard bot.' : 'Two players share this device.'}</p></div></div>
       <div className="yard-tic-mode-picker" role="group" aria-label="Game mode">
         <button type="button" aria-pressed={props.mode === 'regular'} className={props.mode === 'regular' ? 'is-selected' : ''} onClick={() => props.onModeChange('regular')}><b>Regular</b><span>Classic 3 × 3</span></button>
         <button type="button" aria-pressed={props.mode === 'yard'} className={props.mode === 'yard' ? 'is-selected' : ''} onClick={() => props.onModeChange('yard')}><b>Yard Mode</b><span>Nine grids in one</span></button>
+      </div>
+      <div className="yard-tic-mode-picker" role="group" aria-label="Opponent">
+        <button type="button" aria-pressed={!props.practiceBot} className={!props.practiceBot ? 'is-selected' : ''} onClick={() => props.onPracticeBotChange(false)}><b>Two players</b><span>Pass and play</span></button>
+        <button type="button" aria-pressed={props.practiceBot} className={props.practiceBot ? 'is-selected' : ''} onClick={() => props.onPracticeBotChange(true)}><b>Practice vs bot</b><span>Play as X</span></button>
       </div>
       <div className="yard-tic-layout">
         <section className="yard-tic-board-card" aria-label="Tic-Tac-Toe game">
@@ -488,8 +539,8 @@ function LocalGame(props: {
             ? <div className="yard-tic-board" role="grid" aria-label="Tic-Tac-Toe board">
               {props.regular.board.map((mark, index) => <button key={index} type="button" className="yard-tic-cell" data-mark={mark ?? undefined} role="gridcell"
                 aria-label={`Row ${Math.floor(index / 3) + 1}, column ${(index % 3) + 1}${mark ? `, ${mark}` : ', empty'}`}
-                disabled={Boolean(mark || props.regular.winner || props.regular.isDraw)}
-                onClick={() => props.setRegular((current) => playTicTacToeMove(current, index))}>{mark}</button>)}
+                disabled={Boolean(mark || props.regular.winner || props.regular.isDraw || (props.practiceBot && props.regular.currentPlayer === 'O'))}
+                 onClick={() => props.setRegular((current) => playTicTacToeMove(current, index))}>{mark}</button>)}
             </div>
             : <div className="yard-ultimate-scroll"><div className="yard-ultimate-board" role="grid" aria-label="Yard Mode: nine Tic-Tac-Toe grids">
               {props.yard.boards.map((board, boardIndex) => {
@@ -499,7 +550,7 @@ function LocalGame(props: {
                   role="group" aria-label={`Small grid ${boardIndex + 1}${result ? `, ${result === 'draw' ? 'draw' : `${result} won`}` : ''}`}>
                   {board.map((mark, cellIndex) => <button key={cellIndex} type="button" className="yard-ultimate-cell" data-mark={mark ?? undefined}
                     aria-label={`Grid ${boardIndex + 1}, row ${Math.floor(cellIndex / 3) + 1}, column ${(cellIndex % 3) + 1}${mark ? `, ${mark}` : ', empty'}`}
-                    disabled={Boolean(result || !isTarget || finished || mark)}
+                    disabled={Boolean(result || !isTarget || finished || mark || (props.practiceBot && props.yard.currentPlayer === 'O'))}
                     onClick={() => props.setYard((current) => playYardTicTacToeMove(current, boardIndex, cellIndex))}>{mark}</button>)}
                   {result && <span className={`yard-ultimate-result${result === 'draw' ? ' is-draw' : ''}`} aria-hidden="true">{result === 'draw' ? '—' : result}</span>}
                 </div>;

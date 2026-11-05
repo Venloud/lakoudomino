@@ -63,6 +63,35 @@ describe('Filler', () => {
     tieColors[1] = 2;
     tieColors[63] = 1;
     const draw = playFillerMove({ colors: tieColors, owners: tieOwners }, 0, 2);
-    assert.equal(draw?.winner, 2);
+    assert.equal(draw?.winner, null);
+    assert.equal(draw?.draw, true);
+  });
+
+  it('creates fair distinct starting territories and cycles turns for 2–4 players', () => {
+    for (const playerCount of [2, 3, 4] as const) {
+      const board = createFillerBoard(() => 0.5, playerCount);
+      const starts = board.owners.flatMap((owner, index) => owner === null ? [] : [index]);
+      const startColors = starts.map((index) => board.colors[index]);
+      assert.equal(starts.length, playerCount);
+      assert.equal(new Set(startColors).size, playerCount);
+      const forbidden = new Set(startColors);
+      const color = Array.from({ length: FILLER_COLOR_COUNT }, (_, index) => index).find((value) => !forbidden.has(value))!;
+      const next = playFillerMove(board, 0, color);
+      assert.ok(next);
+      assert.equal(next.playerCount, playerCount);
+      assert.equal(next.turn, 1);
+      assert.equal(next.scores.reduce((sum, score) => sum + score, 0), next.owners.filter((owner) => owner !== null).length);
+    }
+  });
+
+  it('rejects out-of-turn multiplayer moves and protects every opponent territory', () => {
+    const board = createFillerBoard(() => 0.5, 4);
+    assert.equal(playFillerMove(board, 1, 5), null);
+    const start = board.owners.findIndex((owner) => owner === 1);
+    const color = Array.from({ length: FILLER_COLOR_COUNT }, (_, index) => index)
+      .find((value) => !board.owners.some((owner, i) => owner !== null && board.colors[i] === value))!;
+    const next = playFillerMove(board, 0, color);
+    assert.ok(next);
+    assert.equal(next.owners[start], 1);
   });
 });

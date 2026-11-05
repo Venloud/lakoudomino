@@ -138,6 +138,214 @@ export const JoinTicTacToeRoomResponse = zod.object({
 
 
 /**
+ * @summary List public Word Yard rooms with open seats
+ */
+export const ListWordYardRoomsResponse = zod.object({
+  "rooms": zod.array(zod.object({
+  "code": zod.string(),
+  "mode": zod.enum(['classic', 'speed', 'party']),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "wordLength": zod.number().int(),
+  "seatsTaken": zod.number().int()
+}))
+})
+
+
+/**
+ * @summary Create a Word Yard room
+ */
+export const createWordYardRoomBodyWordLengthMin = 4;
+export const createWordYardRoomBodyWordLengthMax = 7;
+
+export const createWordYardRoomBodyTimeLimitMsMin = 10000;
+export const createWordYardRoomBodyTimeLimitMsMax = 600000;
+
+export const createWordYardRoomBodyRoundsToPlayMax = 10;
+
+export const createWordYardRoomBodyDisplayNameMax = 24;
+
+
+
+export const CreateWordYardRoomBody = zod.object({
+  "mode": zod.enum(['classic', 'speed', 'party']),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "wordLength": zod.number().int().min(createWordYardRoomBodyWordLengthMin).max(createWordYardRoomBodyWordLengthMax),
+  "timeLimitMs": zod.number().int().min(createWordYardRoomBodyTimeLimitMsMin).max(createWordYardRoomBodyTimeLimitMsMax),
+  "roundsToPlay": zod.number().int().min(1).max(createWordYardRoomBodyRoundsToPlayMax),
+  "isPrivate": zod.boolean(),
+  "displayName": zod.string().min(1).max(createWordYardRoomBodyDisplayNameMax)
+})
+
+export const createWordYardRoomResponseSeatMin = 0;
+export const createWordYardRoomResponseSeatMax = 3;
+
+
+
+export const CreateWordYardRoomResponse = zod.object({
+  "room": zod.object({
+  "code": zod.string(),
+  "mode": zod.enum(['classic', 'speed', 'party']),
+  "status": zod.enum(['waiting', 'playing', 'round-complete', 'finished']),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "wordLength": zod.number().int(),
+  "timeLimitMs": zod.number().int(),
+  "roundsToPlay": zod.number().int(),
+  "isPrivate": zod.boolean(),
+  "players": zod.array(zod.record(zod.string(), zod.unknown())),
+  "match": zod.record(zod.string(), zod.unknown()).nullable()
+}),
+  "seat": zod.number().int().min(createWordYardRoomResponseSeatMin).max(createWordYardRoomResponseSeatMax),
+  "reconnectToken": zod.string()
+})
+
+
+/**
+ * @summary Join or create a compatible public Word Yard room
+ */
+export const quickMatchWordYardBodyWordLengthMin = 4;
+export const quickMatchWordYardBodyWordLengthMax = 7;
+
+export const quickMatchWordYardBodyTimeLimitMsMin = 10000;
+export const quickMatchWordYardBodyTimeLimitMsMax = 600000;
+
+export const quickMatchWordYardBodyRoundsToPlayMax = 10;
+
+export const quickMatchWordYardBodyDisplayNameMax = 24;
+
+
+
+export const QuickMatchWordYardBody = zod.object({
+  "mode": zod.enum(['classic', 'speed', 'party']),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "wordLength": zod.number().int().min(quickMatchWordYardBodyWordLengthMin).max(quickMatchWordYardBodyWordLengthMax),
+  "timeLimitMs": zod.number().int().min(quickMatchWordYardBodyTimeLimitMsMin).max(quickMatchWordYardBodyTimeLimitMsMax),
+  "roundsToPlay": zod.number().int().min(1).max(quickMatchWordYardBodyRoundsToPlayMax),
+  "isPrivate": zod.boolean(),
+  "displayName": zod.string().min(1).max(quickMatchWordYardBodyDisplayNameMax)
+})
+
+export const quickMatchWordYardResponseSeatMin = 0;
+export const quickMatchWordYardResponseSeatMax = 3;
+
+
+
+export const QuickMatchWordYardResponse = zod.object({
+  "room": zod.object({
+  "code": zod.string(),
+  "mode": zod.enum(['classic', 'speed', 'party']),
+  "status": zod.enum(['waiting', 'playing', 'round-complete', 'finished']),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "wordLength": zod.number().int(),
+  "timeLimitMs": zod.number().int(),
+  "roundsToPlay": zod.number().int(),
+  "isPrivate": zod.boolean(),
+  "players": zod.array(zod.record(zod.string(), zod.unknown())),
+  "match": zod.record(zod.string(), zod.unknown()).nullable()
+}),
+  "seat": zod.number().int().min(quickMatchWordYardResponseSeatMin).max(quickMatchWordYardResponseSeatMax),
+  "reconnectToken": zod.string()
+})
+
+
+export const joinWordYardRoomPathCodeRegExp = new RegExp('^[A-Z0-9]{4,8}$');
+
+
+export const JoinWordYardRoomParams = zod.object({
+  "code": zod.coerce.string().regex(joinWordYardRoomPathCodeRegExp)
+})
+
+export const joinWordYardRoomBodyDisplayNameMax = 24;
+
+
+
+export const JoinWordYardRoomBody = zod.object({
+  "displayName": zod.string().min(1).max(joinWordYardRoomBodyDisplayNameMax)
+})
+
+export const joinWordYardRoomResponseSeatMin = 0;
+export const joinWordYardRoomResponseSeatMax = 3;
+
+
+
+export const JoinWordYardRoomResponse = zod.object({
+  "room": zod.object({
+  "code": zod.string(),
+  "mode": zod.enum(['classic', 'speed', 'party']),
+  "status": zod.enum(['waiting', 'playing', 'round-complete', 'finished']),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "wordLength": zod.number().int(),
+  "timeLimitMs": zod.number().int(),
+  "roundsToPlay": zod.number().int(),
+  "isPrivate": zod.boolean(),
+  "players": zod.array(zod.record(zod.string(), zod.unknown())),
+  "match": zod.record(zod.string(), zod.unknown()).nullable()
+}),
+  "seat": zod.number().int().min(joinWordYardRoomResponseSeatMin).max(joinWordYardRoomResponseSeatMax),
+  "reconnectToken": zod.string()
+})
+
+
+export const readyWordYardRoomPathCodeRegExp = new RegExp('^[A-Z0-9]{4,8}$');
+
+
+export const ReadyWordYardRoomParams = zod.object({
+  "code": zod.coerce.string().regex(readyWordYardRoomPathCodeRegExp)
+})
+
+export const ReadyWordYardRoomBody = zod.object({
+  "reconnectToken": zod.string()
+})
+
+export const ReadyWordYardRoomResponse = zod.object({
+  "room": zod.object({
+  "code": zod.string(),
+  "mode": zod.enum(['classic', 'speed', 'party']),
+  "status": zod.enum(['waiting', 'playing', 'round-complete', 'finished']),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "wordLength": zod.number().int(),
+  "timeLimitMs": zod.number().int(),
+  "roundsToPlay": zod.number().int(),
+  "isPrivate": zod.boolean(),
+  "players": zod.array(zod.record(zod.string(), zod.unknown())),
+  "match": zod.record(zod.string(), zod.unknown()).nullable()
+})
+})
+
+
+export const submitWordYardGuessPathCodeRegExp = new RegExp('^[A-Z0-9]{4,8}$');
+
+
+export const SubmitWordYardGuessParams = zod.object({
+  "code": zod.coerce.string().regex(submitWordYardGuessPathCodeRegExp)
+})
+
+export const submitWordYardGuessBodyGuessMin = 4;
+export const submitWordYardGuessBodyGuessMax = 7;
+
+
+
+export const SubmitWordYardGuessBody = zod.object({
+  "reconnectToken": zod.string(),
+  "guess": zod.string().min(submitWordYardGuessBodyGuessMin).max(submitWordYardGuessBodyGuessMax)
+})
+
+export const SubmitWordYardGuessResponse = zod.object({
+  "room": zod.object({
+  "code": zod.string(),
+  "mode": zod.enum(['classic', 'speed', 'party']),
+  "status": zod.enum(['waiting', 'playing', 'round-complete', 'finished']),
+  "playerCount": zod.union([zod.literal(2),zod.literal(3),zod.literal(4)]),
+  "wordLength": zod.number().int(),
+  "timeLimitMs": zod.number().int(),
+  "roundsToPlay": zod.number().int(),
+  "isPrivate": zod.boolean(),
+  "players": zod.array(zod.record(zod.string(), zod.unknown())),
+  "match": zod.record(zod.string(), zod.unknown()).nullable()
+})
+})
+
+
+/**
  * @summary Get open public waiting tables
  */
 export const getLobbyResponseTablesItemRowLengthMax = 20;
@@ -938,7 +1146,7 @@ export const ListFriendsResponse = zod.object({
   "inviterId": zod.string().uuid(),
   "inviterName": zod.string(),
   "roomCode": zod.string(),
-  "game": zod.enum(['domino', 'tic-tac-toe']),
+  "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard']),
   "status": zod.enum(['pending'])
 }))
 })
@@ -1016,7 +1224,7 @@ export const acceptFriendInviteResponseRoomCodeRegExp = new RegExp('^[A-Z0-9]{4,
 
 export const AcceptFriendInviteResponse = zod.object({
   "roomCode": zod.string().regex(acceptFriendInviteResponseRoomCodeRegExp),
-  "game": zod.enum(['domino', 'tic-tac-toe'])
+  "game": zod.enum(['domino', 'tic-tac-toe', 'word-yard'])
 })
 
 
