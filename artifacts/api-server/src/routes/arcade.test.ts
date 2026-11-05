@@ -138,6 +138,93 @@ test("arcade room sockets reject illegal and out-of-turn updates and restore the
   }
 });
 
+test("room creation and join persistence failures roll back and return retryable responses", async () => {
+  const app = express();
+  app.use(express.json());
+  app.use(arcadeRouter);
+  const server: Server = createServer(app);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const originalUpdatedAt = new Date(Date.now() - 60_000);
+  const storedRoom = {
+    code: "FAILJOIN",
+    game: "mopyon",
+    capacity: 2,
+    isPrivate: true,
+    players: [{ name: "Host", tokenHash: "a".repeat(64) }],
+    state: {},
+    turn: 0,
+    updatedAt: originalUpdatedAt,
+  };
+  let rollbacks = 0;
+  let commits = 0;
+  const joinAttempt: { players: string | null; timestamp: Date | null } = { players: null, timestamp: null };
+  const fakeClient = {
+    async query(text: string, values: unknown[] = []) {
+      if (text.trim() === "BEGIN" || text.trim() === "ROLLBACK" || text.trim() === "COMMIT") {
+        if (text.trim() === "ROLLBACK") rollbacks++;
+        if (text.trim() === "COMMIT") commits++;
+        return { rows: [] };
+      }
+      if (text.includes("FROM arcade_rooms WHERE code = $1")) return { rows: [{ ...storedRoom }] };
+      if (text.includes("INSERT INTO arcade_rooms")) throw new Error("simulated room insert failure");
+      if (text.includes("UPDATE arcade_rooms")) {
+        joinAttempt.players = String(values[1]);
+        joinAttempt.timestamp = values[4] as Date;
+        throw new Error("simulated room update failure");
+      }
+      throw new Error(`Unexpected test SQL: ${text}`);
+    },
+    release() {},
+  };
+  const poolObject = pool as unknown as Record<string, unknown>;
+  const originalConnectDescriptor = Object.getOwnPropertyDescriptor(poolObject, "connect");
+  Object.defineProperty(poolObject, "connect", {
+    configurable: true,
+    writable: true,
+    value: async () => fakeClient,
+  });
+
+  try {
+    const createResponse = await fetch(`${baseUrl}/arcade/rooms`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ game: "mopyon", displayName: "Retry me", playerCount: 2, isPrivate: true }),
+    });
+    assert.equal(createResponse.status, 503);
+    assert.deepEqual(await createResponse.json(), {
+      error: "Room storage is temporarily unavailable. Please retry.",
+      retryable: true,
+    });
+    assert.equal(rollbacks, 1);
+    assert.equal(commits, 0);
+
+    const joinResponse = await fetch(`${baseUrl}/arcade/rooms/FAILJOIN/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "Joining player" }),
+    });
+    assert.equal(joinResponse.status, 503);
+    assert.deepEqual(await joinResponse.json(), {
+      error: "Room storage is temporarily unavailable. Please retry.",
+      retryable: true,
+    });
+    assert.equal(rollbacks, 2);
+    assert.equal(commits, 0);
+    assert.match(joinAttempt.players ?? "", /Joining player/);
+    assert.ok(joinAttempt.timestamp instanceof Date);
+    assert.notEqual(joinAttempt.timestamp?.getTime(), originalUpdatedAt.getTime());
+    assert.deepEqual(storedRoom.players, [{ name: "Host", tokenHash: "a".repeat(64) }]);
+    assert.equal(storedRoom.updatedAt, originalUpdatedAt);
+  } finally {
+    if (originalConnectDescriptor) Object.defineProperty(poolObject, "connect", originalConnectDescriptor);
+    else Reflect.deleteProperty(poolObject, "connect");
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+});
+
 test("Scrabble room responses and live updates reveal only each player's own rack", async () => {
   const app = express();
   app.use(express.json());
