@@ -110,6 +110,9 @@ async function createRoomsTable(schema: string): Promise<void> {
       two_player_variant text NOT NULL DEFAULT 'draw',
       turn_seconds integer NOT NULL DEFAULT 30,
       is_private boolean NOT NULL DEFAULT false,
+      speed real NOT NULL DEFAULT 1,
+      play_now boolean NOT NULL DEFAULT false,
+      afk_state jsonb,
       seed integer,
       status text NOT NULL,
       seats jsonb NOT NULL,
@@ -120,6 +123,8 @@ async function createRoomsTable(schema: string): Promise<void> {
       active_match_id text,
       stats_recorded boolean NOT NULL DEFAULT false,
       match_participants jsonb NOT NULL DEFAULT '[]',
+      lifecycle_applied boolean NOT NULL DEFAULT false,
+      crowns_eligible boolean,
       host_disconnected_at bigint,
       quarantined_at timestamptz,
       quarantine_issues jsonb,
@@ -216,19 +221,22 @@ async function insertRoom(
   await pool.query(
     `INSERT INTO "${schema}".domino_rooms
       (code, host_name, mode, row_length, player_count, row_boxes, two_player_variant,
-       turn_seconds, is_private, seed, status, seats, last_action, engine_state,
+       turn_seconds, is_private, speed, play_now, afk_state, seed, status, seats, last_action, engine_state,
        waitlist, offers, active_match_id, stats_recorded, match_participants,
-       host_disconnected_at, quarantined_at, quarantine_issues)
+       lifecycle_applied, crowns_eligible, host_disconnected_at, quarantined_at, quarantine_issues)
      VALUES
-      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14::jsonb,
-       $15::jsonb, $16::jsonb, $17, $18, $19::jsonb, $20, NULL, NULL)`,
+       ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14,
+        $15::jsonb, $16, $17::jsonb, $18::jsonb, $19::jsonb, $20, $21, $22::jsonb,
+        $23, $24, $25, NULL, NULL)`,
     [
       stored.code, stored.hostName, stored.mode, stored.rowLength, stored.playerCount,
       stored.rowBoxes, stored.twoPlayerVariant, stored.turnSeconds, stored.isPrivate,
-      stored.seed, stored.status, JSON.stringify(stored.seats), stored.lastAction,
+      stored.speed, stored.playNow, JSON.stringify(stored.afkState ?? null), stored.seed,
+      stored.status, JSON.stringify(stored.seats), stored.lastAction,
       JSON.stringify(stored.engineState), JSON.stringify(stored.waitlist),
       JSON.stringify(stored.offers), stored.activeMatchId, stored.statsRecorded,
-      JSON.stringify(stored.matchParticipants), stored.hostDisconnectedAt,
+      JSON.stringify(stored.matchParticipants), stored.lifecycleApplied ?? Boolean(stored.engineState?.over),
+      stored.crownsEligible ?? null, stored.hostDisconnectedAt,
     ],
   );
 }

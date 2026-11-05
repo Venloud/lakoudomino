@@ -65,7 +65,7 @@ export function restoreRoom(value: unknown): PersistedRoomState {
     (typeof value.speed !== "number" || !Number.isFinite(value.speed) || value.speed <= 0)) {
     issues.push({ path: "speed", message: "must be a positive number" });
   }
-  if (value.afkState !== undefined &&
+  if (value.afkState !== undefined && value.afkState !== null &&
     (!record(value.afkState) || !Array.isArray(value.afkState.timeouts) ||
       value.afkState.timeouts.length < 2 || value.afkState.timeouts.length > 4 ||
       !value.afkState.timeouts.every((timeout) => Number.isInteger(timeout) && Number(timeout) >= 0))) {
