@@ -4,7 +4,7 @@ import { Link } from 'wouter';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
 import { ArcadeOnlinePanel } from '@/components/arcade-online-panel';
-import { createMopyonState, MOPYON_BOARD_SIZE, playMopyonMove } from '@/lib/mopyon';
+import { chooseMopyonBotMove, createMopyonState, MOPYON_BOARD_SIZE, playMopyonMove } from '@/lib/mopyon';
 import './mopyon.css';
 
 export default function MopyonPage() {
@@ -23,16 +23,8 @@ export default function MopyonPage() {
   useEffect(() => {
     if (!practiceBot || game.currentPlayer !== 'O' || game.winner || game.isDraw) return;
     const timer = window.setTimeout(() => {
-      const candidates = game.board.flatMap((mark, index) => mark ? [] : [index]);
-      let choice = candidates[0];
-      for (const mark of ['O', 'X'] as const) {
-        const winning = candidates.find((index) => {
-          const next = playMopyonMove({ ...game, currentPlayer: mark }, Math.floor(index / MOPYON_BOARD_SIZE), index % MOPYON_BOARD_SIZE);
-          return next.winner === mark;
-        });
-        if (winning !== undefined) { choice = winning; break; }
-      }
-      if (choice !== undefined) setGame((current) => playMopyonMove(current, Math.floor(choice / MOPYON_BOARD_SIZE), choice % MOPYON_BOARD_SIZE));
+      const choice = chooseMopyonBotMove(game, 'O');
+      if (choice !== null) setGame((current) => playMopyonMove(current, Math.floor(choice / MOPYON_BOARD_SIZE), choice % MOPYON_BOARD_SIZE));
     }, 380);
     return () => window.clearTimeout(timer);
   }, [game, practiceBot]);
