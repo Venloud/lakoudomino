@@ -18,4 +18,5 @@
 - [Scrabble private snapshots](scrabble-private-snapshots.md) — deliver seat-specific projections while keeping complete racks and tile order in trusted server state.
 - [Arcade resignation results](arcade-resignation-results.md) — persist room outcomes as server-owned player metadata and omit them from public player records.
 - [Safe recovery diagnostics](room-recovery-diagnostics.md) — expose aggregate skipped-room counts and sanitized issue paths, never room identifiers or credentials.
+- [Retried room synchronization](room-retry-sync.md) — fan out retry activation through Postgres notifications and reconcile missing rooms without replacing live runtimes.
 - [Post-merge schema application](post-merge-schema-application.md) — verify development columns after merges; rerun the documented setup when automatic reconciliation leaves schema changes unapplied.

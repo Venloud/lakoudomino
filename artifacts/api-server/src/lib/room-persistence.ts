@@ -1,5 +1,5 @@
 import { db, dominoRooms } from "@workspace/db";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { logger, sendRoomRecoveryNotification } from "./logger.ts";
 import type { PersistedRoomState } from "./room-types.ts";
 import {
@@ -33,6 +33,8 @@ export type QuarantinedRoomRetryResult =
   | { status: "restored"; room: PersistedRoomState }
   | { status: "not_found" }
   | { status: "invalid"; issuePaths: string[] };
+
+export const ROOM_RETRY_NOTIFICATION_CHANNEL = "domino_room_retry";
 
 export type RoomRecoveryDiagnostics = {
   checkedAt: string | null;
@@ -196,9 +198,29 @@ export async function retryQuarantinedRoom(
         eq(dominoRooms.code, roomCode),
         isNotNull(dominoRooms.quarantinedAt),
       ));
+    await tx.execute(sql`select pg_notify(${ROOM_RETRY_NOTIFICATION_CHANNEL}, ${roomCode})`);
 
     return { status: "restored", room };
   });
+}
+
+export async function loadActivePersistedRooms(): Promise<PersistedRoomState[]> {
+  const rows = await databaseRoomStore.loadActiveRooms();
+  return restoreRooms(rows).rooms;
+}
+
+export async function loadActivePersistedRoom(
+  roomCode: string,
+): Promise<PersistedRoomState | undefined> {
+  const [row] = await db
+    .select()
+    .from(dominoRooms)
+    .where(and(
+      eq(dominoRooms.code, roomCode),
+      isNull(dominoRooms.quarantinedAt),
+    ))
+    .limit(1);
+  return row ? restoreRoom(row) : undefined;
 }
 
 async function quarantineInvalidRooms(
