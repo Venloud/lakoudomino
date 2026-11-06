@@ -1068,6 +1068,112 @@ test("restored rooms reconnect only preserved seat tokens and never claim tokenl
   }
 });
 
+test("a restored room rejects another room's reconnect token without revealing hands or changing either room", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room reconnect integration tests.");
+
+  const schema = `rooms_cross_reconnect_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  let roomBSocket: WebSocket | undefined;
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const firstMatch = createMatch({
+      mode: "regular",
+      playerCount: 2,
+      rowBoxes: 10,
+      twoPlayerVariant: "draw",
+      seed: 219,
+    }).match;
+    const secondMatch = createMatch({
+      mode: "regular",
+      playerCount: 2,
+      rowBoxes: 10,
+      twoPlayerVariant: "draw",
+      seed: 220,
+    }).match;
+    const firstOpening = autoStep(firstMatch, []);
+    const secondOpening = autoStep(secondMatch, []);
+    assert.ok(firstOpening, "the first room fixture should have a legal opening move");
+    assert.ok(secondOpening, "the second room fixture should have a legal opening move");
+    assert.notDeepEqual(
+      firstOpening.match.hand.hands[0],
+      secondOpening.match.hand.hands[0],
+      "the rooms should contain different private hands",
+    );
+
+    const roomACode = `A${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const roomBCode = `B${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const roomATokens = [randomUUID(), randomUUID()];
+    const roomBTokens = [randomUUID(), randomUUID()];
+    const configureRoom = (
+      code: string,
+      match: ReturnType<typeof createMatch>["match"],
+      tokens: string[],
+      hostName: string,
+    ) => {
+      const room = makeRoom(code, match, false);
+      room.hostName = hostName;
+      for (const seat of room.seats) {
+        if (seat.seat < 2) {
+          seat.status = "waiting";
+          seat.name = `${hostName} ${seat.seat + 1}`;
+          seat.reconnectTokenHash = hashReconnectToken(tokens[seat.seat]);
+          delete seat.botLevel;
+        }
+      }
+      return room;
+    };
+    const roomA = configureRoom(roomACode, firstOpening.match, roomATokens, "Room A");
+    const roomB = configureRoom(roomBCode, secondOpening.match, roomBTokens, "Room B");
+    assert.notEqual(
+      roomA.seats[0].reconnectTokenHash,
+      roomB.seats[0].reconnectTokenHash,
+      "each room should store a different seat token hash",
+    );
+    await insertRoom(schema, roomA);
+    await insertRoom(schema, roomB);
+
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+    const roomABaseline = await getGame(api.baseUrl, roomACode);
+    const roomBBaseline = await getGame(api.baseUrl, roomBCode);
+    assert.equal(matchesMatch(roomABaseline, firstOpening.match), true, "room A should restore its saved match");
+    assert.equal(matchesMatch(roomBBaseline, secondOpening.match), true, "room B should restore its saved match");
+
+    roomBSocket = await openRoomSocket(api.baseUrl, roomBCode);
+    const receivedMessages: JsonRecord[] = [];
+    const captureMessage = (raw: unknown) => {
+      receivedMessages.push(JSON.parse(String(raw)) as JsonRecord);
+    };
+    roomBSocket.on("message", captureMessage);
+    const invalidTokenError = "That reconnect token is not valid for this room";
+    await expectSocketError(
+      roomBSocket,
+      JSON.stringify({ type: "hello", reconnectToken: roomATokens[0] }),
+      invalidTokenError,
+    );
+    await delay(50);
+    roomBSocket.off("message", captureMessage);
+    assert.deepEqual(
+      receivedMessages,
+      [{ type: "error", message: invalidTokenError }],
+      "a foreign token must not receive a snapshot or any private hand",
+    );
+
+    assert.deepEqual(await getGame(api.baseUrl, roomACode), roomABaseline, "room A's snapshot must remain unchanged");
+    assert.deepEqual(await getGame(api.baseUrl, roomBCode), roomBBaseline, "room B's snapshot must remain unchanged");
+  } finally {
+    roomBSocket?.terminate();
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
 test("a restored completed hand automatically starts the next hand", {
   timeout: 45_000,
 }, async () => {
