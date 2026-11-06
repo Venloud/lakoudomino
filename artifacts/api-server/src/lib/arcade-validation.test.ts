@@ -218,6 +218,52 @@ test("Filler validates the selected color and computes the territory from the se
   assert.equal(move("filler", current, { ...legal, fillerBoard: { ...nested, owners: Array(64).fill(0) } }, 0, 2, 0, 1).ok, false);
 });
 
+test("Filler takeover bot chooses the stronger legal territory gain", () => {
+  const colors = Array(64).fill(4);
+  const owners: (number | null)[] = Array(64).fill(null);
+  colors[0] = 0;
+  owners[0] = 0;
+  colors[63] = 1;
+  owners[63] = 1;
+  colors[1] = 2;
+  for (const index of [8, 16, 24]) colors[index] = 3;
+  const current = {
+    turn: 0,
+    winner: null,
+    fillerPlayerCount: 2,
+    fillerBoard: { colors, owners, playerCount: 2, turn: 0 },
+  };
+
+  const weakerColors = [...colors];
+  const weakerOwners = [...owners];
+  weakerColors[0] = 2;
+  weakerOwners[1] = 0;
+  const weakerMove = {
+    turn: 1,
+    winner: null,
+    fillerPlayerCount: 2,
+    fillerBoard: {
+      colors: weakerColors,
+      owners: weakerOwners,
+      playerCount: 2,
+      turn: 1,
+      scores: [2, 1],
+      winner: null,
+      draw: false,
+    },
+  };
+  assert.equal(move("filler", current, weakerMove, 0, 2, 0, 1).ok, true);
+
+  const result = getArcadeBotTransition("filler", current, 0, 2);
+  assert.ok(result);
+  assert.equal(move("filler", current, result.state, 0, 2, 0, result.turn).ok, true);
+  const state = result.state as Record<string, unknown>;
+  const board = state.fillerBoard as Record<string, unknown>;
+  const nextOwners = board.owners as (number | null)[];
+  assert.equal((board.colors as number[])[0], 3);
+  assert.equal(nextOwners.filter((owner) => owner === 0).length, 4);
+});
+
 test("Block Drop accepts a legal move for the sender and protects the other race board", () => {
   const current = createArcadeInitialState("block-drop", 2) as Record<string, unknown>[];
   const own = structuredClone(current[0]) as Record<string, unknown>;
