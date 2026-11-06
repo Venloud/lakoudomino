@@ -9,7 +9,7 @@ import test from "node:test";
 import { WebSocket } from "ws";
 import { pool } from "@workspace/db";
 import { applyAction, autoStep, createMatch, viewFor, type Action } from "lakou-engine";
-import { serializeRoom } from "../lib/room-persistence-codec.ts";
+import { restoreRooms, serializeRoom } from "../lib/room-persistence-codec.ts";
 import {
   hashReconnectToken,
   SOCKET_AUTHENTICATION_ERROR,
@@ -1071,6 +1071,80 @@ test("a restored completed hand automatically starts the next hand", {
     assert.equal(savedHandNumber, 2, "the pending hand should start automatically after restart without a player request");
   } finally {
     if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("legacy Domino room rows restore with safe defaults after schema additions", async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for legacy room persistence tests.");
+
+  const schema = `rooms_legacy_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  const code = `L${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+
+  try {
+    await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+    await createRoomsTable(schema);
+
+    const match = createMatch({
+      mode: "regular",
+      playerCount: 2,
+      rowBoxes: 10,
+      twoPlayerVariant: "draw",
+      seed: 619,
+    }).match;
+    const seats = [
+      { seat: 0, status: "waiting", name: "Legacy host", reconnectTokenHash: null },
+      { seat: 1, status: "waiting", name: "Legacy guest", reconnectTokenHash: null },
+      { seat: 2, status: "open", name: null, reconnectTokenHash: null },
+      { seat: 3, status: "open", name: null, reconnectTokenHash: null },
+    ];
+
+    // Deliberately omit speed, play_now, afk_state, lifecycle_applied, and crowns_eligible.
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.domino_rooms (
+        code, host_name, mode, row_length, player_count, row_boxes,
+        two_player_variant, turn_seconds, is_private, seed, status, seats,
+        last_action, engine_state, waitlist, offers
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+        $12::jsonb, $13, $14::jsonb, $15::jsonb, $16::jsonb
+      )`,
+      [
+        code, "Legacy host", "regular", 10, 2, 10, "draw", 30, false, 619,
+        "playing", JSON.stringify(seats), "legacy room", JSON.stringify(match),
+        "[]", "[]",
+      ],
+    );
+
+    const { rows } = await pool.query(
+      `SELECT
+        code, host_name AS "hostName", mode, row_length AS "rowLength",
+        player_count AS "playerCount", row_boxes AS "rowBoxes",
+        two_player_variant AS "twoPlayerVariant", turn_seconds AS "turnSeconds",
+        is_private AS "isPrivate", speed, play_now AS "playNow",
+        afk_state AS "afkState", seed, status, seats,
+        last_action AS "lastAction", engine_state AS "engineState",
+        waitlist, offers, lifecycle_applied AS "lifecycleApplied",
+        crowns_eligible AS "crownsEligible"
+      FROM ${quotedSchema}.domino_rooms
+      WHERE code = $1`,
+      [code],
+    );
+    assert.equal(rows.length, 1);
+
+    const result = restoreRooms(rows);
+    assert.deepEqual(result.errors, [], "a legacy row must not be quarantined");
+    assert.equal(result.rooms.length, 1);
+    const restored = result.rooms[0]!;
+    assert.equal(restored.speed, 1);
+    assert.equal(restored.playNow, false);
+    assert.equal(restored.afkState, undefined);
+    assert.equal(restored.lifecycleApplied, false);
+    assert.equal(restored.crownsEligible, undefined);
+    assert.equal(restored.engineState?.hand.turn, match.hand.turn, "the saved player turn must be preserved");
+  } finally {
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });
