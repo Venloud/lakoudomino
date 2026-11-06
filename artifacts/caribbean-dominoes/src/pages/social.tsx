@@ -6,12 +6,13 @@ import {
   Trophy, ArrowUpRight,
 } from 'lucide-react';
 import {
-  getGetAuthMeQueryKey, getGetLobbyQueryKey, getListFriendsQueryKey,
+  getRecentMatches, getGetAuthMeQueryKey, getGetLobbyQueryKey, getListFriendsQueryKey,
   getGetRecentMatchesQueryKey as getRecentMatchesQueryKey, getGetTicTacToeResultsQueryKey,
   useAcceptFriendInvite, useAcceptFriendRequest, useCreateFriendInvite, useDismissFriendInvite, useWithdrawFriendInvite,
   useCreateFriendRequest, useDeclineFriendRequest, useGetAuthMe, useGetLobby,
   useGetRecentMatches, useGetTicTacToeResults, useJoinRoom, useJoinTicTacToeRoom, useListFriends, useLogout,
 } from '@workspace/api-client-react';
+import type { RecentMatch } from '@workspace/api-client-react';
 import { getClientId } from '@/lib/lakou-session';
 import { TicTacToeProfileResults } from './tic-tac-toe-profile';
 
@@ -225,12 +226,24 @@ function EmptyHistory({ onGames }: { onGames: () => void }) {
 export default function SocialPage({ page }: { page: Destination }) {
   const [, setLocation] = useLocation();
   const client = useQueryClient();
+  const [additionalMatches, setAdditionalMatches] = useState<RecentMatch[]>([]);
+  const [nextHistoryOffset, setNextHistoryOffset] = useState<number | null>(null);
+  const [loadingMoreMatches, setLoadingMoreMatches] = useState(false);
+  const [loadMoreMatchesError, setLoadMoreMatchesError] = useState(false);
   const auth = useGetAuthMe({ query: { queryKey: getGetAuthMeQueryKey(), refetchOnWindowFocus: true } });
   const user = auth.data?.user;
   const signedIn = Boolean(user);
   const friendsQuery = useListFriends({ query: { queryKey: getListFriendsQueryKey(), enabled: signedIn, refetchInterval: 15000, refetchOnWindowFocus: true } });
   const lobby = useGetLobby({ query: { queryKey: getGetLobbyQueryKey(), refetchInterval: 15000, refetchOnWindowFocus: true } });
-  const recent = useGetRecentMatches({ query: { queryKey: getRecentMatchesQueryKey(), enabled: signedIn, refetchOnWindowFocus: true } });
+  const recent = useGetRecentMatches({ limit: 6, offset: 0 }, { query: { queryKey: [...getRecentMatchesQueryKey({ limit: 6, offset: 0 }), user?.id], enabled: signedIn, refetchOnWindowFocus: true } });
+  useEffect(() => {
+    setAdditionalMatches([]);
+    setNextHistoryOffset(null);
+    setLoadMoreMatchesError(false);
+  }, [user?.id]);
+  useEffect(() => {
+    if (recent.data && additionalMatches.length === 0) setNextHistoryOffset(recent.data.nextOffset);
+  }, [recent.data, additionalMatches.length]);
   const ticTacToeResults = useGetTicTacToeResults({ query: { queryKey: getGetTicTacToeResultsQueryKey(), enabled: signedIn, refetchOnWindowFocus: true } });
   const requestFriend = useCreateFriendRequest();
   const acceptRequest = useAcceptFriendRequest();
@@ -381,7 +394,7 @@ export default function SocialPage({ page }: { page: Destination }) {
   });
   const title = page === 'home' ? 'Meet at the table.' : page === 'games' ? 'Games' : page === 'friends' ? 'Friends' : page === 'leaderboard' ? 'Leaderboard' : 'Your profile';
   const subtitle = page === 'home' ? 'Find your crew, jump into a match, and see who takes the points.' : page === 'games' ? 'Find a live match or create a private room for any game.' : page === 'friends' ? 'Keep your people close and find who is around.' : page === 'leaderboard' ? 'The standings from games played across the yard.' : 'Your Domino record and recent results.';
-  const recentMatches = recent.data?.matches ?? [];
+  const recentMatches = [...(recent.data?.matches ?? []), ...additionalMatches];
   const friendRows = friendData?.friends ?? [];
   const gameCatalog = [
     { name: 'Domino', slug: 'domino', description: 'Live tables · Regular and Points', online: true },
@@ -404,16 +417,37 @@ export default function SocialPage({ page }: { page: Destination }) {
     const slug = mode.slice('arcade:'.length);
     return `${gameCatalog.find((game) => game.slug === slug)?.name ?? slug} · Online`;
   };
+  const loadMoreMatches = async () => {
+    if (nextHistoryOffset === null || loadingMoreMatches) return;
+    setLoadingMoreMatches(true);
+    setLoadMoreMatchesError(false);
+    try {
+      const page = await getRecentMatches({ limit: 6, offset: nextHistoryOffset });
+      setAdditionalMatches((current) => {
+        const existing = new Set(current.map((match) => match.matchId));
+        return [...current, ...page.matches.filter((match) => !existing.has(match.matchId))];
+      });
+      setNextHistoryOffset(page.nextOffset);
+    } catch {
+      setLoadMoreMatchesError(true);
+    } finally {
+      setLoadingMoreMatches(false);
+    }
+  };
   const renderHistory = () => {
      if (!signedIn) return <div className="yard-empty" data-testid="empty-history-sign-in"><strong>Sign in to see your match history</strong><p>Recorded results belong to your 509 Yard account. Sign in to see your recent games and standings.</p><Link href="/sign-in" className="yard-button primary" data-testid="link-history-sign-in">Sign in</Link></div>;
     if (recent.isLoading) return <div className="yard-loading" data-testid="loading-recent-matches"><i className="yard-skeleton" /><i className="yard-skeleton" /><i className="yard-skeleton" /></div>;
     if (recent.isError) return <div className="yard-empty" role="alert" data-testid="error-recent-matches"><strong>Match history is unavailable</strong><p>We couldn't load your recorded matches.</p><button className="yard-button" onClick={() => void recent.refetch()} data-testid="button-retry-history">Try again</button></div>;
     if (!recentMatches.length) return <EmptyHistory onGames={goGames} />;
-    return <div className="yard-history-list">{recentMatches.slice(0, 6).map((match) => <div className="yard-history-row" key={match.matchId} data-testid={`match-${match.matchId}`}>
+    return <>
+      <div className="yard-history-list" data-testid="recent-match-list">{recentMatches.map((match) => <div className="yard-history-row" key={match.matchId} data-testid={`match-${match.matchId}`}>
       <span className="yard-result-mark">{match.rank ? `#${match.rank}` : '—'}</span>
         <span><b>{match.won ? 'Victory' : `${match.medal || 'Match'} finish`}</b><small>{recentMatchLabel(match.mode)}{match.opponents.length ? ` · vs. ${match.opponents.join(', ')}` : ''} · Table {match.roomCode} · {new Date(match.recordedAt).toLocaleDateString()}</small></span>
       <strong className="yard-history-points">{match.crownPoints > 0 ? `+${match.crownPoints}` : match.crownPoints} CP</strong>
-    </div>)}</div>;
+      </div>)}</div>
+      {loadMoreMatchesError && <div className="yard-inline-error" role="alert" data-testid="error-load-more-matches">Older matches could not be loaded. <button className="yard-button" onClick={() => void loadMoreMatches()}>Try again</button></div>}
+      {nextHistoryOffset !== null && <button className="yard-button" onClick={() => void loadMoreMatches()} disabled={loadingMoreMatches} data-testid="button-load-more-matches">{loadingMoreMatches ? 'Loading…' : 'Load more matches'}</button>}
+    </>;
   };
   const renderFriends = () => {
     if (!signedIn) return <div className="yard-empty"><strong>Your people are one sign-in away</strong><p>Sign in to add friends, see their live status, and join their tables.</p><Link className="yard-button primary" href="/sign-in" data-testid="link-friends-sign-in">Sign in</Link></div>;

@@ -6,15 +6,79 @@ import { once } from "node:events";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { WebSocket } from "ws";
 import { ARCADE_ROOM_RETENTION_MS } from "@workspace/api-zod";
-import { pool } from "@workspace/db";
+import { arcadeRooms, pool } from "@workspace/db";
 
 type JsonRecord = Record<string, unknown>;
 
 const apiServerDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const arcadeRoomTableConfig = getTableConfig(arcadeRooms);
 const delay = (milliseconds: number) =>
   new Promise<void>((resolveDelay) => setTimeout(resolveDelay, milliseconds));
+
+async function assertProvisionedArcadeSchemaMatchesDrizzle(): Promise<void> {
+  const columns = await pool.query(`
+    SELECT
+      attribute.attname AS name,
+      format_type(attribute.atttypid, attribute.atttypmod) AS sql_type,
+      attribute.attnotnull AS not_null,
+      (default_value.adbin IS NOT NULL) AS has_default,
+      EXISTS (
+        SELECT 1
+        FROM pg_index AS primary_key
+        WHERE primary_key.indrelid = relation.oid
+          AND primary_key.indisprimary
+          AND attribute.attnum = ANY(primary_key.indkey)
+      ) AS is_primary
+    FROM pg_attribute AS attribute
+    JOIN pg_class AS relation ON relation.oid = attribute.attrelid
+    JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+    LEFT JOIN pg_attrdef AS default_value
+      ON default_value.adrelid = relation.oid
+      AND default_value.adnum = attribute.attnum
+    WHERE namespace.nspname = 'public'
+      AND relation.relname = 'arcade_rooms'
+      AND attribute.attnum > 0
+      AND NOT attribute.attisdropped
+    ORDER BY attribute.attnum
+  `);
+  assert.deepEqual(
+    columns.rows.map((column) => ({
+      name: column.name,
+      sqlType: column.sql_type,
+      notNull: column.not_null,
+      hasDefault: column.has_default,
+      primary: column.is_primary,
+    })),
+    arcadeRoomTableConfig.columns.map((column) => ({
+      name: column.name,
+      sqlType: column.getSQLType(),
+      notNull: column.notNull,
+      hasDefault: column.hasDefault,
+      primary: column.primary,
+    })),
+    "provisioned public.arcade_rooms columns should match the Drizzle definition",
+  );
+
+  const indexes = await pool.query(
+    `SELECT indexname AS name, indexdef
+     FROM pg_indexes
+     WHERE schemaname = 'public' AND tablename = 'arcade_rooms'`,
+  );
+  for (const index of arcadeRoomTableConfig.indexes) {
+    const expectedColumns = (index.config.columns as Array<{ name?: string }>)
+      .flatMap((column) => column.name ? [column.name] : []);
+    const provisionedIndex = indexes.rows.find((row) => row.name === index.config.name);
+    assert.ok(provisionedIndex, `provisioned index ${index.config.name} should exist`);
+    assert.match(
+      provisionedIndex.indexdef,
+      new RegExp(`\\(${expectedColumns.join(", ")}\\)$`),
+      `provisioned index ${index.config.name} should cover its Drizzle columns`,
+    );
+  }
+}
 
 async function reservePort(): Promise<number> {
   const server = createServer();
@@ -56,21 +120,24 @@ async function startArcadeProcess(databaseUrl: string): Promise<{
   const baseUrl = `http://127.0.0.1:${port}`;
   const deadline = Date.now() + 15_000;
 
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`Arcade API process exited during startup:\n${output}`);
+  try {
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        throw new Error(`Arcade API process exited during startup:\n${output}`);
+      }
+      try {
+        const response = await fetch(`${baseUrl}/healthz`);
+        if (response.ok) return { child, baseUrl, getOutput: () => output };
+      } catch {
+        // The process is still starting; try again.
+      }
+      await delay(100);
     }
-    try {
-      const response = await fetch(`${baseUrl}/healthz`);
-      if (response.ok) return { child, baseUrl, getOutput: () => output };
-    } catch {
-      // The process is still starting; try again.
-    }
-    await delay(100);
+    throw new Error(`Arcade API process did not become ready:\n${output}`);
+  } catch (error) {
+    await stopArcadeProcess(child);
+    throw error;
   }
-
-  child.kill("SIGKILL");
-  throw new Error(`Arcade API process did not become ready:\n${output}`);
 }
 
 async function stopArcadeProcess(child: ChildProcess): Promise<void> {
@@ -165,19 +232,12 @@ test("arcade private, matchmaking, and Block Drop rooms survive an API process r
   let blockDropSocket: WebSocket | undefined;
   let reconnectSockets: WebSocket[] = [];
 
-  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
   try {
+    await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+    await assertProvisionedArcadeSchemaMatchesDrizzle();
     await pool.query(`
-      CREATE TABLE ${quotedSchema}.arcade_rooms (
-        code text PRIMARY KEY,
-        game text NOT NULL,
-        capacity integer NOT NULL,
-        is_private boolean NOT NULL,
-        players jsonb NOT NULL,
-        state jsonb,
-        turn integer NOT NULL DEFAULT 0,
-        updated_at timestamptz NOT NULL DEFAULT now()
-      )
+      CREATE TABLE ${quotedSchema}.arcade_rooms
+      (LIKE public.arcade_rooms INCLUDING ALL)
     `);
 
     const isolatedDatabaseUrl = new URL(databaseUrl);
@@ -229,8 +289,15 @@ test("arcade private, matchmaking, and Block Drop rooms survive an API process r
     const movedRoom = acceptedMove.room as JsonRecord;
     const movedPlayer = (movedRoom.state as unknown[])[0] as JsonRecord;
     assert.equal((movedPlayer.active as JsonRecord).x, Number(activePiece.x) - 1);
+    const persistedBlockDrop = await pool.query(
+      `SELECT state FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
+      [blockDropRoom.code],
+    );
+    assert.equal(persistedBlockDrop.rowCount, 1);
+    const expectedBlockDropState = persistedBlockDrop.rows[0].state;
 
     const expiredCode = `Y${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const malformedCode = `Y${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
     const expiredState = {
       board: Array(225).fill(null),
       currentPlayer: "X",
@@ -246,6 +313,16 @@ test("arcade private, matchmaking, and Block Drop rooms survive an API process r
       [
         expiredCode,
         JSON.stringify([{ name: "Expired player", tokenHash: "0".repeat(64) }]),
+        JSON.stringify(expiredState),
+      ],
+    );
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.arcade_rooms
+        (code, game, capacity, is_private, players, state, turn, updated_at)
+       VALUES ($1, 'mopyon', 2, true, $2::jsonb, $3::jsonb, 0, now())`,
+      [
+        malformedCode,
+        JSON.stringify([{ name: "Malformed player", tokenHash: "not-a-token-hash" }]),
         JSON.stringify(expiredState),
       ],
     );
@@ -285,6 +362,7 @@ test("arcade private, matchmaking, and Block Drop rooms survive an API process r
     const restoredRoom = await restoredBlockDrop.json() as JsonRecord;
     const restoredPlayer = (restoredRoom.state as unknown[])[0] as JsonRecord;
     assert.equal((restoredPlayer.active as JsonRecord).x, Number(activePiece.x) - 1);
+    assert.deepEqual(restoredRoom.state, expectedBlockDropState);
 
     const expiredResponse = await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${expiredCode}`);
     assert.equal(expiredResponse.status, 404);
@@ -293,12 +371,25 @@ test("arcade private, matchmaking, and Block Drop rooms survive an API process r
       [expiredCode],
     );
     assert.equal(expiredRows.rowCount, 0, "expired room should also be deleted from storage");
+    assert.equal((await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${malformedCode}`)).status, 404);
+    const malformedRows = await pool.query(
+      `SELECT code FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
+      [malformedCode],
+    );
+    assert.equal(malformedRows.rowCount, 0, "malformed room should also be deleted from storage");
   } finally {
     blockDropSocket?.close();
     reconnectSockets.forEach((socket) => socket.close());
-    if (processTwo) await stopArcadeProcess(processTwo.child);
-    if (processOne) await stopArcadeProcess(processOne.child);
-    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+    const processStops = await Promise.allSettled([
+      ...(processTwo ? [stopArcadeProcess(processTwo.child)] : []),
+      ...(processOne ? [stopArcadeProcess(processOne.child)] : []),
+    ]);
+    try {
+      await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+    } finally {
+      const stopFailure = processStops.find((result) => result.status === "rejected");
+      if (stopFailure?.status === "rejected") throw stopFailure.reason;
+    }
   }
 });
 
@@ -551,10 +642,17 @@ test("signed-in arcade results remain in profile history after room deletion and
     assert.equal((await duplicateResult).type, "room");
 
     await pool.query(`DELETE FROM ${quotedSchema}.arcade_rooms WHERE code = $1`, [host.code]);
-    const readHistory = async (cookie: string) => {
-      const response = await fetch(`${processOne!.baseUrl}/api/auth/recent-matches`, { headers: { cookie } });
+    const readHistory = async (cookie: string, limit = 6, offset = 0) => {
+      const response = await fetch(
+        `${processOne!.baseUrl}/api/auth/recent-matches?limit=${limit}&offset=${offset}`,
+        { headers: { cookie } },
+      );
       assert.equal(response.status, 200);
-      return await response.json() as { matches: JsonRecord[] };
+      return await response.json() as {
+        matches: JsonRecord[];
+        hasMore: boolean;
+        nextOffset: number | null;
+      };
     };
     const [hostHistory, guestHistory] = await Promise.all([
       readHistory(hostCookie),
@@ -643,6 +741,30 @@ test("signed-in arcade results remain in profile history after room deletion and
     assert.deepEqual(resignedHistory?.opponents, ["History host", "History third", "History fourth"]);
     assert.deepEqual(thirdHistory?.opponents, ["History host", "Resigned rival", "History fourth"]);
     assert.deepEqual(fourthHistory?.opponents, ["History host", "Resigned rival", "History third"]);
+
+    const legacyDominoMatchId = randomUUID();
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.domino_matches (match_id, room_code, mode, recorded_at)
+       VALUES ($1, 'OLD1', 'regular', now() - interval '1 day')`,
+      [legacyDominoMatchId],
+    );
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.domino_match_results
+       (match_id, user_id, rank, medal, crown_points, won)
+       VALUES ($1, $2, 1, 'win', 10, true)`,
+      [legacyDominoMatchId, hostUser],
+    );
+    const firstPage = await readHistory(hostCookie, 2, 0);
+    const secondPage = await readHistory(hostCookie, 2, 2);
+    assert.equal(firstPage.matches.length, 2);
+    assert.equal(firstPage.hasMore, true);
+    assert.equal(firstPage.nextOffset, 2);
+    assert.equal(secondPage.matches.length, 1);
+    assert.equal(secondPage.hasMore, false);
+    assert.equal(secondPage.nextOffset, null);
+    assert.deepEqual(new Set(firstPage.matches.map((match) => match.mode)), new Set(["arcade:mopyon", "arcade:scrabble"]));
+    assert.equal(secondPage.matches[0].mode, "regular");
+    assert.equal(secondPage.matches[0].matchId, legacyDominoMatchId);
   } finally {
     sockets.forEach((socket) => socket.close());
     if (processOne) await stopArcadeProcess(processOne.child);

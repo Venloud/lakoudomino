@@ -9,4 +9,6 @@ import type { RecentMatch } from './recentMatch';
 
 export interface RecentMatchesResponse {
   matches: RecentMatch[];
+  hasMore: boolean;
+  nextOffset: number | null;
 }

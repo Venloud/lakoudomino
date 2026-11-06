@@ -716,6 +716,8 @@ export interface RecentMatch {
 
 export interface RecentMatchesResponse {
   matches: RecentMatch[];
+  hasMore: boolean;
+  nextOffset: number | null;
 }
 
 export type TicTacToeResultMode = typeof TicTacToeResultMode[keyof typeof TicTacToeResultMode];
@@ -905,4 +907,16 @@ export interface FriendInviteInput {
   /** @pattern ^[A-Z0-9]{4,8}$ */
   roomCode: string;
 }
+
+export type GetRecentMatchesParams = {
+/**
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
+};
 

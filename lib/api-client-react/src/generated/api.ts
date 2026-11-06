@@ -34,6 +34,7 @@ import type {
   FriendsResponse,
   Friendship,
   GameSnapshot,
+  GetRecentMatchesParams,
   HealthStatus,
   HostActionInput,
   Lobby,
@@ -2416,20 +2417,27 @@ export function useGetAuthMe<TData = Awaited<ReturnType<typeof getAuthMe>>, TErr
 
 
 
-export const getGetRecentMatchesUrl = () => {
+export const getGetRecentMatchesUrl = (params?: GetRecentMatchesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/auth/recent-matches`
+  return stringifiedParams.length > 0 ? `/api/auth/recent-matches?${stringifiedParams}` : `/api/auth/recent-matches`
 }
 
 /**
  * @summary Get recently recorded matches for the signed-in user
  */
-export const getRecentMatches = async ( options?: Parameters<typeof customFetch>[1]): Promise<RecentMatchesResponse> => {
+export const getRecentMatches = async (params?: GetRecentMatchesParams, options?: Parameters<typeof customFetch>[1]): Promise<RecentMatchesResponse> => {
 
-  return customFetch<RecentMatchesResponse>(getGetRecentMatchesUrl(),
+  return customFetch<RecentMatchesResponse>(getGetRecentMatchesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -2442,23 +2450,23 @@ export const getRecentMatches = async ( options?: Parameters<typeof customFetch>
 
 
 
-export const getGetRecentMatchesQueryKey = () => {
+export const getGetRecentMatchesQueryKey = (params?: GetRecentMatchesParams,) => {
     return [
-    `/api/auth/recent-matches`
+    `/api/auth/recent-matches`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetRecentMatchesQueryOptions = <TData = Awaited<ReturnType<typeof getRecentMatches>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetRecentMatchesQueryOptions = <TData = Awaited<ReturnType<typeof getRecentMatches>>, TError = ErrorType<void>>(params?: GetRecentMatchesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetRecentMatchesQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetRecentMatchesQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRecentMatches>>> = ({ signal }) => getRecentMatches({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRecentMatches>>> = ({ signal }) => getRecentMatches(params, { signal, ...requestOptions });
 
 
 
@@ -2476,11 +2484,11 @@ export type GetRecentMatchesQueryError = ErrorType<void>
  */
 
 export function useGetRecentMatches<TData = Awaited<ReturnType<typeof getRecentMatches>>, TError = ErrorType<void>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetRecentMatchesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRecentMatches>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetRecentMatchesQueryOptions(options)
+  const queryOptions = getGetRecentMatchesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
