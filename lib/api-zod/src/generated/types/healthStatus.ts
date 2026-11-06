@@ -5,10 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { HealthStatusArcadeRoomUpdates } from './healthStatusArcadeRoomUpdates';
 import type { HealthStatusRoomRecovery } from './healthStatusRoomRecovery';
 
 export interface HealthStatus {
   status: string;
   /** Safe summary of the most recent persisted Domino room recovery attempt. */
   roomRecovery: HealthStatusRoomRecovery;
+  /** Aggregate state of the arcade room notification listener. */
+  arcadeRoomUpdates: HealthStatusArcadeRoomUpdates;
 }

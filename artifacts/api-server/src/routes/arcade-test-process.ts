@@ -4,6 +4,7 @@ import { WebSocketServer } from "ws";
 import authRouter from "./auth.ts";
 import arcadeRouter, {
   handleArcadeSocket,
+  getArcadeNotificationListenerHealth,
   initializeArcadeRooms,
   disconnectArcadeNotificationListenerForTest,
   interruptArcadeNotificationListenerForTest,
@@ -18,7 +19,13 @@ if (!Number.isInteger(port) || port <= 0) {
 
 const app = express();
 app.use(express.json());
-app.get("/healthz", (_request, response) => response.json({ status: "ok" }));
+app.get("/healthz", (_request, response) => response.json({
+  status: "ok",
+  arcadeRoomUpdates: getArcadeNotificationListenerHealth(),
+}));
+app.get("/__test/arcade-notification-health", (_request, response) => {
+  response.json(getArcadeNotificationListenerHealth());
+});
 app.post("/__test/interrupt-notification-listener", (_request, response) => {
   const interrupted = interruptArcadeNotificationListenerForTest();
   response.status(interrupted ? 200 : 409).json({ interrupted });

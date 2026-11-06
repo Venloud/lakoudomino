@@ -117,10 +117,36 @@ export type HealthStatusRoomRecovery = {
   issueCounts: HealthStatusRoomRecoveryIssueCountsItem[];
 };
 
+export type HealthStatusArcadeRoomUpdatesStatus = typeof HealthStatusArcadeRoomUpdatesStatus[keyof typeof HealthStatusArcadeRoomUpdatesStatus];
+
+
+export const HealthStatusArcadeRoomUpdatesStatus = {
+  'not-started': 'not-started',
+  connecting: 'connecting',
+  connected: 'connected',
+  retrying: 'retrying',
+} as const;
+
+/**
+ * Aggregate state of the arcade room notification listener.
+ */
+export type HealthStatusArcadeRoomUpdates = {
+  status: HealthStatusArcadeRoomUpdatesStatus;
+  retryScheduled: boolean;
+  retryPaused: boolean;
+  /** @minimum 0 */
+  retryCount: number;
+  nextRetryAt: number | null;
+  lastConnectedAt: number | null;
+  lastDisconnectedAt: number | null;
+};
+
 export interface HealthStatus {
   status: string;
   /** Safe summary of the most recent persisted Domino room recovery attempt. */
   roomRecovery: HealthStatusRoomRecovery;
+  /** Aggregate state of the arcade room notification listener. */
+  arcadeRoomUpdates: HealthStatusArcadeRoomUpdates;
 }
 
 export type RoomMode = typeof RoomMode[keyof typeof RoomMode];
