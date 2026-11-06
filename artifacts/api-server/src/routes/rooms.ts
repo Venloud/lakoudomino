@@ -483,15 +483,33 @@ function requireRoom(code: string, res: Response) {
 
 function sendSnapshot(socket: WebSocket, room: RoomState, seat: Seat | null, meId: string | null = null) {
   if (socket.readyState !== WebSocket.OPEN) return;
-  const view = room.engineState ? publicView(room.engineState, seat) : null;
+  const isSpectator = seat === null;
+  const privateView = room.engineState ? publicView(room.engineState, seat) : null;
+  const view = privateView && isSpectator
+    ? { ...privateView, myHand: [], legal: [], revealedHands: null }
+    : privateView;
+  const privateGame = room.engineState ? gameSnapshot(room, seat) : null;
+  const game = privateGame && isSpectator
+    ? {
+        ...privateGame,
+        hand: [],
+        engine: {
+          ...privateGame.engine,
+          myHand: [],
+          legal: [],
+          revealedHands: null,
+        },
+      }
+    : privateGame;
   socket.send(JSON.stringify({
     type: "snapshot",
     viewerId: socketViewerIds.get(socket) ?? null,
+    viewerRole: isSpectator ? "spectator" : "player",
     playNow: room.playNow ?? false,
-    game: room.engineState ? gameSnapshot(room, seat) : null,
+    game,
     view,
     names: room.seats.map((entry) => entry.name || `Seat ${entry.seat + 1}`),
-    waitlist: publicWaitlist(room, meId),
+    waitlist: isSpectator ? { entries: [], meId: null, notify: false } : publicWaitlist(room, meId),
     roomSettings: {
       mode: room.mode,
       rowBoxes: room.rowBoxes ?? room.rowLength,
@@ -1073,6 +1091,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
   const clientId = clientPresenceId(requestUrl);
   const viewerId = randomUUID();
   socketViewerIds.set(socket, viewerId);
+  const watchOnly = requestUrl.searchParams.get("watch") === "1";
   let seat: Seat | undefined;
   let waitlistIdentity: string | undefined;
   let spectator = false;
@@ -1086,7 +1105,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
 
   socket.on("message", async (raw) => {
     const rawText = raw.toString();
-    const validation = validateSocketMessage(rawText, seat);
+    const validation = validateSocketMessage(rawText, seat, watchOnly);
     if (!validation.ok) {
       let attemptedNextHand = false;
       try {
@@ -1108,6 +1127,10 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
     }
     const event = validation.event;
     if (event.type === "hello") {
+      if (watchOnly && event.reconnectToken) {
+        sendSocketError(socket, "A watch link cannot use a player reconnect token");
+        return;
+      }
       const matchingSeat = event.reconnectToken
         ? resolveSeatForReconnect(room.seats, event.reconnectToken)
         : undefined;

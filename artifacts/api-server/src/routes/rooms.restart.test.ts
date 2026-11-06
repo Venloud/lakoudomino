@@ -161,8 +161,9 @@ async function receiveSocketMessage(socket: WebSocket): Promise<JsonRecord> {
   });
 }
 
-async function openRoomSocket(baseUrl: string, code: string): Promise<WebSocket> {
-  const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws?code=${encodeURIComponent(code)}`);
+async function openRoomSocket(baseUrl: string, code: string, watchOnly = false): Promise<WebSocket> {
+  const watchQuery = watchOnly ? "&watch=1" : "";
+  const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws?code=${encodeURIComponent(code)}${watchQuery}`);
   await once(socket, "open");
   return socket;
 }
@@ -408,6 +409,7 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
   const quotedSchema = `"${schema}"`;
   let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
   let spectator: WebSocket | undefined;
+  let watchOnlySpectator: WebSocket | undefined;
   let player: WebSocket | undefined;
   await pool.query(`CREATE SCHEMA ${quotedSchema}`);
   try {
@@ -465,17 +467,42 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
     }), SOCKET_AUTHENTICATION_ERROR);
     await unchanged();
 
+    watchOnlySpectator = await openRoomSocket(api.baseUrl, created.code, true);
+    await expectSocketError(watchOnlySpectator, JSON.stringify({
+      type: "hello", reconnectToken: created.reconnectToken,
+    }), "A watch link cannot use a player reconnect token");
+    const watchSnapshotPromise = receiveSocketMessage(watchOnlySpectator);
+    watchOnlySpectator.send(JSON.stringify({ type: "hello", displayName: "Watch-only guest" }));
+    const watchSnapshot = await watchSnapshotPromise;
+    assert.equal(watchSnapshot.type, "snapshot");
+    assert.equal(watchSnapshot.viewerRole, "spectator");
+    assert.deepEqual((watchSnapshot.game as JsonRecord).hand, []);
+    assert.deepEqual((watchSnapshot.view as JsonRecord).myHand, []);
+    assert.equal((watchSnapshot.view as JsonRecord).revealedHands, null);
+    assert.equal(((watchSnapshot.game as JsonRecord).engine as JsonRecord).revealedHands, null);
+    assert.deepEqual((watchSnapshot.waitlist as JsonRecord).entries, []);
+    assert.equal(JSON.stringify(watchSnapshot).includes(created.reconnectToken), false);
+    await expectSocketError(watchOnlySpectator, JSON.stringify({
+      type: "play", tileId: "0-0", side: "left",
+    }), "This watch link is read-only");
+    await expectSocketError(watchOnlySpectator, JSON.stringify({
+      type: "changeSettings", mode: "regular", rowBoxes: 10, turnSeconds: 30, isPrivate: false,
+    }), "This watch link is read-only");
+    await expectSocketError(watchOnlySpectator, JSON.stringify({ type: "nextHand" }), "This watch link is read-only");
+    await unchanged();
+
     const turnSeat = Number(baseline.turnSeat);
     const playerToken = turnSeat === 0 ? created.reconnectToken : joined.reconnectToken;
     player = await openRoomSocket(api.baseUrl, created.code);
     const playerWelcomePromise = receiveSocketMessage(player);
     player.send(JSON.stringify({ type: "hello", reconnectToken: playerToken }));
     const playerWelcome = await playerWelcomePromise;
+    const spectatorAfterPlayerJoins = await receiveSocketMessage(watchOnlySpectator);
     const playerGame = playerWelcome.game as JsonRecord;
     assert.equal(playerGame.yourSeat, turnSeat);
     const hand = playerGame.hand as JsonRecord[];
+    assert.ok(hand.length > 0, "a seated player should still receive their own private hand");
     const openEnds = playerGame.openEnds as JsonRecord[];
-    assert.ok(hand.length > 0, "the active player should have a tile to try");
     const unsupportedSide = ["right", "top", "bottom", "left"].find((side) =>
       !openEnds.some((end) => end.id === side));
     assert.ok(unsupportedSide, "the board should not have every possible end open");
@@ -484,8 +511,32 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
       type: "play", tileId: hand[0].id, side: unsupportedSide,
     }), "That tile cannot be played on that end");
     await unchanged();
+
+    const playerView = playerWelcome.view as JsonRecord;
+    const legal = playerView.legal as JsonRecord[];
+    const action = legal.find((candidate) => candidate.type === "play");
+    assert.ok(action, "the opening turn should have a legal play");
+    const tile = action.tile as number[];
+    const side = ({ W: "left", E: "right", N: "top", S: "bottom", center: "left" } as Record<string, string>)[String(action.arm)];
+    const watchUpdatePromise = receiveSocketMessage(watchOnlySpectator);
+    player.send(JSON.stringify({ type: "play", tileId: `${tile[0]}-${tile[1]}`, side }));
+    const watchUpdate = await watchUpdatePromise;
+    assert.equal(watchUpdate.type, "snapshot");
+    assert.equal(watchUpdate.viewerRole, "spectator");
+    const spectatorBoard = ((watchUpdate.view as JsonRecord).board as JsonRecord).history as unknown[];
+    const initialBoard = ((spectatorAfterPlayerJoins.view as JsonRecord).board as JsonRecord).history as unknown[];
+    assert.equal(spectatorBoard.length, initialBoard.length + 1, "watchers should receive the public board update");
+    assert.deepEqual((watchUpdate.game as JsonRecord).hand, []);
+    assert.deepEqual((watchUpdate.view as JsonRecord).myHand, []);
+    const afterMove = await getGame(api.baseUrl, created.code);
+    assert.ok(
+      ((afterMove.board as unknown[]) ?? []).length > ((baseline.board as unknown[]) ?? []).length,
+      "the seated player's legal move should be persisted",
+    );
+    await expectSocketError(watchOnlySpectator, JSON.stringify({ type: "chat", text: "hello" }), "This watch link is read-only");
   } finally {
     spectator?.terminate();
+    watchOnlySpectator?.terminate();
     player?.terminate();
     if (api) await stopRoomsProcess(api.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);

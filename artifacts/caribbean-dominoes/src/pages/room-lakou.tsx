@@ -76,6 +76,7 @@ function socketEventForAction(action: Action) {
 export default function RoomPage() {
   const { code: raw } = useParams<{ code: string }>();
   const code = (raw || '').toUpperCase();
+  const watchOnly = new URLSearchParams(window.location.search).get('watch') === '1';
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const auth = useGetAuthMe({ query: { queryKey: getGetAuthMeQueryKey() } });
@@ -87,13 +88,14 @@ export default function RoomPage() {
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [offer, setOffer] = useState<any>(null);
   const [error, setError] = useState('');
+  const [watchLinkCopied, setWatchLinkCopied] = useState(false);
   const socket = useRef<WebSocket | null>(null);
   const viewerId = useRef<string | null>(null);
   const [seatToken, setSeatToken] = useState<string | null>(() => sessionStorage.getItem(tokenKey(code)));
   const [waitlistToken, setWaitlistToken] = useState<string | null>(() => sessionStorage.getItem(waitlistTokenKey(code)));
   const [pendingNotify, setPendingNotify] = useState(() => sessionStorage.getItem(waitlistNotifyKey(code)) === 'true');
   const displayName = sessionStorage.getItem(nameKey(code)) || sessionStorage.getItem('lakou-display-name') || 'Guest';
-  const activeToken = seatToken || waitlistToken;
+  const activeToken = watchOnly ? null : seatToken || waitlistToken;
   const host = Boolean(seatToken && sessionStorage.getItem(hostTokenKey(code)) === seatToken);
   const roomFriends = useMemo<KitFriend[]>(() => (friendsQuery.data?.friends ?? []).map((friend) => ({
     id: friend.id,
@@ -118,6 +120,7 @@ export default function RoomPage() {
     viewerId.current = null;
     setOffer(null);
     setError('');
+    setWatchLinkCopied(false);
   }, [code]);
 
   useEffect(() => {
@@ -125,15 +128,15 @@ export default function RoomPage() {
     let closed = false; let retry: number | undefined;
     const connect = () => {
       if (closed) return;
-       const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?code=${encodeURIComponent(code)}&clientId=${encodeURIComponent(getClientId())}`);
+       const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?code=${encodeURIComponent(code)}&clientId=${encodeURIComponent(getClientId())}${watchOnly ? '&watch=1' : ''}`);
       socket.current = ws;
        ws.onopen = () => {
          void queryClient.invalidateQueries({ queryKey: getListFriendsQueryKey() });
-         ws?.send(JSON.stringify(
-           activeToken
-             ? { type: 'hello', reconnectToken: activeToken, displayName }
-             : { type: 'hello', displayName },
-         ));
+          ws?.send(JSON.stringify(
+            !watchOnly && activeToken
+              ? { type: 'hello', reconnectToken: activeToken, displayName }
+              : { type: 'hello', displayName },
+          ));
        };
       ws.onmessage = (event) => {
         try {
@@ -180,7 +183,7 @@ export default function RoomPage() {
       socket.current?.close();
       socket.current = null;
     };
-  }, [code, room?.status, activeToken, displayName, seatToken, waitlistToken, setLocation]);
+  }, [code, room?.status, activeToken, displayName, seatToken, waitlistToken, watchOnly, setLocation]);
 
   const send = (message: unknown) => {
     if (socket.current?.readyState !== WebSocket.OPEN) { setError('Reconnecting to the table…'); return; }
@@ -215,6 +218,7 @@ export default function RoomPage() {
     seatColorIndex: index % 4,
   }));
   const view = snapshot?.view;
+  const watchLink = new URL(`/room/${code}?watch=1`, window.location.origin).toString();
   const canStartNextHand = Boolean(
     seatToken &&
     view &&
@@ -355,11 +359,32 @@ export default function RoomPage() {
     }
   };
 
+  const copyWatchLink = async () => {
+    try {
+      await navigator.clipboard.writeText(watchLink);
+      setWatchLinkCopied(true);
+      window.setTimeout(() => setWatchLinkCopied(false), 2200);
+    } catch {
+      setError('Copying the watch link is unavailable in this browser.');
+    }
+  };
+
   if (roomQuery.isLoading) return <main className="room-shell room-loading-page"><p className="room-loading-text">Setting the table…</p></main>;
   if (!room) return <main className="room-shell"><div className="empty-card">That table may have closed.</div></main>;
 
   if (room.status === 'waiting') {
     const settings = snapshot?.roomSettings;
+    if (watchOnly) {
+      return (
+        <main className="room-shell">
+          <section className="empty-card" aria-live="polite">
+            <h1 data-testid="text-watch-table-title">{room.hostName || 'Domino'}’s table</h1>
+            <p data-testid="status-watch-waiting">Watch-only link · The game has not started yet.</p>
+            <p data-testid="text-watch-player-count">{waitingSeats.filter(Boolean).length} player{waitingSeats.filter(Boolean).length === 1 ? '' : 's'} at the table</p>
+          </section>
+        </main>
+      );
+    }
     return (
       <>
         <WaitingRoom
@@ -402,18 +427,26 @@ export default function RoomPage() {
   }
 
   return <>
+    {!watchOnly && (
+      <div className="room-watch-link" role="status">
+        <span>Friends can watch this live table without joining.</span>
+        <a data-testid="link-open-watch-view" href={watchLink}>Open watch view</a>
+        <button data-testid="button-copy-watch-link" type="button" onClick={() => void copyWatchLink()}>{watchLinkCopied ? 'Link copied' : 'Copy watch link'}</button>
+      </div>
+    )}
     <LakouGame view={snapshot.view} names={names} tableCode={code} events={snapshot.events} eventsKey={snapshot.eventsKey} turnDeadline={snapshot.turnDeadline} turnMs={snapshot.turnMs ?? undefined}
-    chat={chat} onAction={(action) => send(socketEventForAction(action))} onSendChat={(text) => send({ type: 'chat', text })}
-    canStartNextHand={canStartNextHand}
-    onNextHand={() => {
+    chat={watchOnly ? [] : chat} onAction={(action) => { if (!watchOnly) send(socketEventForAction(action)); }} onSendChat={(text) => { if (!watchOnly) send({ type: 'chat', text }); }}
+    readOnly={watchOnly}
+    canStartNextHand={!watchOnly && canStartNextHand}
+    onNextHand={watchOnly ? undefined : () => {
       console.log(`Next hand clicked in room ${code}`);
       send({ type: 'nextHand' });
     }}
     nextHandAt={snapshot.nextHandAt ?? null}
-    onPlayAgain={() => (host || snapshot.playNow) && send({ type: 'playAgain' })}
-     onLeave={confirmLeave}
-     onHome={confirmLeave}
-     waitlist={!snapshot.playNow && snapshot.waitlist ? {
+    onPlayAgain={watchOnly ? undefined : () => (host || snapshot.playNow) && send({ type: 'playAgain' })}
+      onLeave={watchOnly ? undefined : confirmLeave}
+      onHome={() => setLocation('/')}
+      waitlist={!watchOnly && !snapshot.playNow && snapshot.waitlist ? {
       ...snapshot.waitlist,
       entries: waitlistEntries,
       notify: snapshot.waitlist.notify ?? pendingNotify,
@@ -421,7 +454,7 @@ export default function RoomPage() {
       onJoin: joinWaitlist,
       onLeave: leaveWaitlist,
     } : undefined}
-    seatOffer={offer ? {
+     seatOffer={!watchOnly && offer ? {
       tableName: room.hostName || 'Domino',
       seatNumber: offer.seat ?? 0,
       reason: 'A seat opened at the table.',

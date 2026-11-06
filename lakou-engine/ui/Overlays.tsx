@@ -54,9 +54,10 @@ function ScoreBreakdown({ reasons }: { reasons: ScoreReason[] }) {
 }
 
 /** Figma "Hand results" (17:409). */
-export function EndOfHand({ handNumber, winnerSeat, winnerName, headline, rows, target, nextStarter, canStartNext, onNext, onLeave, nextHandAt }: {
+export function EndOfHand({ handNumber, winnerSeat, winnerName, headline, rows, target, nextStarter, canStartNext, onNext, onLeave, nextHandAt, privateTilesHidden = false }: {
   handNumber: number; winnerSeat: number; winnerName: string; headline: string; rows: StandingRow[]; target: number;
   nextStarter: string; canStartNext: boolean; onNext?: () => void; onLeave?: () => void; nextHandAt?: number | null;
+  privateTilesHidden?: boolean;
 }) {
   const left = useCountdown(nextHandAt ?? null);
   const secs = left != null ? Math.ceil(left / 1000) : null;
@@ -76,7 +77,7 @@ export function EndOfHand({ handNumber, winnerSeat, winnerName, headline, rows, 
           </div>
         </div>
         <div className="lk-scores">
-          <div className="lk-cols"><span>Place · Player</span><span>Pips left</span><span>This hand</span><span>Total</span></div>
+          <div className="lk-cols"><span>Place · Player</span><span>{privateTilesHidden ? 'Tiles hidden' : 'Pips left'}</span><span>This hand</span><span>Total</span></div>
           {rows.map((r) => (
             <div key={r.seat} className={`lk-result${r.isMe ? ' lk-me' : ''}`}>
               <div className="lk-result-row">
@@ -85,12 +86,12 @@ export function EndOfHand({ handNumber, winnerSeat, winnerName, headline, rows, 
                   <Avatar seat={r.seat} name={r.name} size={24} />
                   <b>{r.name}{r.isMe ? ' (you)' : ''}</b>
                 </span>
-                <span className="lk-muted">{r.pipsLeft}</span>
+                <span className="lk-muted">{privateTilesHidden ? '—' : r.pipsLeft}</span>
                   <b className={r.thisHand ? 'lk-green lk-hand-points' : 'lk-muted'}>{r.thisHand ? <>+<CountUp value={r.thisHand} delay={Math.min((r.reasons?.length ?? 0) * 125 + 220, 850)} /></> : '—'}</b>
                 <b className="lk-total">{r.total}</b>
               </div>
               {r.reasons && r.reasons.length > 0 && <ScoreBreakdown reasons={r.reasons} />}
-              {r.tilesLeft.length > 0 && (
+              {!privateTilesHidden && r.tilesLeft.length > 0 && (
                 <span className="lk-result-tiles">{r.tilesLeft.map((t, i) => <Domino key={i} first={t[0]} second={t[1]} orientation="h" unit={9} />)}</span>
               )}
               <span className="lk-track" style={{ height: 5 }}><i style={{ width: `${Math.min(100, (r.total / target) * 100)}%`, background: seatColor(r.seat) }} /></span>
@@ -98,10 +99,10 @@ export function EndOfHand({ handNumber, winnerSeat, winnerName, headline, rows, 
           ))}
         </div>
         <p className="lk-sub">{nextStarter} starts the next hand  ·  First to fill the row ({target}) wins</p>
-        <div className="lk-buttons">
-          <button className="lk-btn lk-btn-ghost" onClick={onLeave}>Leave table</button>
-          <button className="lk-btn lk-btn-gold" onClick={onNext} disabled={!canStartNext || !onNext}>{nextLabel}</button>
-        </div>
+        {(onLeave || onNext) && <div className="lk-buttons">
+          {onLeave && <button className="lk-btn lk-btn-ghost" onClick={onLeave}>Leave table</button>}
+          {onNext && <button className="lk-btn lk-btn-gold" onClick={onNext} disabled={!canStartNext}>{nextLabel}</button>}
+        </div>}
       </div>
     </div>
   );
@@ -155,10 +156,10 @@ export function MatchOver({ rows, points, onAgain, onLeave, meSeat }: {
             );
           })}
         </div>
-        <div className="lk-buttons">
-          <button className="lk-btn lk-btn-ghost" onClick={onLeave}>Leave table</button>
-          <button className="lk-btn lk-btn-gold" onClick={onAgain}>Play again</button>
-        </div>
+        {(onLeave || onAgain) && <div className="lk-buttons">
+          {onLeave && <button className="lk-btn lk-btn-ghost" onClick={onLeave}>Leave table</button>}
+          {onAgain && <button className="lk-btn lk-btn-gold" onClick={onAgain}>Play again</button>}
+        </div>}
       </div>
     </div>
   );

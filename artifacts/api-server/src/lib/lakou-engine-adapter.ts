@@ -29,7 +29,12 @@ export function createRoomMatch(config: MatchConfig): { match: MatchState; event
 }
 
 export function publicView(match: MatchState, seat: number | null): PublicEngineView {
-  return { ...viewFor(match, seat), engine: "lakou" };
+  const view = viewFor(match, seat);
+  return {
+    ...view,
+    ...(seat === null ? { myHand: [], legal: [], revealedHands: null } : {}),
+    engine: "lakou",
+  };
 }
 
 function tileFromId(id: string): Tile | undefined {

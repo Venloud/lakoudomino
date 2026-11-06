@@ -36,11 +36,12 @@ test("MatchState round-trips with room metadata and no duplicate gameplay fields
   assert.equal("hand" in (serializeRoom(room(match)).seats[0] as object), false);
 });
 
-test("view projection keeps spectator hands empty and player hand private", () => {
+test("view projection keeps spectator hands hidden and player hand private", () => {
   const match = createMatch({ mode: "regular", playerCount: 2 }).match;
   assert.deepEqual(viewFor(match, null).myHand, []);
   assert.ok(viewFor(match, 0).myHand.length > 0);
   assert.deepEqual(publicView(match, null).myHand, []);
+  assert.equal(publicView(match, null).revealedHands, null);
 });
 
 test("illegal socket moves do not mutate MatchState", () => {
@@ -164,7 +165,7 @@ test("starting the next Points hand clears the ended hand and deals immediately"
   assert.ok(result.events.some((event) => event.type === "handStart"));
 });
 
-test("finished game snapshots serialize revealed hands as public domino objects", () => {
+test("finished public game snapshots hide hands while seated players keep their own view", () => {
   let match = createMatch({ mode: "regular", playerCount: 2, twoPlayerVariant: "draw" }).match;
   for (let index = 0; index < 400 && !match.hand.over && !match.over; index += 1) {
     const legal = viewFor(match, match.hand.turn).legal;
@@ -175,14 +176,14 @@ test("finished game snapshots serialize revealed hands as public domino objects"
     match = applyAction(match, action).match;
   }
   assert.ok(match.hand.over || match.over, "simulated game should reach a finished hand");
-  const snapshot = gameSnapshot(room(match));
-  const parsed = GetGameResponse.parse(snapshot);
-  assert.ok(parsed.engine);
-  const revealedTile = parsed.engine.revealedHands?.[0]?.[0];
-  if (revealedTile) {
-    assert.equal(typeof revealedTile.id, "string");
-    assert.equal(Array.isArray(revealedTile), false);
-  }
+  const publicSnapshot = GetGameResponse.parse(gameSnapshot(room(match)));
+  assert.deepEqual(publicSnapshot.hand, []);
+  assert.equal(publicSnapshot.engine?.revealedHands, null);
+  const ownerSeat = match.hand.hands.findIndex((hand) => hand.length > 0);
+  assert.notEqual(ownerSeat, -1, "at least one player should retain tiles after the simulated hand");
+  const playerView = publicView(match, ownerSeat);
+  assert.ok(playerView.myHand.length > 0, "players retain access to their own hand");
+  assert.ok(playerView.revealedHands?.[0]?.length !== undefined, "the seated view retains its end-of-hand reveal");
 });
 
 test("room lifecycle offers a released seat and accepts it", () => {
