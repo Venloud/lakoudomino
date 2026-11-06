@@ -1,5 +1,5 @@
 import { db, dominoRooms } from "@workspace/db";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { logger, sendRoomRecoveryNotification } from "./logger.ts";
 import type { PersistedRoomState } from "./room-types.ts";
 import {
@@ -29,6 +29,11 @@ export type PersistedRoomStore = {
   quarantineRoom: (quarantine: PersistedRoomQuarantine) => Promise<void>;
 };
 
+export type QuarantinedRoomRetryResult =
+  | { status: "restored"; room: PersistedRoomState }
+  | { status: "not_found" }
+  | { status: "invalid"; issuePaths: string[] };
+
 export type RoomRecoveryDiagnostics = {
   checkedAt: string | null;
   skippedRoomCount: number;
@@ -52,6 +57,11 @@ const safeIssuePaths = new Set([
   "afkState",
   "engineState",
 ]);
+
+function getSafeIssuePaths(issues: readonly PersistedRoomIssue[]): string[] {
+  return [...new Set(issues.map(({ path }) => safeIssuePaths.has(path) ? path : "unknown"))]
+    .sort((left, right) => left.localeCompare(right));
+}
 
 let roomRecoveryDiagnostics: RoomRecoveryDiagnostics = {
   checkedAt: null,
@@ -152,6 +162,44 @@ const databaseRoomStore: PersistedRoomStore = {
     }
   },
 };
+
+export async function retryQuarantinedRoom(
+  roomCode: string,
+): Promise<QuarantinedRoomRetryResult> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(dominoRooms)
+      .where(and(
+        eq(dominoRooms.code, roomCode),
+        isNotNull(dominoRooms.quarantinedAt),
+      ))
+      .for("update");
+
+    if (!row) return { status: "not_found" };
+
+    let room: PersistedRoomState;
+    try {
+      room = restoreRoom(row);
+    } catch (error) {
+      if (!(error instanceof PersistedRoomRecoveryError)) throw error;
+      return {
+        status: "invalid",
+        issuePaths: getSafeIssuePaths(error.issues),
+      };
+    }
+
+    await tx
+      .update(dominoRooms)
+      .set({ quarantinedAt: null, quarantineIssues: null, updatedAt: new Date() })
+      .where(and(
+        eq(dominoRooms.code, roomCode),
+        isNotNull(dominoRooms.quarantinedAt),
+      ));
+
+    return { status: "restored", room };
+  });
+}
 
 async function quarantineInvalidRooms(
   errors: readonly PersistedRoomRecoveryError[],

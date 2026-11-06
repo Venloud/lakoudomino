@@ -22,6 +22,9 @@ const SCRABBLE_TILE_COUNTS: Record<string, number> = {
 const SCRABBLE_WORDS = new Set(
   "ACE ACT ADD AGE AIR AND ANT ANY ARE ARM ART ASK ATE BAD BAG BAN BAR BAT BAY BED BEE BEG BET BIG BIN BIT BOW BOX BOY BUS BUT BUY CAB CAN CAP CAR CAT COW CUP CUT DAY DEN DID DIG DIM DIN DIP DOG DOT DRY DUE EAR EAT EEL EGG EGO ELF END ERA EVE EYE FAN FAR FAT FED FEE FEW FIG FIT FIX FLY FOG FOR FOX FUN GAP GAS GET GIN GOD GOT GUM GUN GUY HAD HAM HAS HAT HAY HEN HER HID HIM HIP HIS HIT HOG HOT HOW HUG ICE ILL INK JAM JAR JET JOB JOY KEY KID KIT LAB LAD LAP LAW LAY LED LEG LET LID LIE LIP LIT LOG LOT LOW MAD MAN MAP MAT MAY MEN MET MIX MOB MOM MOP MUD MUG NAP NET NEW NOD NOR NOT NOW NUN OAK OAR OAT OFF OIL OLD ONE OUR OUT OWL OWN PAD PAL PAN PAT PAW PAY PEA PEN PET PIE PIG PIN PIT POD POT PUB PUP PUT RAG RAN RAP RAT RAW RED RIB RID RIG RIP ROB ROD ROT ROW RUB RUG RUN SAD SAG SAP SAW SAY SEA SEE SET SEW SHE SHY SIR SIT SIX SKI SKY SOB SON SOP SOW SPA SPY SUB SUE SUM SUN TAB TAG TAN TAP TAR TAX TEA THE TIE TIN TIP TOE TON TOO TOP TOY TRY TUB TUG TWO USE VAN VAT VET VEX VIA VIE WAG WAR WAS WAY WEB WED WET WHO WHY WIG WIN WIT WOE WON WOO WOW YAK YAM YAP YEA YES YET YOU ZAP ZEN ZIP ZOO GAME GAMES PLAY YARD GREEN FRIENDS TABLE TURN STONE ABLE ACID ALSO AREA ARMY AWAY BABY BACK BALL BAND BANK BASE BEAR BEAT BEEN BELL BELT BEST BILL BIRD BLOW BLUE BOAT BODY BONE BOOK BORN BOTH BOWL BURN CALL CALM CAME CAMP CARD CARE CASE CASH CAST CELL CHAT CHIP CITY CLUB COAL COAT CODE COLD COME COOK COOL COPE COPY COST CROP DARK DATA DATE DAWN DEAL DEAR DEBT DEEP DESK DIAL DIET DISH DOES DOOR DOWN DRAW DROP DUST EACH EARN EAST EASY EDGE ELSE EVEN EVER EXIT FACE FACT FAIL FAIR FALL FARM FAST FATE FEAR FEED FEEL FEET FELL FELT FILE FILL FILM FIND FINE FIRE FIRM FISH FIVE FLAT FLOW FOOD FOOT FORM FORT FOUR FREE FROM FULL FUND GATE GAVE GEAR GIFT GIRL GIVE GLAD GOAL GOES GOLD GONE GOOD GRAB GRAY GREW GROW HAIR HALF HAND HANG HARD HARM HATE HAVE HEAD HEAR HEAT HELD HELP HERE HERO HIGH HILL HIRE HOLD HOLE HOME HOPE HOST HOUR HUGE HUNG HUNT HURT IDEA INTO IRON ITEM JOIN JOKE JUMP JUST KEEP KEPT KICK KILL KIND KING KNEW KNOW LACK LADY LAKE LAND LANE LAST LATE LEAD LEFT LESS LIFE LIFT LIKE LINE LINK LIST LIVE LOAD LOAN LOCK LOGO LONG LOOK LORD LOSE LOSS LOST LOVE LUCK MADE MAIL MAIN MAKE MALE MANY MARK MASS MATE MEAL MEAN MENU MERE MESH MESS MILD MILL MIND MINE MISS MODE MOOD MOON MORE MOST MOVE MUCH MUST NAME NAVY NEAR NEAT NEED NEWS NEXT NICE NINE NONE NOSE NOTE ONCE ONLY OPEN OVER PACE PACK PAGE PAID PAIN PAIR PALE PALM PARK PART PASS PAST PATH PEAK PICK PILE PINK PLAN PLAY PLOT PLUS POEM POET POLE POLL POOL POOR PORT POST PURE PUSH QUIT RACE RACK RAIN RANK RATE READ REAL REAR REED REST RICE RICH RIDE RING RISE RISK ROAD ROCK ROLE ROLL ROSE RULE SAFE SAGE SAID SAIL SALE SAME SAND SAVE SEAT SEEK SEEM SEEN SELF SELL SEND SENT SHIP SHOP SHOW SHUT SIDE SIGN SILK SING SITE SIZE SKIN SLIP SLOW SNOW SOFT SOIL SOLD SOLE SOME SONG SOON SORT SOUL SPOT STAR STAY STEP STOP SUCH SUIT SURE SWIM TAKE TALE TALK TALL TANK TAPE TASK TEAM TEAR TELL TEND TERM TEST TEXT THAN THAT THEM THEY THIN THIS TILL TIME TINY TOLD TONE TOOK TOOL TOUR TOWN TREE TRIP TRUE TUBE TUNE TURN TYPE UNIT UPON USED USER VARY VAST VERY VIEW VOTE WAIT WAKE WALK WALL WANT WARM WASH WAVE WEAK WEAR WEEK WELL WENT WERE WEST WHAT WHEN WIDE WIFE WILD WILL WIND WINE WING WISH WITH WOOD WORD WORK YEAR YELL YOUR ZERO ZONE CATS DOGS WORDS".split(" "),
 );
+const SCRABBLE_BOT_WORDS = [...SCRABBLE_WORDS]
+  .filter((word) => word.length > 1 && word.length <= SCRABBLE_SIZE)
+  .sort((a, b) => b.length - a.length || a.localeCompare(b));
 
 function isRecord(value: unknown): value is RecordValue {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -1001,10 +1004,72 @@ export function getArcadeBotTransition(
   }
   if (game !== "scrabble" || !isRecord(current) ||
       !Array.isArray(current.racks) || !Array.isArray(current.bag) ||
-      !Array.isArray(current.scores) || !Array.isArray(current.racks[seat]) ||
+      !Array.isArray(current.scores) || !Array.isArray(current.board) ||
+      current.board.length !== SCRABBLE_SIZE * SCRABBLE_SIZE ||
+      !Array.isArray(current.racks[seat]) ||
       typeof current.passes !== "number") return null;
 
+  const board = current.board as (RecordValue | null)[];
+  const botRack = current.racks[seat] as string[];
+  const bag = current.bag as string[];
   const nextTurn = nextPlayer(seat, capacity);
+  for (const word of SCRABBLE_BOT_WORDS) {
+    for (const vertical of [false, true]) {
+      for (let start = 0; start < board.length; start += 1) {
+        const startRow = Math.floor(start / SCRABBLE_SIZE);
+        const startCol = start % SCRABBLE_SIZE;
+        if (vertical ? startRow + word.length > SCRABBLE_SIZE : startCol + word.length > SCRABBLE_SIZE) continue;
+
+        const nextBoard = [...board];
+        const remainingRack = [...botRack];
+        let freshCount = 0;
+        let fits = true;
+        for (let offset = 0; offset < word.length; offset += 1) {
+          const index = vertical ? start + offset * SCRABBLE_SIZE : start + offset;
+          const existing = board[index];
+          const letter = word[offset];
+          if (existing) {
+            if (existing.letter !== letter) {
+              fits = false;
+              break;
+            }
+            continue;
+          }
+
+          let rackIndex = remainingRack.indexOf(letter);
+          let points = SCRABBLE_LETTER_POINTS[letter] ?? 0;
+          if (rackIndex < 0) {
+            rackIndex = remainingRack.indexOf("?");
+            points = 0;
+          }
+          if (rackIndex < 0) {
+            fits = false;
+            break;
+          }
+          remainingRack.splice(rackIndex, 1);
+          nextBoard[index] = { letter, points };
+          freshCount += 1;
+        }
+        if (!fits || freshCount < 1 || freshCount > 7) continue;
+
+        const drawCount = Math.min(7 - remainingRack.length, bag.length);
+        const proposed = {
+          ...current,
+          board: nextBoard,
+          racks: (current.racks as string[][]).map((rack, player) =>
+            player === seat ? [...remainingRack, ...Array.from({ length: drawCount }, () => "")] : []),
+          bag: bag.slice(drawCount).map(() => ""),
+          turn: nextTurn,
+          passes: 0,
+        };
+        const result = validateArcadeTransition(
+          "scrabble", current, proposed, seat, capacity, seat, nextTurn,
+        );
+        if (result.ok) return { state: result.state, turn: result.turn };
+      }
+    }
+  }
+
   const passes = current.passes + 1;
   let scores = current.scores as number[];
   let winner: number | "draw" | null = null;
