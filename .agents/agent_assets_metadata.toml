@@ -420,3 +420,31 @@ mtime_ms = 1790567932471
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/b45abe38-cfd8-44ba-b598-f46f6489b907/da8b5571-2738-49ff-b073-208e58d37920"
 storage_version_token = "1790567944160374"
 content_type = "image/png"
+
+[[outputs]]
+id = "p2uc0LTU9k4xqt9iqUL8F"
+uri = "file://.local/exports/509-Yard-source.zip"
+type = "unspecified"
+title = "509 Yard source ZIP"
+description = "Complete tracked source snapshot from workspace main, including the completed-work rundown."
+logical_id = "9b8fa045-1df5-4042-abf9-834e3c14abc5"
+content_hash = "sha256:7926c0ba0f89fd672829f7c343fca8cc81e8309ec0dc0befb7862b0bef3ecf28"
+size = 24760294
+mtime_ms = 1793962215919
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/9b8fa045-1df5-4042-abf9-834e3c14abc5/1e33a5a3-4761-4b8a-8ba0-b119da372f9f"
+storage_version_token = "1793962226481769"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "MFTKnl1aSWut5qeIsusnU"
+uri = "file://.local/exports/509-Yard-Rundown.md"
+type = "text"
+title = "509 Yard completed-work rundown"
+description = "A standalone summary of the included project features, recent additions, and package contents."
+logical_id = "83951289-2d32-4288-8b71-e37f07faca36"
+content_hash = "sha256:73cc75dc55e4d793419cda7d086685ac98389c7584696bc8019ddb0ba5b255c3"
+size = 2217
+mtime_ms = 1793962214831
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:1c7d1632-6e23-40f2-b2aa-dbaa1546ed3a/83951289-2d32-4288-8b71-e37f07faca36/521b98e6-b463-4ff1-948b-a695aff72dfe"
+storage_version_token = "1793962227130924"
+content_type = "text/markdown"

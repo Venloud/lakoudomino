@@ -48,6 +48,8 @@ export interface LakouGameProps {
   onHome?: () => void;
   /** When the server starts the next hand by itself (epoch ms). Shows "Next hand in 8s" on the standings. */
   nextHandAt?: number | null;
+  /** Render a public, non-interactive table view for spectators. */
+  readOnly?: boolean;
 }
 
 function useWidth() {
@@ -82,6 +84,7 @@ function reasonsFor(entries: { amount: number; reason?: string; pipsLeft?: numbe
 
 export function LakouGame(props: LakouGameProps) {
   const { view, names, events, eventsKey, turnDeadline, turnMs = 30000, chat, onAction, onSendChat } = props;
+  const readOnly = props.readOnly ?? false;
   const width = useWidth();
   const desktop = width >= 1100;
   const phone = width < 560;
@@ -298,13 +301,13 @@ export function LakouGame(props: LakouGameProps) {
         {desktop ? (
           <span className="lk-topbar-right">
             <span className="lk-meta">{points ? `Points  ·  ${view.rowBoxes}-box row` : `Regular`}{props.tableCode ? `  ·  Table ${props.tableCode}` : ''}</span>
-            <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>
-            <button className="lk-leave" onClick={props.onLeave}>Leave table</button>
+            {!readOnly && <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>}
+            {!readOnly && props.onLeave && <button className="lk-leave" onClick={props.onLeave}>Leave table</button>}
           </span>
         ) : (
           <span className="lk-topbar-right">
             {props.tableCode && <span className="lk-code-pill">{props.tableCode}</span>}
-            <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>
+            {!readOnly && <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>}
           </span>
         )}
       </header>
@@ -334,8 +337,10 @@ export function LakouGame(props: LakouGameProps) {
                 {playersList}
               </div>
               <div className="lk-section">
-                <p className="lk-eyebrow">TABLE CHAT</p>
-                <ChatBox messages={chat} onSend={onSendChat} />
+                {!readOnly && <>
+                  <p className="lk-eyebrow">TABLE CHAT</p>
+                  <ChatBox messages={chat} onSend={onSendChat} />
+                </>}
               </div>
             </div>
             {waitlistEl}
@@ -357,7 +362,7 @@ export function LakouGame(props: LakouGameProps) {
             <span className="lk-grabber" />
             <div className="lk-tabs" role="tablist">
               <button role="tab" aria-selected={tab === 'players'} className={tab === 'players' ? 'lk-on' : ''} onClick={() => setTab('players')}>Players</button>
-              <button role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'lk-on' : ''} onClick={() => setTab('chat')}>Chat{chat.length ? ` · ${chat.length}` : ''}</button>
+              {!readOnly && <button role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'lk-on' : ''} onClick={() => setTab('chat')}>Chat{chat.length ? ` · ${chat.length}` : ''}</button>}
               {props.waitlist && <button role="tab" aria-selected={tab === 'line'} className={tab === 'line' ? 'lk-on' : ''} onClick={() => setTab('line')}>Line · {props.waitlist.entries.length}</button>}
             </div>
             {tab === 'players' && (
@@ -372,7 +377,7 @@ export function LakouGame(props: LakouGameProps) {
                 ))}
               </div>
             )}
-            {tab === 'chat' && <ChatBox messages={chat} onSend={onSendChat} compact />}
+            {!readOnly && tab === 'chat' && <ChatBox messages={chat} onSend={onSendChat} compact />}
             {tab === 'line' && waitlistEl}
           </div>
         </div>
@@ -386,13 +391,14 @@ export function LakouGame(props: LakouGameProps) {
             ? `Domino!${dominoPips != null ? `  ${dominoPips} pips left over` : ''}${winnerGain ? `  ·  +${winnerGain}` : ''}`
             : `Game locked${winnerGain ? `  ·  +${winnerGain}` : ''}`}
           rows={standingRows} target={view.target} nextStarter={winner === me ? 'You' : names[winner]}
-          canStartNext={props.canStartNextHand ?? true} onNext={props.onNextHand} onLeave={props.onLeave}
+          canStartNext={!readOnly && (props.canStartNextHand ?? true)} onNext={readOnly ? undefined : props.onNextHand} onLeave={readOnly ? undefined : props.onLeave}
           nextHandAt={props.nextHandAt ?? null}
+          privateTilesHidden={readOnly}
         />
       )}
-      {showFinal && <MatchOver rows={finalRows} points={points} onAgain={props.onPlayAgain} onLeave={props.onLeave} meSeat={me} />}
-      {props.seatOffer && <SeatOffer {...props.seatOffer} onTake={props.seatOffer.onTake} onStay={props.seatOffer.onStay} />}
-      {settingsOpen && (
+      {showFinal && <MatchOver rows={finalRows} points={points} onAgain={readOnly ? undefined : props.onPlayAgain} onLeave={readOnly ? undefined : props.onLeave} meSeat={me} />}
+      {!readOnly && props.seatOffer && <SeatOffer {...props.seatOffer} onTake={props.seatOffer.onTake} onStay={props.seatOffer.onStay} />}
+      {!readOnly && settingsOpen && (
         <div className="lk-settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
           <section className="lk-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="lk-settings-title">
             <div className="lk-settings-heading">

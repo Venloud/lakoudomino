@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { WebSocket } from "ws";
 import { pool } from "@workspace/db";
-import { autoStep, createMatch } from "lakou-engine";
-import { serializeRoom } from "../lib/room-persistence-codec.ts";
+import { applyAction, autoStep, createMatch, viewFor, type Action } from "lakou-engine";
+import { restoreRooms, serializeRoom } from "../lib/room-persistence-codec.ts";
 import {
   hashReconnectToken,
   SOCKET_AUTHENTICATION_ERROR,
@@ -133,7 +133,7 @@ async function createRoomsTable(schema: string): Promise<void> {
   `);
 }
 
-async function receiveSocketMessage(socket: WebSocket): Promise<JsonRecord> {
+async function receiveSocketMessage(socket: WebSocket, timeoutMs = 5_000): Promise<JsonRecord> {
   return await new Promise((resolveMessage, rejectMessage) => {
     const cleanup = () => {
       clearTimeout(timeout);
@@ -155,14 +155,15 @@ async function receiveSocketMessage(socket: WebSocket): Promise<JsonRecord> {
     const timeout = setTimeout(() => {
       cleanup();
       rejectMessage(new Error("Timed out waiting for a room WebSocket message."));
-    }, 5_000);
+    }, timeoutMs);
     socket.once("message", onMessage);
     socket.once("error", onError);
   });
 }
 
-async function openRoomSocket(baseUrl: string, code: string): Promise<WebSocket> {
-  const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws?code=${encodeURIComponent(code)}`);
+async function openRoomSocket(baseUrl: string, code: string, watchOnly = false): Promise<WebSocket> {
+  const watchQuery = watchOnly ? "&watch=1" : "";
+  const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws?code=${encodeURIComponent(code)}${watchQuery}`);
   await once(socket, "open");
   return socket;
 }
@@ -274,6 +275,28 @@ function makeRoom(code: string, match: ReturnType<typeof createMatch>["match"], 
     waitlist: [],
     offers: [],
   };
+}
+
+function pointsHandEndingMove(seed: number): {
+  match: ReturnType<typeof createMatch>["match"];
+  action: Action;
+  finishedMatch: ReturnType<typeof createMatch>["match"];
+} {
+  let match = createMatch({ mode: "points", playerCount: 4, seed }).match;
+  for (let index = 0; index < 500 && !match.hand.over && !match.over; index += 1) {
+    const legal = viewFor(match, match.hand.turn).legal;
+    const action = legal.find((candidate) => candidate.type === "play") ??
+      legal.find((candidate) => candidate.type === "draw") ??
+      legal.find((candidate) => candidate.type === "pass");
+    assert.ok(action, "engine exposes a legal action until the hand ends");
+    const next = applyAction(match, action).match;
+    if (next.hand.over) {
+      assert.equal(next.over, false, "the fixture should end one Points hand, not the whole match");
+      return { match, action, finishedMatch: next };
+    }
+    match = next;
+  }
+  assert.fail("the fixture should reach a hand-ending move");
 }
 
 async function insertRoom(
@@ -408,6 +431,7 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
   const quotedSchema = `"${schema}"`;
   let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
   let spectator: WebSocket | undefined;
+  let watchOnlySpectator: WebSocket | undefined;
   let player: WebSocket | undefined;
   await pool.query(`CREATE SCHEMA ${quotedSchema}`);
   try {
@@ -465,17 +489,42 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
     }), SOCKET_AUTHENTICATION_ERROR);
     await unchanged();
 
+    watchOnlySpectator = await openRoomSocket(api.baseUrl, created.code, true);
+    await expectSocketError(watchOnlySpectator, JSON.stringify({
+      type: "hello", reconnectToken: created.reconnectToken,
+    }), "A watch link cannot use a player reconnect token");
+    const watchSnapshotPromise = receiveSocketMessage(watchOnlySpectator);
+    watchOnlySpectator.send(JSON.stringify({ type: "hello", displayName: "Watch-only guest" }));
+    const watchSnapshot = await watchSnapshotPromise;
+    assert.equal(watchSnapshot.type, "snapshot");
+    assert.equal(watchSnapshot.viewerRole, "spectator");
+    assert.deepEqual((watchSnapshot.game as JsonRecord).hand, []);
+    assert.deepEqual((watchSnapshot.view as JsonRecord).myHand, []);
+    assert.equal((watchSnapshot.view as JsonRecord).revealedHands, null);
+    assert.equal(((watchSnapshot.game as JsonRecord).engine as JsonRecord).revealedHands, null);
+    assert.deepEqual((watchSnapshot.waitlist as JsonRecord).entries, []);
+    assert.equal(JSON.stringify(watchSnapshot).includes(created.reconnectToken), false);
+    await expectSocketError(watchOnlySpectator, JSON.stringify({
+      type: "play", tileId: "0-0", side: "left",
+    }), "This watch link is read-only");
+    await expectSocketError(watchOnlySpectator, JSON.stringify({
+      type: "changeSettings", mode: "regular", rowBoxes: 10, turnSeconds: 30, isPrivate: false,
+    }), "This watch link is read-only");
+    await expectSocketError(watchOnlySpectator, JSON.stringify({ type: "nextHand" }), "This watch link is read-only");
+    await unchanged();
+
     const turnSeat = Number(baseline.turnSeat);
     const playerToken = turnSeat === 0 ? created.reconnectToken : joined.reconnectToken;
     player = await openRoomSocket(api.baseUrl, created.code);
     const playerWelcomePromise = receiveSocketMessage(player);
     player.send(JSON.stringify({ type: "hello", reconnectToken: playerToken }));
     const playerWelcome = await playerWelcomePromise;
+    const spectatorAfterPlayerJoins = await receiveSocketMessage(watchOnlySpectator);
     const playerGame = playerWelcome.game as JsonRecord;
     assert.equal(playerGame.yourSeat, turnSeat);
     const hand = playerGame.hand as JsonRecord[];
+    assert.ok(hand.length > 0, "a seated player should still receive their own private hand");
     const openEnds = playerGame.openEnds as JsonRecord[];
-    assert.ok(hand.length > 0, "the active player should have a tile to try");
     const unsupportedSide = ["right", "top", "bottom", "left"].find((side) =>
       !openEnds.some((end) => end.id === side));
     assert.ok(unsupportedSide, "the board should not have every possible end open");
@@ -484,6 +533,139 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
       type: "play", tileId: hand[0].id, side: unsupportedSide,
     }), "That tile cannot be played on that end");
     await unchanged();
+
+    const playerView = playerWelcome.view as JsonRecord;
+    const legal = playerView.legal as JsonRecord[];
+    const action = legal.find((candidate) => candidate.type === "play");
+    assert.ok(action, "the opening turn should have a legal play");
+    const tile = action.tile as number[];
+    const side = ({ W: "left", E: "right", N: "top", S: "bottom", center: "left" } as Record<string, string>)[String(action.arm)];
+    const watchUpdatePromise = receiveSocketMessage(watchOnlySpectator);
+    player.send(JSON.stringify({ type: "play", tileId: `${tile[0]}-${tile[1]}`, side }));
+    const watchUpdate = await watchUpdatePromise;
+    assert.equal(watchUpdate.type, "snapshot");
+    assert.equal(watchUpdate.viewerRole, "spectator");
+    const spectatorBoard = ((watchUpdate.view as JsonRecord).board as JsonRecord).history as unknown[];
+    const initialBoard = ((spectatorAfterPlayerJoins.view as JsonRecord).board as JsonRecord).history as unknown[];
+    assert.equal(spectatorBoard.length, initialBoard.length + 1, "watchers should receive the public board update");
+    assert.deepEqual((watchUpdate.game as JsonRecord).hand, []);
+    assert.deepEqual((watchUpdate.view as JsonRecord).myHand, []);
+    const afterMove = await getGame(api.baseUrl, created.code);
+    assert.ok(
+      ((afterMove.board as unknown[]) ?? []).length > ((baseline.board as unknown[]) ?? []).length,
+      "the seated player's legal move should be persisted",
+    );
+    await expectSocketError(watchOnlySpectator, JSON.stringify({ type: "chat", text: "hello" }), "This watch link is read-only");
+  } finally {
+    spectator?.terminate();
+    watchOnlySpectator?.terminate();
+    player?.terminate();
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("a connected watch-only socket receives Points hand results and the automatic next hand", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room WebSocket integration tests.");
+
+  const schema = `rooms_spectator_hands_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  let spectator: WebSocket | undefined;
+  let player: WebSocket | undefined;
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    const { match, action, finishedMatch } = pointsHandEndingMove(29);
+    const activeSeat = match.hand.turn;
+    const code = `S${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const reconnectToken = randomUUID();
+    const room = makeRoom(code, match, false);
+    room.mode = "points";
+    room.playerCount = 4;
+    room.status = "playing";
+    room.seats.forEach((seat, index) => {
+      seat.name = index === activeSeat ? "Final-move player" : `Transition bot ${index + 1}`;
+      seat.status = index === activeSeat ? "waiting" : "bot";
+      seat.reconnectTokenHash = index === activeSeat ? hashReconnectToken(reconnectToken) : null;
+      seat.userId = null;
+      if (index === activeSeat) {
+        delete seat.botLevel;
+      } else {
+        seat.botLevel = "easy";
+      }
+    });
+    await insertRoom(schema, room);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    spectator = await openRoomSocket(api.baseUrl, code, true);
+    const spectatorWelcomePromise = receiveSocketMessage(spectator);
+    spectator.send(JSON.stringify({ type: "hello", displayName: "Hand transition watcher" }));
+    const spectatorWelcome = await spectatorWelcomePromise;
+    const assertNoPrivateTiles = (snapshot: JsonRecord) => {
+      assert.equal(snapshot.type, "snapshot");
+      assert.equal(snapshot.viewerRole, "spectator");
+      assert.deepEqual((snapshot.game as JsonRecord).hand, []);
+      assert.deepEqual((snapshot.view as JsonRecord).myHand, []);
+      assert.deepEqual((snapshot.view as JsonRecord).legal, []);
+      assert.equal((snapshot.view as JsonRecord).revealedHands, null);
+      const gameEngine = (snapshot.game as JsonRecord).engine as JsonRecord;
+      assert.deepEqual(gameEngine.myHand, []);
+      assert.deepEqual(gameEngine.legal, []);
+      assert.equal(gameEngine.revealedHands, null);
+    };
+    assertNoPrivateTiles(spectatorWelcome);
+    assert.equal(((spectatorWelcome.game as JsonRecord).handPoints as number[]).length, 4);
+
+    player = await openRoomSocket(api.baseUrl, code);
+    const playerWelcomePromise = receiveSocketMessage(player);
+    const spectatorPlayerJoinPromise = receiveSocketMessage(spectator);
+    player.send(JSON.stringify({ type: "hello", reconnectToken }));
+    const [playerWelcome, spectatorPlayerJoin] = await Promise.all([
+      playerWelcomePromise,
+      spectatorPlayerJoinPromise,
+    ]);
+    assert.equal((playerWelcome.game as JsonRecord).yourSeat, activeSeat);
+    assertNoPrivateTiles(spectatorPlayerJoin);
+
+    const handEndPromise = receiveSocketMessage(spectator);
+    const finalAction = action.type === "play"
+      ? {
+          type: "play",
+          tileId: `${action.tile[0]}-${action.tile[1]}`,
+          side: action.arm === "center"
+            ? "left"
+            : ({ W: "left", E: "right", N: "top", S: "bottom" } as Record<string, string>)[action.arm],
+        }
+      : { type: action.type };
+    player.send(JSON.stringify(finalAction));
+    const handEnd = await handEndPromise;
+    assertNoPrivateTiles(handEnd);
+    const endGame = handEnd.game as JsonRecord;
+    assert.equal(endGame.handNumber, 1);
+    assert.deepEqual(endGame.handPoints, finishedMatch.scores, "the end-of-hand snapshot should include updated scores");
+    assert.ok(
+      (handEnd.events as JsonRecord[]).some((event) => event.type === "handOver"),
+      "the watcher should receive the hand result event",
+    );
+    assert.notDeepEqual(finishedMatch.scores, match.scores, "the fixture's final move should change the score");
+
+    const nextHand = await receiveSocketMessage(spectator, 25_000);
+    assertNoPrivateTiles(nextHand);
+    const nextGame = nextHand.game as JsonRecord;
+    assert.equal(nextGame.handNumber, 2, "the same watcher should receive the automatic next-hand snapshot");
+    assert.deepEqual(nextGame.board, [], "the next hand should arrive with a cleared public board");
+    assert.deepEqual(nextGame.handPoints, finishedMatch.scores);
+    assert.ok(
+      (nextHand.events as JsonRecord[]).some((event) => event.type === "handStart"),
+      "the next-hand snapshot should identify the hand start",
+    );
+    assert.equal(spectator.readyState, WebSocket.OPEN, "the watcher should not need to reconnect");
   } finally {
     spectator?.terminate();
     player?.terminate();
@@ -889,6 +1071,80 @@ test("a restored completed hand automatically starts the next hand", {
     assert.equal(savedHandNumber, 2, "the pending hand should start automatically after restart without a player request");
   } finally {
     if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("legacy Domino room rows restore with safe defaults after schema additions", async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for legacy room persistence tests.");
+
+  const schema = `rooms_legacy_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  const code = `L${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+
+  try {
+    await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+    await createRoomsTable(schema);
+
+    const match = createMatch({
+      mode: "regular",
+      playerCount: 2,
+      rowBoxes: 10,
+      twoPlayerVariant: "draw",
+      seed: 619,
+    }).match;
+    const seats = [
+      { seat: 0, status: "waiting", name: "Legacy host", reconnectTokenHash: null },
+      { seat: 1, status: "waiting", name: "Legacy guest", reconnectTokenHash: null },
+      { seat: 2, status: "open", name: null, reconnectTokenHash: null },
+      { seat: 3, status: "open", name: null, reconnectTokenHash: null },
+    ];
+
+    // Deliberately omit speed, play_now, afk_state, lifecycle_applied, and crowns_eligible.
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.domino_rooms (
+        code, host_name, mode, row_length, player_count, row_boxes,
+        two_player_variant, turn_seconds, is_private, seed, status, seats,
+        last_action, engine_state, waitlist, offers
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+        $12::jsonb, $13, $14::jsonb, $15::jsonb, $16::jsonb
+      )`,
+      [
+        code, "Legacy host", "regular", 10, 2, 10, "draw", 30, false, 619,
+        "playing", JSON.stringify(seats), "legacy room", JSON.stringify(match),
+        "[]", "[]",
+      ],
+    );
+
+    const { rows } = await pool.query(
+      `SELECT
+        code, host_name AS "hostName", mode, row_length AS "rowLength",
+        player_count AS "playerCount", row_boxes AS "rowBoxes",
+        two_player_variant AS "twoPlayerVariant", turn_seconds AS "turnSeconds",
+        is_private AS "isPrivate", speed, play_now AS "playNow",
+        afk_state AS "afkState", seed, status, seats,
+        last_action AS "lastAction", engine_state AS "engineState",
+        waitlist, offers, lifecycle_applied AS "lifecycleApplied",
+        crowns_eligible AS "crownsEligible"
+      FROM ${quotedSchema}.domino_rooms
+      WHERE code = $1`,
+      [code],
+    );
+    assert.equal(rows.length, 1);
+
+    const result = restoreRooms(rows);
+    assert.deepEqual(result.errors, [], "a legacy row must not be quarantined");
+    assert.equal(result.rooms.length, 1);
+    const restored = result.rooms[0]!;
+    assert.equal(restored.speed, 1);
+    assert.equal(restored.playNow, false);
+    assert.equal(restored.afkState, undefined);
+    assert.equal(restored.lifecycleApplied, false);
+    assert.equal(restored.crownsEligible, undefined);
+    assert.equal(restored.engineState?.hand.turn, match.hand.turn, "the saved player turn must be preserved");
+  } finally {
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });

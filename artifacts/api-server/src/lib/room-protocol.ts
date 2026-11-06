@@ -79,9 +79,11 @@ export function parseSocketEvent(value: string) {
   } catch { /* handled below */ }
   return { ok: false as const, error: SOCKET_PROTOCOL_ERROR };
 }
-export function validateSocketMessage(value: string, seat: number | undefined) {
+export function validateSocketMessage(value: string, seat: number | undefined, readOnly = false) {
   const parsed = parseSocketEvent(value);
   if (!parsed.ok) return parsed;
+  if (readOnly && parsed.event.type !== "hello")
+    return { ok: false as const, error: "This watch link is read-only" };
   if ((parsed.event.type === "play" || parsed.event.type === "pass" ||
     parsed.event.type === "draw" || parsed.event.type === "playAgain" ||
     parsed.event.type === "nextHand" || parsed.event.type === "changeSettings") && seat === undefined)

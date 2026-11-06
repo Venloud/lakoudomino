@@ -1474,6 +1474,15 @@ body:not(:has(.lk-game)) {
 .social-notice-actions button { border: 1px solid rgba(26, 55, 43, .22); border-radius: 6px; padding: 7px 10px; background: transparent; color: #213d31; font-size: 11px; font-weight: 700; }
 .social-notice-actions button:first-child { border-color: #173c31; background: #173c31; color: #f7f1e4; }
 .app-notice { width: min(100% - 32px, 1260px); margin: 0 auto 20px; padding: 10px 13px; border-left: 3px solid #467c68; background: #f7f1e4; color: #213d31; font-size: 13px; }
+.room-watch-link {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  width: fit-content; max-width: calc(100vw - 24px); margin: 8px auto;
+  padding: 8px 11px; border: 1px solid rgba(26, 55, 43, .22); border-radius: 9px;
+  background: #f7f1e4; color: #213d31; box-shadow: 0 5px 18px rgba(0, 0, 0, .16);
+  font-size: 12px; white-space: nowrap;
+}
+.room-watch-link a, .room-watch-link button { border: 0; padding: 0; background: transparent; color: #40715f; font-weight: 700; text-decoration: underline; }
+.room-watch-link button { text-decoration: none; }
 .room-live-error {
   position: fixed; z-index: 1000; top: 56px; left: 50%; transform: translateX(-50%);
   width: min(480px, calc(100vw - 32px)); margin: 0; padding: 11px 14px;
@@ -1485,6 +1494,7 @@ body:not(:has(.lk-game)) {
   .social-notice { align-items: flex-start; flex-direction: column; }
   .social-notice-actions { width: 100%; }
   .social-notice-actions button { flex: 1; }
+  .room-watch-link { flex-wrap: wrap; white-space: normal; text-align: center; }
 }
 
 :root:has(.room-loading-page),
