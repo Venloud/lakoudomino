@@ -826,3 +826,69 @@ test("restored rooms reconnect only preserved seat tokens and never claim tokenl
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });
+
+test("a restored completed hand automatically starts the next hand", {
+  timeout: 45_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room next-hand restart tests.");
+
+  const schema = `rooms_next_hand_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const match = createMatch({
+      mode: "regular",
+      playerCount: 2,
+      rowBoxes: 10,
+      twoPlayerVariant: "draw",
+      seed: 274,
+    }).match;
+    match.handsPlayed = match.hand.number;
+    match.hand.hands[0] = [];
+    match.hand.over = true;
+    match.hand.winner = 0;
+    match.hand.ranking = [0, 1];
+
+    const code = `N${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const room = makeRoom(code, match, false);
+    room.status = "finished";
+    room.seats.forEach((seat, index) => {
+      seat.status = index < 2 ? "waiting" : "open";
+      seat.name = index === 0 ? "Next-hand host" : index === 1 ? "Next-hand guest" : null;
+      seat.reconnectTokenHash = null;
+      delete seat.botLevel;
+    });
+    await insertRoom(schema, room);
+
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    const deadline = Date.now() + 30_000;
+    let savedHandNumber = 1;
+    while (Date.now() < deadline) {
+      const savedRoom = await pool.query(
+        `SELECT status, engine_state FROM ${quotedSchema}.domino_rooms WHERE code = $1`,
+        [code],
+      );
+      assert.equal(savedRoom.rowCount, 1, "the restored room should remain present during the hand transition");
+      const engineState = savedRoom.rows[0].engine_state as JsonRecord;
+      const hand = engineState.hand as JsonRecord;
+      savedHandNumber = Number(hand.number);
+      if (savedHandNumber > 1) {
+        assert.equal(savedRoom.rows[0].status, "playing");
+        assert.equal(hand.over, false);
+        assert.equal((hand.hands as unknown[]).length, 2);
+        break;
+      }
+      await delay(200);
+    }
+    assert.equal(savedHandNumber, 2, "the pending hand should start automatically after restart without a player request");
+  } finally {
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
