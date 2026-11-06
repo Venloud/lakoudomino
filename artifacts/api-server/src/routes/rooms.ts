@@ -141,29 +141,7 @@ export async function initializeRooms(): Promise<void> {
   }
   rooms.clear();
   persistedRooms.forEach((room) => {
-    const runtime: RoomState = {
-      ...room,
-      connections: new Map(),
-      waitlistConnections: new Map(),
-      spectatorConnections: new Set(),
-      lastEvents: [],
-      eventsKey: 0,
-      turnDeadline: null,
-      turnMs: null,
-      nextHandAt: null,
-      timerVersion: 0,
-      chatTimestamps: new Map(),
-      afkState: room.afkState ?? createAfk(room.playerCount ?? 4),
-      speed: room.speed ?? 1,
-      playNow: room.playNow ?? false,
-      lifecycleApplied: room.lifecycleApplied ?? Boolean(room.engineState?.over),
-      activeMatchId: room.activeMatchId ?? null,
-      statsRecorded: room.statsRecorded ?? false,
-      matchParticipants: room.matchParticipants ?? [],
-      hostDisconnectedAt: room.hostDisconnectedAt ?? null,
-    };
-    startOfferTimer(runtime);
-    rooms.set(room.code, runtime);
+    registerRoomRuntime(room);
   });
   for (const room of rooms.values()) {
     if (room.engineState?.over && !room.statsRecorded) {
@@ -174,6 +152,46 @@ export async function initializeRooms(): Promise<void> {
     scheduleNextGameStep(room);
     scheduleNextHand(room);
   }
+}
+
+function registerRoomRuntime(room: PersistedRoomState): RoomState {
+  const runtime: RoomState = {
+    ...room,
+    connections: new Map(),
+    waitlistConnections: new Map(),
+    spectatorConnections: new Set(),
+    lastEvents: [],
+    eventsKey: 0,
+    turnDeadline: null,
+    turnMs: null,
+    nextHandAt: null,
+    timerVersion: 0,
+    chatTimestamps: new Map(),
+    afkState: room.afkState ?? createAfk(room.playerCount ?? 4),
+    speed: room.speed ?? 1,
+    playNow: room.playNow ?? false,
+    lifecycleApplied: room.lifecycleApplied ?? Boolean(room.engineState?.over),
+    activeMatchId: room.activeMatchId ?? null,
+    statsRecorded: room.statsRecorded ?? false,
+    matchParticipants: room.matchParticipants ?? [],
+    hostDisconnectedAt: room.hostDisconnectedAt ?? null,
+  };
+  startOfferTimer(runtime);
+  rooms.set(room.code, runtime);
+  return runtime;
+}
+
+export async function activateRecoveredRoom(room: PersistedRoomState): Promise<boolean> {
+  if (rooms.has(room.code)) return false;
+  const runtime = registerRoomRuntime(room);
+  if (runtime.engineState?.over && !runtime.statsRecorded) {
+    await applyAfterGame(runtime);
+    await persistRoom(runtime);
+  }
+  scheduleRoomCleanup(runtime);
+  scheduleNextGameStep(runtime);
+  scheduleNextHand(runtime);
+  return true;
 }
 
 function startOfferTimer(room: RoomState): void {

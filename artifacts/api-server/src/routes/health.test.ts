@@ -9,8 +9,9 @@ import {
   loadPersistedRooms,
   type RoomRecoveryDiagnostics,
   type PersistedRoomStore,
+  type QuarantinedRoomRetryResult,
 } from "../lib/room-persistence.ts";
-import healthRouter from "./health.ts";
+import healthRouter, { createRoomRetryHandler } from "./health.ts";
 
 test("health exposes skipped-room counts and field paths without identifiers or credentials", async () => {
   const store: PersistedRoomStore = {
@@ -131,4 +132,116 @@ test("recovery alert is absent for zero skips and only contains aggregate safe p
     ],
   });
   assert.equal(JSON.stringify(alert).includes("RECONNECT-HASH-SENTINEL"), false);
+});
+
+test("room retry requires the configured operator token and does not expose stored room data", async () => {
+  const rawSentinel = "PRIVATE-ROOM-CODE RECONNECT-HASH-SENTINEL";
+  let retryCalls = 0;
+  let activatedRoom: unknown;
+  const auditEvents: Array<{ result: string; issuePaths?: string[] }> = [];
+  const validRoom = {
+    code: "PRIVATE-ROOM-CODE",
+    hostName: "Stored host",
+    mode: "regular",
+    rowLength: 10,
+    status: "waiting",
+    seats: [{
+      seat: 0,
+      status: "waiting",
+      name: "Stored host",
+      reconnectTokenHash: "RECONNECT-HASH-SENTINEL",
+    }],
+    lastAction: null,
+    engineState: null,
+    waitlist: [],
+    offers: [],
+  };
+  const retryHandler = createRoomRetryHandler({
+    getOperatorToken: () => "operator-token-secret",
+    async retryRoom() {
+      retryCalls++;
+      return { status: "restored", room: validRoom } as QuarantinedRoomRetryResult;
+    },
+    async activateRoom(room) {
+      activatedRoom = room;
+      return true;
+    },
+    audit(result, issuePaths) {
+      auditEvents.push({ result, issuePaths });
+    },
+  });
+  const app = express();
+  app.post("/ops/rooms/:code/retry", retryHandler);
+  const server = createServer(app);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const endpoint = `http://127.0.0.1:${address.port}/ops/rooms/PRIVATE-ROOM-CODE/retry`;
+    const denied = await fetch(endpoint, {
+      method: "POST",
+      headers: { authorization: "Bearer wrong-token" },
+    });
+    assert.equal(denied.status, 401);
+    assert.equal(retryCalls, 0);
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { authorization: "Bearer operator-token-secret" },
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { status: "restored" });
+    assert.deepEqual(activatedRoom, validRoom);
+    assert.equal(retryCalls, 1);
+    assert.deepEqual(auditEvents, [{ result: "restored", issuePaths: undefined }]);
+    assert.equal(JSON.stringify(auditEvents).includes(rawSentinel), false);
+  } finally {
+    await new Promise<void>((resolveClose, reject) => {
+      server.close((error) => error ? reject(error) : resolveClose());
+    });
+  }
+});
+
+test("room retry reports only allowlisted validation paths for invalid saved data", async () => {
+  const auditEvents: Array<{ result: string; issuePaths?: string[] }> = [];
+  const retryHandler = createRoomRetryHandler({
+    getOperatorToken: () => "operator-token-secret",
+    async retryRoom() {
+      return { status: "invalid", issuePaths: ["mode", "unknown"] };
+    },
+    async activateRoom() {
+      assert.fail("invalid saved data must not be activated");
+    },
+    audit(result, issuePaths) {
+      auditEvents.push({ result, issuePaths });
+    },
+  });
+  const app = express();
+  app.post("/ops/rooms/:code/retry", retryHandler);
+  const server = createServer(app);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const response = await fetch(`http://127.0.0.1:${address.port}/ops/rooms/ROOM123/retry`, {
+      method: "POST",
+      headers: { authorization: "Bearer operator-token-secret" },
+    });
+    assert.equal(response.status, 422);
+    const body = await response.text();
+    assert.equal(body.includes("operator-token-secret"), false);
+    assert.deepEqual(JSON.parse(body), {
+      error: "Saved room data is still invalid",
+      issuePaths: ["mode", "unknown"],
+    });
+    assert.deepEqual(auditEvents, [{ result: "invalid", issuePaths: ["mode", "unknown"] }]);
+  } finally {
+    await new Promise<void>((resolveClose, reject) => {
+      server.close((error) => error ? reject(error) : resolveClose());
+    });
+  }
 });
