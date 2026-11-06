@@ -1221,7 +1221,7 @@ components:
       properties: { user: { oneOf: [{ $ref: "#/components/schemas/User" }, { type: "null" }] } }
     RecentMatch:
       type: object
-      required: [matchId, roomCode, mode, recordedAt, rank, medal, crownPoints, won]
+      required: [matchId, roomCode, mode, recordedAt, rank, medal, crownPoints, won, opponents]
       properties:
         matchId: { type: string, format: uuid }
         roomCode: { type: string }
@@ -1231,6 +1231,7 @@ components:
         medal: { type: string }
         crownPoints: { type: integer }
         won: { type: boolean }
+        opponents: { type: array, items: { type: string } }
     RecentMatchesResponse:
       type: object
       required: [matches]

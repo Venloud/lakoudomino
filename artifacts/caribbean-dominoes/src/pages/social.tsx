@@ -411,7 +411,7 @@ export default function SocialPage({ page }: { page: Destination }) {
     if (!recentMatches.length) return <EmptyHistory onGames={goGames} />;
     return <div className="yard-history-list">{recentMatches.slice(0, 6).map((match) => <div className="yard-history-row" key={match.matchId} data-testid={`match-${match.matchId}`}>
       <span className="yard-result-mark">{match.rank ? `#${match.rank}` : '—'}</span>
-       <span><b>{match.won ? 'Victory' : `${match.medal || 'Match'} finish`}</b><small>{recentMatchLabel(match.mode)} · Table {match.roomCode} · {new Date(match.recordedAt).toLocaleDateString()}</small></span>
+        <span><b>{match.won ? 'Victory' : `${match.medal || 'Match'} finish`}</b><small>{recentMatchLabel(match.mode)}{match.opponents.length ? ` · vs. ${match.opponents.join(', ')}` : ''} · Table {match.roomCode} · {new Date(match.recordedAt).toLocaleDateString()}</small></span>
       <strong className="yard-history-points">{match.crownPoints > 0 ? `+${match.crownPoints}` : match.crownPoints} CP</strong>
     </div>)}</div>;
   };

@@ -1209,7 +1209,8 @@ export const GetRecentMatchesResponse = zod.object({
   "rank": zod.number().int(),
   "medal": zod.string(),
   "crownPoints": zod.number().int(),
-  "won": zod.boolean()
+  "won": zod.boolean(),
+  "opponents": zod.array(zod.string())
 }))
 })
 
