@@ -161,6 +161,44 @@ async function receiveSocketMessage(socket: WebSocket, timeoutMs = 5_000): Promi
   });
 }
 
+async function receiveSocketMessageMatching(
+  socket: WebSocket,
+  matches: (message: JsonRecord) => boolean,
+  timeoutMs = 5_000,
+): Promise<JsonRecord> {
+  return await new Promise((resolveMessage, rejectMessage) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+    };
+    const onMessage = (raw: unknown) => {
+      let message: JsonRecord;
+      try {
+        message = JSON.parse(String(raw)) as JsonRecord;
+      } catch (error) {
+        cleanup();
+        rejectMessage(error);
+        return;
+      }
+      if (matches(message)) {
+        cleanup();
+        resolveMessage(message);
+      }
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      rejectMessage(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectMessage(new Error("Timed out waiting for the expected room WebSocket message."));
+    }, timeoutMs);
+    socket.on("message", onMessage);
+    socket.once("error", onError);
+  });
+}
+
 async function receiveHumanTurnClock(
   socket: WebSocket,
   seat: number,
@@ -1063,6 +1101,123 @@ test("restored rooms reconnect only preserved seat tokens and never claim tokenl
     reconnectingPlayer?.terminate();
     legacyNameClient?.terminate();
     blankTokenClient?.terminate();
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("two devices can reconnect to one restored seat without disconnecting each other", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room reconnect integration tests.");
+
+  const schema = `rooms_multi_device_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const opening = autoStep(createMatch({
+      mode: "regular",
+      playerCount: 2,
+      rowBoxes: 10,
+      twoPlayerVariant: "draw",
+      seed: 118,
+    }).match, []);
+    assert.ok(opening, "fixture opening should be a legal automatic move");
+    const activeSeat = opening.match.hand.turn;
+    const opponentSeat = activeSeat === 0 ? 1 : 0;
+    const expectedHand = opening.match.hand.hands[activeSeat].map(([left, right]) => ({
+      id: `${left}-${right}`,
+      left,
+      right,
+    }));
+    const opponentHand = opening.match.hand.hands[opponentSeat].map(([left, right]) => ({
+      id: `${left}-${right}`,
+      left,
+      right,
+    }));
+    assert.notDeepEqual(expectedHand, opponentHand, "the fixture should give each seat a different hand");
+
+    const cases = [
+      { code: `A${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`, closingDevice: 0 },
+      { code: `B${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`, closingDevice: 1 },
+    ];
+    const reconnectTokens = new Map<string, string>();
+    for (const { code } of cases) {
+      const reconnectToken = randomUUID();
+      reconnectTokens.set(code, reconnectToken);
+      const room = makeRoom(code, opening.match, false);
+      room.seats[activeSeat].reconnectTokenHash = hashReconnectToken(reconnectToken);
+      await insertRoom(schema, room);
+    }
+
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    for (const { code, closingDevice } of cases) {
+      const reconnectToken = reconnectTokens.get(code)!;
+      const connectDevice = async () => {
+        const socket = await openRoomSocket(api!.baseUrl, code);
+        sockets.push(socket);
+        const welcomePromise = receiveSocketMessage(socket);
+        socket.send(JSON.stringify({ type: "hello", reconnectToken }));
+        return { socket, welcome: await welcomePromise };
+      };
+      const devices = [await connectDevice(), await connectDevice()];
+      const [firstDevice, secondDevice] = devices;
+      for (const snapshot of [firstDevice.welcome, secondDevice.welcome]) {
+        const game = snapshot.game as JsonRecord;
+        const view = snapshot.view as JsonRecord;
+        assert.equal(snapshot.type, "snapshot");
+        assert.equal(game.yourSeat, activeSeat);
+        assert.deepEqual(game.hand, expectedHand, "each device should receive its seat's restored hand");
+        assert.deepEqual(view.myHand, opening.match.hand.hands[activeSeat]);
+        assert.notDeepEqual(game.hand, opponentHand, "a reconnect must never reveal the opponent's hand");
+        assert.equal(view.revealedHands, null, "the snapshot must not reveal every player's hand");
+      }
+
+      const closingSocket = devices[closingDevice].socket;
+      const survivingDevice = devices[1 - closingDevice];
+      const closePromise = once(closingSocket, "close");
+      closingSocket.close();
+      await closePromise;
+      assert.equal(survivingDevice.socket.readyState, WebSocket.OPEN);
+
+      const legal = (survivingDevice.welcome.view as JsonRecord).legal as JsonRecord[];
+      const action = legal.find((candidate) => candidate.type === "play") ??
+        legal.find((candidate) => candidate.type === "draw") ??
+        legal.find((candidate) => candidate.type === "pass");
+      assert.ok(action, "the surviving device should have a legal turn action");
+      const actionEvent = action.type === "play"
+        ? {
+            type: "play",
+            tileId: (action.tile as number[]).join("-"),
+            side: ({ W: "left", E: "right", N: "top", S: "bottom", center: "left" } as Record<string, string>)[String(action.arm)],
+          }
+        : { type: action.type };
+      const initialLastAction = (survivingDevice.welcome.game as JsonRecord).lastAction;
+      const moveResult = receiveSocketMessageMatching(
+        survivingDevice.socket,
+        (message) => message.type === "snapshot" &&
+          (message.game as JsonRecord | undefined)?.lastAction !== initialLastAction,
+      );
+      survivingDevice.socket.send(JSON.stringify(actionEvent));
+      const updatedSnapshot = await moveResult;
+      assert.equal(updatedSnapshot.type, "snapshot", "the surviving device should receive the move update");
+      assert.equal((updatedSnapshot.game as JsonRecord).yourSeat, activeSeat);
+      assert.notEqual(
+        (updatedSnapshot.game as JsonRecord).lastAction,
+        initialLastAction,
+        "the surviving device's legal action should update the restored room",
+      );
+      assert.equal(survivingDevice.socket.readyState, WebSocket.OPEN);
+    }
+  } finally {
+    sockets.forEach((socket) => socket.terminate());
     if (api) await stopRoomsProcess(api.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
