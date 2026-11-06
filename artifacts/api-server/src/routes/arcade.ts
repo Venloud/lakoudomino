@@ -24,7 +24,7 @@ const NOTIFY_CHANNEL = "arcade_room_updates";
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const STORED_RESULT_KEY = "__509YardArcadeResult";
 
-type ArcadePlayer = { name: string; tokenHash: string; userId?: string; bot?: boolean };
+type ArcadePlayer = { name: string; tokenHash: string; userId?: string; bot?: boolean; publicName?: string };
 type ArcadeResult = { winnerSeat: number; resignedSeat: number; endedAt: number };
 type ArcadeRoom = {
   code: string;
@@ -115,6 +115,8 @@ function restoreRoom(record: ArcadeRoomRecord): ArcadeRoom | null {
     if (typeof player.name !== "string" || !player.name.trim() ||
         typeof player.tokenHash !== "string" || !/^[a-f0-9]{64}$/.test(player.tokenHash)) return null;
     if (player.bot !== undefined && typeof player.bot !== "boolean") return null;
+    if (player.publicName !== undefined &&
+        (typeof player.publicName !== "string" || !player.publicName.trim())) return null;
     if (player.userId !== undefined && (typeof player.userId !== "string" ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(player.userId))) return null;
     const savedResult = index === 0 ? player[STORED_RESULT_KEY] : undefined;
@@ -137,6 +139,7 @@ function restoreRoom(record: ArcadeRoomRecord): ArcadeRoom | null {
       tokenHash: player.tokenHash,
       ...(typeof player.userId === "string" ? { userId: player.userId } : {}),
       ...(player.bot ? { bot: true } : {}),
+      ...(typeof player.publicName === "string" ? { publicName: player.publicName } : {}),
     });
   }
   return {
@@ -270,9 +273,18 @@ async function persistArcadeMatchResult(client: SqlExecutor, room: ArcadeRoom): 
   const draw = winner === "draw";
   if (!draw && (!Number.isInteger(winner) || (winner as number) < 0 || (winner as number) >= room.capacity)) return;
 
-  const players = new Map<string, { seat: number }>();
+  const players = new Map<string, { seat: number; opponents: string[] }>();
   for (const [seat, player] of room.players.entries()) {
-    if (player.userId && !players.has(player.userId)) players.set(player.userId, { seat });
+    if (player.userId && !players.has(player.userId)) {
+      players.set(player.userId, {
+        seat,
+        opponents: room.players.flatMap((opponent, opponentSeat) => {
+          if (opponentSeat === seat || opponent.userId === player.userId) return [];
+          const name = opponent.publicName ?? opponent.name;
+          return name.trim() ? [name] : [];
+        }),
+      });
+    }
   }
   if (!players.size) return;
 
@@ -284,11 +296,11 @@ async function persistArcadeMatchResult(client: SqlExecutor, room: ArcadeRoom): 
   for (const [userId, player] of players) {
     const won = !draw && player.seat === winner;
     const inserted = await client.query(
-      `INSERT INTO domino_match_results (match_id, user_id, rank, medal, crown_points, won)
-       VALUES ($1, $2, $3, $4, 0, $5)
+      `INSERT INTO domino_match_results (match_id, user_id, rank, medal, crown_points, won, opponents)
+       VALUES ($1, $2, $3, $4, 0, $5, $6)
        ON CONFLICT (match_id, user_id) DO NOTHING
        RETURNING user_id`,
-      [matchId, userId, won || draw ? 1 : 2, draw ? "draw" : won ? "win" : "loss", won],
+      [matchId, userId, won || draw ? 1 : 2, draw ? "draw" : won ? "win" : "loss", won, player.opponents],
     );
     if (inserted.rows.length) {
       await client.query(
@@ -704,6 +716,7 @@ export async function handleArcadeSocket(socket: WebSocket, request: IncomingMes
               name: "Yard bot",
               tokenHash: hashToken(issueToken()),
               ...(current.players[seat].userId ? { userId: current.players[seat].userId } : {}),
+              publicName: current.players[seat].publicName ?? current.players[seat].name,
               bot: true,
             };
             const botMoved = advanceBotTurns(current);

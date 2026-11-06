@@ -16,4 +16,5 @@ export interface RecentMatch {
   medal: string;
   crownPoints: number;
   won: boolean;
+  opponents: string[];
 }

@@ -491,6 +491,7 @@ test("signed-in arcade results remain in profile history after room deletion and
       CREATE TABLE ${quotedSchema}.domino_match_results (
         match_id uuid NOT NULL, user_id uuid NOT NULL, rank integer NOT NULL,
         medal text NOT NULL, crown_points integer NOT NULL, won boolean NOT NULL,
+        opponents text[] NOT NULL DEFAULT '{}'::text[],
         created_at timestamptz NOT NULL DEFAULT now(), UNIQUE (match_id, user_id)
       );
     `);
@@ -501,21 +502,32 @@ test("signed-in arcade results remain in profile history after room deletion and
 
     const hostUser = randomUUID();
     const guestUser = randomUUID();
+    const thirdUser = randomUUID();
+    const fourthUser = randomUUID();
     const hostSession = randomUUID();
     const guestSession = randomUUID();
+    const thirdSession = randomUUID();
+    const fourthSession = randomUUID();
     const sessionHash = (token: string) => createHash("sha256").update(token).digest("hex");
     await pool.query(
-      `INSERT INTO ${quotedSchema}.domino_users (id, username) VALUES ($1, $2), ($3, $4)`,
-      [hostUser, "history_host", guestUser, "history_guest"],
+      `INSERT INTO ${quotedSchema}.domino_users (id, username)
+       VALUES ($1, $2), ($3, $4), ($5, $6), ($7, $8)`,
+      [hostUser, "history_host", guestUser, "history_guest", thirdUser, "history_third", fourthUser, "history_fourth"],
     );
     await pool.query(
       `INSERT INTO ${quotedSchema}.domino_sessions (token_hash, user_id, expires_at)
-       VALUES ($1, $2, now() + interval '1 hour'), ($3, $4, now() + interval '1 hour')`,
-      [sessionHash(hostSession), hostUser, sessionHash(guestSession), guestUser],
+       VALUES ($1, $2, now() + interval '1 hour'), ($3, $4, now() + interval '1 hour'),
+              ($5, $6, now() + interval '1 hour'), ($7, $8, now() + interval '1 hour')`,
+      [
+        sessionHash(hostSession), hostUser, sessionHash(guestSession), guestUser,
+        sessionHash(thirdSession), thirdUser, sessionHash(fourthSession), fourthUser,
+      ],
     );
 
     const hostCookie = `lakou.sid=${hostSession}`;
     const guestCookie = `lakou.sid=${guestSession}`;
+    const thirdCookie = `lakou.sid=${thirdSession}`;
+    const fourthCookie = `lakou.sid=${fourthSession}`;
     const host = await postRoom(processOne.baseUrl, "rooms", {
       game: "mopyon",
       displayName: "History host",
@@ -555,7 +567,82 @@ test("signed-in arcade results remain in profile history after room deletion and
     assert.equal(hostHistory.matches[0].won, false);
     assert.equal(guestHistory.matches[0].medal, "win");
     assert.equal(guestHistory.matches[0].won, true);
+    assert.deepEqual(hostHistory.matches[0].opponents, ["History guest"]);
+    assert.deepEqual(guestHistory.matches[0].opponents, ["History host"]);
     assert.equal(hostHistory.matches[0].matchId, guestHistory.matches[0].matchId);
+
+    const multiRoom = await postRoom(processOne.baseUrl, "rooms", {
+      game: "scrabble",
+      displayName: "History host",
+      playerCount: 4,
+      isPrivate: true,
+    }, hostCookie);
+    const resigned = await postRoom(processOne.baseUrl, `rooms/${String(multiRoom.code)}/join`, {
+      displayName: "Resigned rival",
+    }, guestCookie);
+    await postRoom(processOne.baseUrl, `rooms/${String(multiRoom.code)}/join`, {
+      displayName: "History third",
+    }, thirdCookie);
+    await postRoom(processOne.baseUrl, `rooms/${String(multiRoom.code)}/join`, {
+      displayName: "History fourth",
+    }, fourthCookie);
+    const multiHostSocket = await connectArcadeSocket(
+      processOne.baseUrl, String(multiRoom.code), String(multiRoom.reconnectToken),
+    );
+    const resignedSocket = await connectArcadeSocket(
+      processOne.baseUrl, String(multiRoom.code), String(resigned.reconnectToken),
+    );
+    sockets.push(multiHostSocket.socket, resignedSocket.socket);
+    const beforeMatchEnd = nextSocketMessage(multiHostSocket.socket);
+    resignedSocket.socket.send(JSON.stringify({ type: "resign" }));
+    const takeover = await beforeMatchEnd;
+    assert.equal(takeover.type, "room");
+    assert.equal(((takeover.room as JsonRecord).players as JsonRecord[])[1].name, "Yard bot");
+
+    const finalBoard = Array(225).fill(null) as (JsonRecord | null)[];
+    finalBoard[112] = { letter: "C", points: 3 };
+    finalBoard[113] = { letter: "A", points: 1 };
+    finalBoard[114] = { letter: "T", points: 1 };
+    const trustedState = {
+      board: finalBoard,
+      racks: [["S"], ["Q"], ["A"], ["B"]],
+      bag: [],
+      scores: [0, 0, 0, 0],
+      turn: 0,
+      playerCount: 4,
+      passes: 0,
+      winner: null,
+    };
+    await pool.query(
+      `UPDATE ${quotedSchema}.arcade_rooms SET state = $2::jsonb, turn = 0 WHERE code = $1`,
+      [multiRoom.code, JSON.stringify(trustedState)],
+    );
+    const completed = nextSocketMessage(multiHostSocket.socket);
+    const completedBoard = [...finalBoard];
+    completedBoard[115] = { letter: "S", points: 1 };
+    multiHostSocket.socket.send(JSON.stringify({
+      type: "state",
+      turn: 1,
+      state: { ...trustedState, board: completedBoard, racks: [[], [], [], []], turn: 1 },
+    }));
+    const finalUpdate = await completed;
+    assert.equal(finalUpdate.type, "state");
+    assert.equal(((finalUpdate.room as JsonRecord).state as JsonRecord).winner, 0);
+
+    const historyAtRoom = async (cookie: string) => {
+      const history = await readHistory(cookie);
+      return history.matches.find((match) => match.roomCode === multiRoom.code);
+    };
+    const [multiHostHistory, resignedHistory, thirdHistory, fourthHistory] = await Promise.all([
+      historyAtRoom(hostCookie),
+      historyAtRoom(guestCookie),
+      historyAtRoom(thirdCookie),
+      historyAtRoom(fourthCookie),
+    ]);
+    assert.deepEqual(multiHostHistory?.opponents, ["Resigned rival", "History third", "History fourth"]);
+    assert.deepEqual(resignedHistory?.opponents, ["History host", "History third", "History fourth"]);
+    assert.deepEqual(thirdHistory?.opponents, ["History host", "Resigned rival", "History fourth"]);
+    assert.deepEqual(fourthHistory?.opponents, ["History host", "Resigned rival", "History third"]);
   } finally {
     sockets.forEach((socket) => socket.close());
     if (processOne) await stopArcadeProcess(processOne.child);

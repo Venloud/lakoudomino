@@ -140,6 +140,7 @@ router.get("/auth/recent-matches", async (req, res): Promise<void> => {
     medal: dominoMatchResults.medal,
     crownPoints: dominoMatchResults.crownPoints,
     won: dominoMatchResults.won,
+    opponents: dominoMatchResults.opponents,
   }).from(dominoMatchResults)
     .innerJoin(dominoMatches, eq(dominoMatchResults.matchId, dominoMatches.matchId))
     .where(eq(dominoMatchResults.userId, identity.userId))

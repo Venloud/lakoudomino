@@ -1,4 +1,5 @@
 import { integer, boolean, pgTable, text, timestamp, uuid, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const dominoUsers = pgTable("domino_users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -55,6 +56,7 @@ export const dominoMatchResults = pgTable("domino_match_results", {
   medal: text("medal").notNull(),
   crownPoints: integer("crown_points").notNull(),
   won: boolean("won").notNull(),
+  opponents: text("opponents").array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("match_result_pair_idx").on(t.matchId, t.userId)]);
 export type DominoUser = typeof dominoUsers.$inferSelect;
