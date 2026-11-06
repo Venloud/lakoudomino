@@ -168,9 +168,76 @@ async function openRoomSocket(baseUrl: string, code: string): Promise<WebSocket>
 }
 
 async function expectSocketError(socket: WebSocket, payload: string, expected: string): Promise<void> {
-  const message = receiveSocketMessage(socket);
+  const message = new Promise<JsonRecord>((resolveMessage, rejectMessage) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+    };
+    const onMessage = (raw: unknown) => {
+      let value: JsonRecord;
+      try {
+        value = JSON.parse(String(raw)) as JsonRecord;
+      } catch (error) {
+        cleanup();
+        rejectMessage(error);
+        return;
+      }
+      if (value.type !== "error") return;
+      cleanup();
+      resolveMessage(value);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      rejectMessage(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectMessage(new Error("Timed out waiting for a room WebSocket error."));
+    }, 5_000);
+    socket.on("message", onMessage);
+    socket.once("error", onError);
+  });
   socket.send(payload);
   assert.deepEqual(await message, { type: "error", message: expected });
+}
+
+async function receiveRoomSettings(
+  socket: WebSocket,
+  expected: Record<string, unknown>,
+): Promise<JsonRecord> {
+  return await new Promise((resolveMessage, rejectMessage) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+    };
+    const onMessage = (raw: unknown) => {
+      let message: JsonRecord;
+      try {
+        message = JSON.parse(String(raw)) as JsonRecord;
+      } catch (error) {
+        cleanup();
+        rejectMessage(error);
+        return;
+      }
+      if (message.type !== "snapshot") return;
+      const settings = message.roomSettings as JsonRecord | undefined;
+      if (!settings || !Object.entries(expected).every(([key, value]) => settings[key] === value)) return;
+      cleanup();
+      resolveMessage(message);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      rejectMessage(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectMessage(new Error("Timed out waiting for the expected room settings snapshot."));
+    }, 5_000);
+    socket.on("message", onMessage);
+    socket.once("error", onError);
+  });
 }
 
 function makeRoom(code: string, match: ReturnType<typeof createMatch>["match"], botOnTurn: boolean): PersistedRoomState {
@@ -420,6 +487,121 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
   } finally {
     spectator?.terminate();
     player?.terminate();
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("waiting room setting changes reach every connected player and rejected changes are not saved", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room WebSocket integration tests.");
+
+  const schema = `rooms_settings_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    const createResponse = await fetch(`${api.baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        displayName: "Settings host",
+        mode: "regular",
+        playerCount: 2,
+        rowLength: 10,
+        rowBoxes: 10,
+        twoPlayerVariant: "draw",
+        isPrivate: true,
+      }),
+    });
+    if (createResponse.status !== 201) assert.fail(`room create failed: ${await createResponse.text()}`);
+    const created = await createResponse.json() as { code: string; reconnectToken: string };
+    const joinResponse = await fetch(`${api.baseUrl}/api/rooms/${created.code}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "Settings guest" }),
+    });
+    if (joinResponse.status !== 200) assert.fail(`room join failed: ${await joinResponse.text()}`);
+    const joined = await joinResponse.json() as { reconnectToken: string };
+
+    const connectPlayer = async (reconnectToken: string) => {
+      const socket = await openRoomSocket(api!.baseUrl, created.code);
+      sockets.push(socket);
+      const welcomePromise = receiveSocketMessage(socket);
+      socket.send(JSON.stringify({ type: "hello", reconnectToken }));
+      assert.equal((await welcomePromise).type, "snapshot");
+      return socket;
+    };
+    const host = await connectPlayer(created.reconnectToken);
+    const guest = await connectPlayer(joined.reconnectToken);
+    const spectator = await openRoomSocket(api.baseUrl, created.code);
+    sockets.push(spectator);
+    const spectatorWelcome = receiveSocketMessage(spectator);
+    spectator.send(JSON.stringify({ type: "hello", displayName: "Settings spectator" }));
+    assert.equal((await spectatorWelcome).type, "snapshot");
+    const updatedSettings = {
+      mode: "regular",
+      rowBoxes: 14,
+      turnSeconds: 45,
+      isPrivate: false,
+      playerCount: 2,
+    };
+    const hostUpdate = receiveRoomSettings(host, updatedSettings);
+    const guestUpdate = receiveRoomSettings(guest, updatedSettings);
+    const spectatorUpdate = receiveRoomSettings(spectator, updatedSettings);
+    host.send(JSON.stringify({ type: "changeSettings", ...updatedSettings }));
+    const [hostSnapshot, guestSnapshot, spectatorSnapshot] = await Promise.all([
+      hostUpdate,
+      guestUpdate,
+      spectatorUpdate,
+    ]);
+    assert.deepEqual(hostSnapshot.roomSettings, updatedSettings);
+    assert.deepEqual(guestSnapshot.roomSettings, updatedSettings);
+    assert.deepEqual(spectatorSnapshot.roomSettings, updatedSettings);
+
+    const readPersistedSettings = async () => {
+      const result = await pool.query(
+        `SELECT mode, row_boxes, turn_seconds, is_private, player_count
+         FROM ${quotedSchema}.domino_rooms WHERE code = $1`,
+        [created.code],
+      );
+      assert.equal(result.rowCount, 1, "the room should remain persisted");
+      return result.rows[0];
+    };
+    const persistedSettingsBeforeRejections = await readPersistedSettings();
+    assert.ok(persistedSettingsBeforeRejections, "the updated room should remain persisted");
+
+    await expectSocketError(
+      guest,
+      JSON.stringify({ type: "changeSettings", ...updatedSettings, rowBoxes: 18 }),
+      "Only the host can change settings while waiting",
+    );
+    assert.deepEqual(
+      await readPersistedSettings(),
+      persistedSettingsBeforeRejections,
+      "an unauthorized change must not be saved",
+    );
+
+    await expectSocketError(
+      host,
+      JSON.stringify({ type: "changeSettings", ...updatedSettings, rowBoxes: 21 }),
+      "Choose a row length from 5 to 20 and a 15, 30, 45, or 60 second timer",
+    );
+    assert.deepEqual(
+      await readPersistedSettings(),
+      persistedSettingsBeforeRejections,
+      "an invalid change must not be saved",
+    );
+  } finally {
+    sockets.forEach((socket) => socket.terminate());
     if (api) await stopRoomsProcess(api.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
