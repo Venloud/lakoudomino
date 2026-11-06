@@ -33,6 +33,7 @@ export type WordGameState = {
 export const WORD_GAME_STORAGE_KEY = '509-yard-word-game:v1';
 const WORD_GAME_STORAGE_VERSION = 1;
 export type WordGameStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+export type WordGamePersistenceResult = 'saved' | 'conflict' | 'failed';
 
 function isWordGameState(value: unknown): value is WordGameState {
   if (!value || typeof value !== 'object') return false;
@@ -76,26 +77,50 @@ export function loadSavedWordGame(storage: WordGameStorage): WordGameState | nul
   }
 }
 
-export function saveWordGame(state: WordGameState, storage: WordGameStorage): boolean {
+function matchesSavedWordGame(storage: WordGameStorage, expectedState: WordGameState | null): boolean {
+  const raw = storage.getItem(WORD_GAME_STORAGE_KEY);
+  if (expectedState === null) return raw === null;
+  if (!raw) return false;
   try {
-    if (state.status !== 'playing') {
-      storage.removeItem(WORD_GAME_STORAGE_KEY);
-      return true;
-    }
-    if (!isWordGameState(state)) return false;
-    storage.setItem(WORD_GAME_STORAGE_KEY, JSON.stringify({ version: WORD_GAME_STORAGE_VERSION, state }));
-    return true;
+    const saved: unknown = JSON.parse(raw);
+    if (!saved || typeof saved !== 'object' ||
+        (saved as { version?: unknown }).version !== WORD_GAME_STORAGE_VERSION ||
+        !isWordGameState((saved as { state?: unknown }).state)) return false;
+    return JSON.stringify((saved as { state: WordGameState }).state) === JSON.stringify(expectedState);
   } catch {
     return false;
   }
 }
 
-export function clearSavedWordGame(storage: WordGameStorage): boolean {
+export function saveWordGame(
+  state: WordGameState,
+  storage: WordGameStorage,
+  expectedState: WordGameState | null,
+): WordGamePersistenceResult {
   try {
-    storage.removeItem(WORD_GAME_STORAGE_KEY);
-    return true;
+    if (!matchesSavedWordGame(storage, expectedState)) return 'conflict';
+    if (state.status !== 'playing') {
+      storage.removeItem(WORD_GAME_STORAGE_KEY);
+      return 'saved';
+    }
+    if (!isWordGameState(state)) return 'failed';
+    storage.setItem(WORD_GAME_STORAGE_KEY, JSON.stringify({ version: WORD_GAME_STORAGE_VERSION, state }));
+    return 'saved';
   } catch {
-    return false;
+    return 'failed';
+  }
+}
+
+export function clearSavedWordGame(
+  storage: WordGameStorage,
+  expectedState: WordGameState | null,
+): WordGamePersistenceResult {
+  try {
+    if (!matchesSavedWordGame(storage, expectedState)) return 'conflict';
+    storage.removeItem(WORD_GAME_STORAGE_KEY);
+    return 'saved';
+  } catch {
+    return 'failed';
   }
 }
 

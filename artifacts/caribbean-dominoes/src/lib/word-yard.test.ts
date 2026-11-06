@@ -198,7 +198,7 @@ test('saves and restores the complete in-progress match state', () => {
   match.board[WORD_CENTER] = tile('A');
   match.racks[0].pop();
 
-  assert.equal(saveWordGame(match, storage), true);
+  assert.equal(saveWordGame(match, storage, null), 'saved');
   assert.deepEqual(loadSavedWordGame(storage), match);
 });
 
@@ -206,13 +206,32 @@ test('a new match replaces the saved match and can be explicitly cleared', () =>
   const storage = memoryStorage();
   const first = createWordGame(() => 0);
   const next: WordGameState = { ...createWordGame(() => 0.5), scores: [6, 2], turn: 1 };
-  assert.equal(saveWordGame(first, storage), true);
-  assert.equal(saveWordGame(next, storage), true);
+  assert.equal(saveWordGame(first, storage, null), 'saved');
+  assert.equal(saveWordGame(next, storage, first), 'saved');
   assert.deepEqual(loadSavedWordGame(storage), next);
 
-  assert.equal(clearSavedWordGame(storage), true);
+  assert.equal(clearSavedWordGame(storage, next), 'saved');
   assert.equal(storage.getItem(WORD_GAME_STORAGE_KEY), null);
   assert.equal(loadSavedWordGame(storage), null);
+});
+
+test('a stale tab cannot overwrite or clear a newer saved match', () => {
+  const storage = memoryStorage();
+  const initial = createWordGame(() => 0.5);
+  assert.equal(saveWordGame(initial, storage, null), 'saved');
+
+  // Each tab loaded the same snapshot before either tab made a move.
+  const staleTabSnapshot = loadSavedWordGame(storage);
+  assert.deepEqual(staleTabSnapshot, initial);
+  const newerMatch: WordGameState = { ...initial, scores: [8, 0], turn: 1 };
+  assert.equal(saveWordGame(newerMatch, storage, initial), 'saved');
+
+  const staleTabMatch: WordGameState = { ...initial, scores: [0, 6], turn: 1 };
+  assert.equal(saveWordGame(staleTabMatch, storage, staleTabSnapshot), 'conflict');
+  assert.deepEqual(loadSavedWordGame(storage), newerMatch);
+
+  assert.equal(clearSavedWordGame(storage, staleTabSnapshot), 'conflict');
+  assert.deepEqual(loadSavedWordGame(storage), newerMatch);
 });
 
 test('finished and malformed saved matches are never restored', () => {
@@ -220,7 +239,7 @@ test('finished and malformed saved matches are never restored', () => {
   const game = createWordGame(() => 0);
   const finished = passWordTurn(passWordTurn(game));
   assert.equal(finished.status, 'finished');
-  assert.equal(saveWordGame(finished, storage), true);
+  assert.equal(saveWordGame(finished, storage, null), 'saved');
   assert.equal(loadSavedWordGame(storage), null);
 
   storage.setItem(WORD_GAME_STORAGE_KEY, '{broken json');

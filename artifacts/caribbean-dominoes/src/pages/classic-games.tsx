@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as R
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Chess, type Square } from 'chess.js';
-import { LETTER_POINTS, WORD_BONUSES, WORD_BOARD_SIZE, clearSavedWordGame, createWordGame, loadSavedWordGame, passWordTurn, playWordTurn, resolveWordChallenge, saveWordGame } from '../lib/word-yard';
+import { LETTER_POINTS, WORD_BONUSES, WORD_BOARD_SIZE, WORD_GAME_STORAGE_KEY, clearSavedWordGame, createWordGame, loadSavedWordGame, passWordTurn, playWordTurn, resolveWordChallenge, saveWordGame } from '../lib/word-yard';
 import type { WordDirection, WordGameState, WordPlacement, WordPlayer } from '../lib/word-yard';
 import { loadWordDictionary, lookupWordDefinitions } from '../lib/word-yard-dictionary';
 import type { WordDefinition } from '../lib/word-yard-dictionary';
@@ -105,10 +105,16 @@ function hasCurrentArcadeOnlineSession(game: GameId): boolean {
   try { return hasSavedArcadeOnlineSession(window.sessionStorage, game); }
   catch { return true; }
 }
-function initialWordGame() {
-  if (typeof window === 'undefined' || hasSavedWordYardOnlineSession()) return createWordGame();
-  try { return loadSavedWordGame(window.localStorage) ?? createWordGame(); }
-  catch { return createWordGame(); }
+function initialWordGameSnapshot() {
+  if (typeof window === 'undefined' || hasSavedWordYardOnlineSession()) {
+    return { game: createWordGame(), savedGame: null };
+  }
+  try {
+    const savedGame = loadSavedWordGame(window.localStorage);
+    return { game: savedGame ?? createWordGame(), savedGame };
+  } catch {
+    return { game: createWordGame(), savedGame: null };
+  }
 }
 function chessPieces(game: Chess): Piece[] {
   return game.board().flat().map((piece) => piece ? { side: piece.color === 'w' ? 0 : 1, kind: piece.type.toUpperCase() } : null);
@@ -260,7 +266,11 @@ export default function ClassicGamesPage() {
     restoredLocalMatch?.game === 'dame' ? restoredLocalMatch.state.forcedFrom : null);
   const [dameForcedFrom, setDameForcedFrom] = useState<number | null>(() =>
     restoredLocalMatch?.game === 'dame' ? restoredLocalMatch.state.forcedFrom : null);
-  const [wordGame, setWordGame] = useState(initialWordGame);
+  const wordGameInitialRef = useRef<ReturnType<typeof initialWordGameSnapshot> | null>(null);
+  if (wordGameInitialRef.current === null) wordGameInitialRef.current = initialWordGameSnapshot();
+  const [wordGame, setWordGame] = useState(() => wordGameInitialRef.current!.game);
+  const lastSavedWordGameRef = useRef<WordGameState | null>(wordGameInitialRef.current.savedGame);
+  const [wordSaveConflict, setWordSaveConflict] = useState(false);
   const [wordDictionary, setWordDictionary] = useState<ReadonlySet<string> | null>(null);
   const [pendingWordChallenge, setPendingWordChallenge] = useState<PendingWordChallenge | null>(null);
   const [challengeBusy, setChallengeBusy] = useState(false);
@@ -301,14 +311,41 @@ export default function ClassicGamesPage() {
   useEffect(() => {
     if (id !== 'words' || onlineSession !== null || wordYardUsedOnlineRef.current ||
         hasSavedWordYardOnlineSession() || typeof window === 'undefined') return;
+    if (wordSaveConflict) return;
     try {
-      if (!saveWordGame(wordGame, window.localStorage)) {
+      const result = saveWordGame(wordGame, window.localStorage, lastSavedWordGameRef.current);
+      if (result === 'conflict') {
+        setWordSaveConflict(true);
+        setWordFeedback('This match changed in another tab. Reload the latest saved match before continuing.');
+      } else if (result === 'failed') {
         setWordFeedback('This browser could not save the match. It may not survive a refresh.');
+      } else {
+        lastSavedWordGameRef.current = wordGame.status === 'playing' ? wordGame : null;
       }
     } catch {
       setWordFeedback('This browser could not save the match. It may not survive a refresh.');
     }
-  }, [id, onlineSession, wordGame]);
+  }, [id, onlineSession, wordGame, wordSaveConflict]);
+  useEffect(() => {
+    if (id !== 'words' || onlineSession !== null || wordYardUsedOnlineRef.current ||
+        hasSavedWordYardOnlineSession() || typeof window === 'undefined') return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage || event.key !== WORD_GAME_STORAGE_KEY) return;
+      let nextState: unknown = null;
+      try {
+        nextState = event.newValue === null
+          ? null
+          : (JSON.parse(event.newValue) as { state?: unknown }).state;
+      } catch {
+        nextState = undefined;
+      }
+      if (JSON.stringify(nextState) === JSON.stringify(lastSavedWordGameRef.current)) return;
+      setWordSaveConflict(true);
+      setWordFeedback('This match changed in another tab. Reload the latest saved match before continuing.');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [id, onlineSession]);
   useEffect(() => {
     if (!isLocalArcadeGame(id) || typeof window === 'undefined' || onlineSession !== null ||
         localArcadeUsedOnlineRef.current || hasCurrentArcadeOnlineSession(id)) return;
@@ -351,7 +388,18 @@ export default function ClassicGamesPage() {
 
   const reset = () => {
     if (id === 'words' && onlineSession === null && !hasSavedWordYardOnlineSession()) {
-      try { clearSavedWordGame(window.localStorage); } catch { /* The next save reports storage failures. */ }
+      if (wordSaveConflict) return;
+      const clearResult = clearSavedWordGame(window.localStorage, lastSavedWordGameRef.current);
+      if (clearResult === 'conflict') {
+        setWordSaveConflict(true);
+        setWordFeedback('This match changed in another tab. Reload the latest saved match before continuing.');
+        return;
+      }
+      if (clearResult === 'failed') {
+        setWordFeedback('This browser could not reset the saved match. Try again.');
+        return;
+      }
+      lastSavedWordGameRef.current = null;
       setWordGame(createWordGame());
       setWordPlacements([]);
       setSelectedRackIndex(null);
@@ -421,7 +469,7 @@ export default function ClassicGamesPage() {
     fillerBoard.colors[fillerBoard.owners.findIndex((owner) => owner === player)]);
   const kayBoardPits = kayAnimatedPits ?? pits;
   const gameOver = id === 'words' ? wordGame.status === 'finished' : id === 'filler' ? fillerWinner !== null : winner !== null;
-  const wordInteractionBlocked = gameOver || pendingWordChallenge !== null;
+  const wordInteractionBlocked = gameOver || pendingWordChallenge !== null || wordSaveConflict;
   const wordDefinitionSource = wordLookupResult?.definitions.find((item) => item.sourceUrl)?.sourceUrl;
   const safeWordDefinitionSource = wordDefinitionSource?.startsWith('https://') ? wordDefinitionSource : undefined;
   const chessGame = chessRef.current;
@@ -934,7 +982,7 @@ export default function ClassicGamesPage() {
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}>
           <strong role="status">{reviewPly === null ? turnLabel : `Reviewing position after move ${reviewPly}`}</strong>
-          <button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button>
+          <button className="yard-button" type="button" onClick={reset} disabled={id === 'words' && wordSaveConflict}><RotateCcw size={14} /> New game</button>
         </div>
         <div className="yard-chess-tools">
           <div className="yard-chess-modes" role="group" aria-label="Choose opponent">
@@ -1091,7 +1139,7 @@ export default function ClassicGamesPage() {
       <header className="yard-heading" style={{ marginTop: 16 }}><div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>{title}</h1><p className="yard-subtitle">{info.intro}</p></div></header>
       {id !== 'words' && <ArcadeOnlinePanel game={id} playerCount={id === 'filler' ? fillerPlayerCount : 2} turn={activeTurn} state={arcadeSnapshot} onRemoteState={applyArcadeSnapshot} onRoomChange={handleArcadeRoomChange} />}
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}><strong role="status" data-testid="status-current-turn" style={id === 'box' && winner === null ? { color: BOX_PLAYER_COLORS[turn] } : id === 'four-in-a-row' && winner === null ? { color: CONNECT_PLAYER_COLORS[turn] } : undefined}>{id === 'words' ? `${turnLabel} · ${wordGame.scores[0]}–${wordGame.scores[1]}` : turnLabel}</strong><button className="yard-button" type="button" onClick={reset}><RotateCcw size={14} /> New game</button></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}><strong role="status" data-testid="status-current-turn" style={id === 'box' && winner === null ? { color: BOX_PLAYER_COLORS[turn] } : id === 'four-in-a-row' && winner === null ? { color: CONNECT_PLAYER_COLORS[turn] } : undefined}>{id === 'words' ? `${turnLabel} · ${wordGame.scores[0]}–${wordGame.scores[1]}` : turnLabel}</strong><button className="yard-button" type="button" onClick={reset} disabled={id === 'words' && wordSaveConflict}><RotateCcw size={14} /> New game</button></div>
         {id !== 'chess' && id !== 'words' && <div role="group" aria-label="Choose opponent" style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 14 }}>
            <button className={`yard-button${playVsBot ? '' : ' primary'}`} type="button" aria-pressed={!playVsBot} disabled={onlineSession !== null} onClick={() => setPlayVsBot(false)}>Two players</button>
            <button className={`yard-button${playVsBot ? ' primary' : ''}`} type="button" aria-pressed={playVsBot} disabled={onlineSession !== null} onClick={() => { setPlayVsBot(true); if (id === 'filler' && fillerPlayerCount !== 2) { setFillerPlayerCount(2); setFillerBoard(createFillerBoard(Math.random, 2)); setFillerTurn(0); setFillerWinner(null); } }}>Practice vs bot</button>
@@ -1287,7 +1335,10 @@ export default function ClassicGamesPage() {
                     <button className="wy-action" type="button" onClick={acceptWordPlay} disabled={challengeBusy} data-testid="button-accept-word">Accept play</button>
                   </div>
                 </div>}
-                <p className="wy-message" data-state={wordFeedback.includes('scored') ? 'success' : wordFeedback.includes('not ') || wordFeedback.includes('must') || wordFeedback.includes('Place') ? 'error' : undefined} role="status" aria-live="polite" data-testid="status-word-feedback">{wordFeedback}</p>
+                <p className="wy-message" data-state={wordSaveConflict || wordFeedback.includes('scored') ? wordSaveConflict ? 'error' : 'success' : wordFeedback.includes('not ') || wordFeedback.includes('must') || wordFeedback.includes('Place') ? 'error' : undefined} role="status" aria-live="polite" data-testid="status-word-feedback">
+                  {wordFeedback}
+                  {wordSaveConflict && <> <button className="wy-action" type="button" data-testid="button-reload-word-match" onClick={() => window.location.reload()}>Reload latest match</button></>}
+                </p>
               </section>
             </aside>
           </div>
