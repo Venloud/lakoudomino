@@ -1,6 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMopyonState, MOPYON_BOARD_SIZE, playMopyonMove } from './mopyon.ts';
+import {
+  chooseMopyonBotMove,
+  createMopyonState,
+  MOPYON_BOARD_SIZE,
+  playMopyonMove,
+  type MopyonMark,
+  type MopyonState,
+} from './mopyon.ts';
+
+function botPosition(marks: { row: number; column: number; mark: MopyonMark }[]): MopyonState {
+  const state = createMopyonState();
+  const board = [...state.board];
+  for (const { row, column, mark } of marks) {
+    board[row * MOPYON_BOARD_SIZE + column] = mark;
+  }
+  return { ...state, board, currentPlayer: 'O' };
+}
 
 const axisCases = [
   { name: 'horizontal', row: 7, column: (step: number) => 4 + step },
@@ -45,4 +61,44 @@ test('Mòpyon ignores occupied, invalid, and post-win moves', () => {
   }
   assert.equal(state.winner, 'O');
   assert.equal(playMopyonMove(state, 10, 10), state);
+});
+
+test('Mòpyon practice bot takes a winning move immediately', () => {
+  const state = botPosition([
+    ...[4, 5, 6, 7].map((column) => ({ row: 7, column, mark: 'O' as const })),
+    { row: 3, column: 2, mark: 'X' },
+  ]);
+
+  assert.equal(chooseMopyonBotMove(state), 7 * MOPYON_BOARD_SIZE + 3);
+});
+
+test('Mòpyon practice bot blocks the opponent’s only immediate win', () => {
+  const state = botPosition([
+    { row: 7, column: 1, mark: 'O' },
+    ...[2, 3, 4, 5].map((column) => ({ row: 7, column, mark: 'X' as const })),
+    { row: 4, column: 8, mark: 'O' },
+  ]);
+
+  assert.equal(chooseMopyonBotMove(state), 7 * MOPYON_BOARD_SIZE + 6);
+});
+
+test('Mòpyon practice bot builds a line and opens in the center', () => {
+  const openLine = botPosition([
+    ...[6, 7, 8].map((column) => ({ row: 7, column, mark: 'O' as const })),
+    { row: 2, column: 2, mark: 'X' },
+  ]);
+  const move = chooseMopyonBotMove(openLine);
+  assert.ok(move === 7 * MOPYON_BOARD_SIZE + 5 || move === 7 * MOPYON_BOARD_SIZE + 9);
+  assert.equal(chooseMopyonBotMove(createMopyonState()), 7 * MOPYON_BOARD_SIZE + 7);
+});
+
+test('Mòpyon practice bot returns no move after the game ends', () => {
+  let state = createMopyonState();
+  for (let column = 0; column < 5; column += 1) {
+    if (column > 0) state = playMopyonMove(state, 0, column);
+    state = playMopyonMove(state, 8, column);
+  }
+
+  assert.equal(state.winner, 'X');
+  assert.equal(chooseMopyonBotMove(state), null);
 });
