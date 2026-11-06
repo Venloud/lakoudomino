@@ -3,6 +3,7 @@ import test from "node:test";
 import { Chess } from "chess.js";
 import {
   createArcadeInitialState,
+  getArcadeBotTransition,
   validateArcadeTransition,
 } from "./arcade-validation.ts";
 
@@ -224,4 +225,55 @@ test("Block Drop accepts a legal move for the sender and protects the other race
   own.active = { ...active, x: Number(active.x) - 1 };
   assert.equal(move("block-drop", current, own, 0, 2, 0, 0).ok, true);
   assert.equal(move("block-drop", current, { ...own, score: 1000 }, 0, 2, 0, 0).ok, false);
+});
+
+test("Scrabble takeover bot makes a validated legal word play from its server rack", () => {
+  const current = createArcadeInitialState("scrabble", 2) as Record<string, unknown>;
+  current.racks = [
+    ["C", "A", "T", "S", "E", "R", "N"],
+    ["Q", "Q", "Q", "Q", "Q", "Q", "Q"],
+  ];
+  const result = getArcadeBotTransition("scrabble", current, 0, 2);
+  assert.ok(result);
+  const state = result.state as Record<string, unknown>;
+  assert.equal(result.turn, 1);
+  assert.equal(state.turn, 1);
+  assert.equal(state.passes, 0);
+  assert.ok((state.board as unknown[]).some((tile) => tile !== null));
+  assert.ok((state.scores as number[])[0] > 0);
+  assert.deepEqual((state.racks as string[][])[1], ["Q", "Q", "Q", "Q", "Q", "Q", "Q"]);
+});
+
+test("Scrabble takeover bot passes when no rack word can be played", () => {
+  const current = createArcadeInitialState("scrabble", 2) as Record<string, unknown>;
+  current.racks = [
+    ["Q", "Q", "Q", "Q", "Q", "Q", "Q"],
+    ["A", "A", "A", "A", "A", "A", "A"],
+  ];
+  const result = getArcadeBotTransition("scrabble", current, 0, 2);
+  assert.ok(result);
+  const state = result.state as Record<string, unknown>;
+  assert.equal(state.turn, 1);
+  assert.equal(state.passes, 1);
+  assert.deepEqual(state.board, current.board);
+});
+
+test("Scrabble takeover bot applies trusted end-game scoring on its final play", () => {
+  const current = createArcadeInitialState("scrabble", 2) as Record<string, unknown>;
+  const board = [...current.board as (Record<string, unknown> | null)[]];
+  board[112] = { letter: "C", points: 3 };
+  board[113] = { letter: "A", points: 1 };
+  board[114] = { letter: "T", points: 1 };
+  current.board = board;
+  current.racks = [["Q"], ["S"]];
+  current.bag = [];
+  current.scores = [0, 0];
+  current.turn = 1;
+
+  const result = getArcadeBotTransition("scrabble", current, 1, 2);
+  assert.ok(result);
+  const state = result.state as Record<string, unknown>;
+  assert.equal(state.winner, 1);
+  assert.deepEqual(state.scores, [-10, 16]);
+  assert.deepEqual(state.racks, [["Q"], []]);
 });
