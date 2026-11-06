@@ -1105,12 +1105,44 @@ test("notification listener retries automatically and resyncs connected room sna
     const observer = await connectArcadeSocket(processTwo.baseUrl, String(host.code), String(guest.reconnectToken));
     sockets.push(writer.socket, observer.socket);
     assert.equal(observer.firstMessage.type, "room");
+    const readListenerHealth = async () => {
+      const response = await fetch(`${processTwo!.baseUrl}/__test/arcade-notification-health`);
+      assert.equal(response.status, 200);
+      return await response.json() as {
+        status: string;
+        retryScheduled: boolean;
+        retryPaused: boolean;
+        retryCount: number;
+        nextRetryAt: number | null;
+        lastConnectedAt: number | null;
+        lastDisconnectedAt: number | null;
+      };
+    };
+    const healthyListener = await readListenerHealth();
+    assert.equal(healthyListener.status, "connected");
+    assert.equal(healthyListener.retryScheduled, false);
+    assert.ok(healthyListener.lastConnectedAt);
+    assert.deepEqual(Object.keys(healthyListener).sort(), [
+      "lastConnectedAt",
+      "lastDisconnectedAt",
+      "nextRetryAt",
+      "retryCount",
+      "retryPaused",
+      "retryScheduled",
+      "status",
+    ]);
 
     const disconnected = await fetch(`${processTwo.baseUrl}/__test/disconnect-notification-listener`, {
       method: "POST",
     });
     assert.equal(disconnected.status, 200);
     assert.deepEqual(await disconnected.json(), { disconnected: true });
+    const retryingListener = await readListenerHealth();
+    assert.equal(retryingListener.status, "retrying");
+    assert.equal(retryingListener.retryScheduled, true);
+    assert.equal(retryingListener.retryCount, 1);
+    assert.ok(retryingListener.nextRetryAt);
+    assert.ok(retryingListener.lastDisconnectedAt);
 
     const initialRoom = observer.firstMessage.room as JsonRecord;
     const initialState = initialRoom.state as JsonRecord;
@@ -1131,6 +1163,17 @@ test("notification listener retries automatically and resyncs connected room sna
     assert.equal(recoveredRoom.turn, 1);
     assert.equal(((recoveredRoom.state as JsonRecord).board as unknown[])[0], "X");
     assert.equal(observer.socket.readyState, WebSocket.OPEN);
+    const retryDeadline = Date.now() + 5_000;
+    let recoveredListener = await readListenerHealth();
+    while (recoveredListener.status !== "connected" && Date.now() < retryDeadline) {
+      await delay(50);
+      recoveredListener = await readListenerHealth();
+    }
+    assert.equal(recoveredListener.status, "connected");
+    assert.equal(recoveredListener.retryScheduled, false);
+    assert.equal(recoveredListener.retryCount, 0);
+    assert.equal(recoveredListener.nextRetryAt, null);
+    assert.ok(recoveredListener.lastDisconnectedAt);
   } finally {
     sockets.forEach((socket) => socket.close());
     if (processTwo) await stopArcadeProcess(processTwo.child);

@@ -17,6 +17,8 @@ export const healthCheckResponseRoomRecoverySkippedRoomCountMin = 0;
 export const healthCheckResponseRoomRecoveryIssueCountsItemFieldPathMax = 120;
 
 
+export const healthCheckResponseArcadeRoomUpdatesRetryCountMin = 0;
+
 
 
 export const HealthCheckResponse = zod.object({
@@ -28,7 +30,16 @@ export const HealthCheckResponse = zod.object({
   "fieldPath": zod.string().max(healthCheckResponseRoomRecoveryIssueCountsItemFieldPathMax),
   "occurrenceCount": zod.number().int().min(1)
 }))
-}).describe('Safe summary of the most recent persisted Domino room recovery attempt.')
+}).describe('Safe summary of the most recent persisted Domino room recovery attempt.'),
+  "arcadeRoomUpdates": zod.object({
+  "status": zod.enum(['not-started', 'connecting', 'connected', 'retrying']),
+  "retryScheduled": zod.boolean(),
+  "retryPaused": zod.boolean(),
+  "retryCount": zod.number().int().min(healthCheckResponseArcadeRoomUpdatesRetryCountMin),
+  "nextRetryAt": zod.number().int().nullable(),
+  "lastConnectedAt": zod.number().int().nullable(),
+  "lastDisconnectedAt": zod.number().int().nullable()
+}).describe('Aggregate state of the arcade room notification listener.')
 })
 
 

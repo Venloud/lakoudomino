@@ -726,9 +726,34 @@ components:
                     minimum: 1
                 required: [fieldPath, occurrenceCount]
           required: [checkedAt, skippedRoomCount, issueCounts]
+        arcadeRoomUpdates:
+          type: object
+          description: Aggregate state of the arcade room notification listener.
+          properties:
+            status:
+              type: string
+              enum: [not-started, connecting, connected, retrying]
+            retryScheduled:
+              type: boolean
+            retryPaused:
+              type: boolean
+            retryCount:
+              type: integer
+              minimum: 0
+            nextRetryAt:
+              type: integer
+              nullable: true
+            lastConnectedAt:
+              type: integer
+              nullable: true
+            lastDisconnectedAt:
+              type: integer
+              nullable: true
+          required: [status, retryScheduled, retryPaused, retryCount, nextRetryAt, lastConnectedAt, lastDisconnectedAt]
       required:
         - status
         - roomRecovery
+        - arcadeRoomUpdates
     RoomMode:
       type: string
       enum: [regular, points]

@@ -57,6 +57,15 @@ test("health exposes skipped-room counts and field paths without identifiers or 
         skippedRoomCount: number;
         issueCounts: Array<{ fieldPath: string; occurrenceCount: number }>;
       };
+      arcadeRoomUpdates: {
+        status: string;
+        retryScheduled: boolean;
+        retryPaused: boolean;
+        retryCount: number;
+        nextRetryAt: number | null;
+        lastConnectedAt: number | null;
+        lastDisconnectedAt: number | null;
+      };
     };
 
     assert.equal(body.status, "ok");
@@ -65,6 +74,18 @@ test("health exposes skipped-room counts and field paths without identifiers or 
     assert.deepEqual(body.roomRecovery.issueCounts, [
       { fieldPath: "mode", occurrenceCount: 2 },
       { fieldPath: "seats", occurrenceCount: 2 },
+    ]);
+    assert.equal(body.arcadeRoomUpdates.status, "not-started");
+    assert.equal(body.arcadeRoomUpdates.retryScheduled, false);
+    assert.equal(body.arcadeRoomUpdates.retryCount, 0);
+    assert.deepEqual(Object.keys(body.arcadeRoomUpdates).sort(), [
+      "lastConnectedAt",
+      "lastDisconnectedAt",
+      "nextRetryAt",
+      "retryCount",
+      "retryPaused",
+      "retryScheduled",
+      "status",
     ]);
     assert.deepEqual(createRoomRecoveryAlertPayload(getRoomRecoveryDiagnostics()), {
       event: "persisted_room_recovery_skipped",

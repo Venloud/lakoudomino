@@ -60,7 +60,24 @@ let listenerStarted = false;
 let listenerRetry: NodeJS.Timeout | undefined;
 let listenerClient: ArcadeNotificationClient | undefined;
 let listenerRetryPausedForTest = false;
+let listenerStatus: "not-started" | "connecting" | "connected" | "retrying" = "not-started";
+let listenerRetryCount = 0;
+let listenerNextRetryAt: number | null = null;
+let listenerLastConnectedAt: number | null = null;
+let listenerLastDisconnectedAt: number | null = null;
 let pendingBroadcasts: Promise<void> = Promise.resolve();
+
+export function getArcadeNotificationListenerHealth() {
+  return {
+    status: listenerStatus,
+    retryScheduled: listenerRetry !== undefined,
+    retryPaused: listenerRetryPausedForTest,
+    retryCount: listenerRetryCount,
+    nextRetryAt: listenerNextRetryAt,
+    lastConnectedAt: listenerLastConnectedAt,
+    lastDisconnectedAt: listenerLastDisconnectedAt,
+  } as const;
+}
 
 function recordFromRow(row: Record<string, unknown>): ArcadeRoomRecord {
   return {
@@ -320,6 +337,8 @@ function queueRoomEvent(event: RoomEvent): void {
 function handleListenerDisconnect(client: ArcadeNotificationClient, error?: Error): void {
   if (listenerClient !== client) return;
   listenerClient = undefined;
+  listenerStatus = "retrying";
+  listenerLastDisconnectedAt = Date.now();
   if (error) logger.error({ err: error }, "Arcade room notification connection failed");
   client.release(true);
   scheduleListenerRetry();
@@ -327,6 +346,7 @@ function handleListenerDisconnect(client: ArcadeNotificationClient, error?: Erro
 
 async function listenForRoomEvents(): Promise<void> {
   let client: ArcadeNotificationClient | undefined;
+  listenerStatus = "connecting";
   try {
     client = await pool.connect() as unknown as ArcadeNotificationClient;
     listenerClient = client;
@@ -347,20 +367,33 @@ async function listenForRoomEvents(): Promise<void> {
     client.once("end", () => handleListenerDisconnect(client!));
     await client.query(`LISTEN ${NOTIFY_CHANNEL}`);
     await resyncConnectedRooms();
+    if (listenerClient === client) {
+      listenerStatus = "connected";
+      listenerRetryCount = 0;
+      listenerNextRetryAt = null;
+      listenerLastConnectedAt = Date.now();
+    }
   } catch (error) {
     logger.error({ err: error }, "Could not listen for arcade room updates");
     if (client && listenerClient === client) {
       listenerClient = undefined;
       client.release(true);
     }
+    listenerStatus = "retrying";
+    listenerLastDisconnectedAt = Date.now();
     scheduleListenerRetry();
   }
 }
 
 function scheduleListenerRetry(): void {
+  listenerStatus = "retrying";
   if (listenerRetry || listenerRetryPausedForTest) return;
+  listenerRetryCount += 1;
+  listenerNextRetryAt = Date.now() + 1_000;
   listenerRetry = setTimeout(() => {
     listenerRetry = undefined;
+    listenerNextRetryAt = null;
+    listenerStatus = "connecting";
     void listenForRoomEvents();
   }, 1_000);
   listenerRetry.unref();
@@ -387,7 +420,10 @@ export function resumeArcadeNotificationListenerForTest(): void {
     clearTimeout(listenerRetry);
     listenerRetry = undefined;
   }
-  if (!listenerClient) void listenForRoomEvents();
+  if (!listenerClient) {
+    listenerStatus = "connecting";
+    void listenForRoomEvents();
+  }
 }
 
 export async function initializeArcadeRooms(): Promise<void> {

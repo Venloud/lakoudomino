@@ -46,6 +46,8 @@ export * from './gameSnapshotOpenEndsItem';
 export * from './gameSnapshotOpenEndsItemId';
 export * from './gameSnapshotView';
 export * from './healthStatus';
+export * from './healthStatusArcadeRoomUpdates';
+export * from './healthStatusArcadeRoomUpdatesStatus';
 export * from './healthStatusRoomRecovery';
 export * from './healthStatusRoomRecoveryIssueCountsItem';
 export * from './hostActionInput';
