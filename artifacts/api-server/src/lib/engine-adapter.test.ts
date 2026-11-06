@@ -159,10 +159,21 @@ test("next-hand start permission is host-only for friend tables and shared for P
 
 test("starting the next Points hand clears the ended hand and deals immediately", () => {
   const finished = finishPointsHand();
+  const finishedSpectatorView = publicView(finished, null);
+  assert.deepEqual(finishedSpectatorView.myHand, []);
+  assert.equal(finishedSpectatorView.revealedHands, null);
+  assert.deepEqual(finishedSpectatorView.scores, finished.scores);
+
   const result = startNextHand(finished);
   assert.equal(result.match.hand.number, finished.hand.number + 1);
   assert.equal(result.match.hand.over, false);
   assert.ok(result.events.some((event) => event.type === "handStart"));
+
+  const nextHandSpectatorView = publicView(result.match, null);
+  assert.equal(nextHandSpectatorView.handNumber, result.match.hand.number);
+  assert.deepEqual(nextHandSpectatorView.myHand, []);
+  assert.equal(nextHandSpectatorView.revealedHands, null);
+  assert.deepEqual(nextHandSpectatorView.scores, finished.scores);
 });
 
 test("finished public game snapshots hide hands while seated players keep their own view", () => {
