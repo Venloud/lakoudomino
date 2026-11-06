@@ -824,6 +824,156 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
   }
 });
 
+test("Scrabble moves stay private and authoritative during cross-instance maintenance", {
+  timeout: 30_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade room retention integration tests.");
+
+  const schema = `arcade_scrabble_race_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let processOne: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  let processTwo: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY,
+        game text NOT NULL,
+        capacity integer NOT NULL,
+        is_private boolean NOT NULL,
+        players jsonb NOT NULL,
+        state jsonb,
+        turn integer NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    [processOne, processTwo] = await Promise.all([
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+      startArcadeProcess(isolatedDatabaseUrl.toString()),
+    ]);
+
+    const host = await postRoom(processOne.baseUrl, "rooms", {
+      game: "scrabble",
+      displayName: "Scrabble host",
+      playerCount: 2,
+      isPrivate: true,
+    });
+    const guest = await postRoom(processOne.baseUrl, `rooms/${String(host.code)}/join`, {
+      displayName: "Scrabble guest",
+    });
+    const hostRack = ["C", "A", "T", "R", "E", "S", "O"];
+    const guestRack = ["D", "O", "G", "H", "I", "J", "K"];
+    const originalBag = ["L", "N", "D", "B", "Q"];
+    const initialState = {
+      board: Array(225).fill(null),
+      racks: [hostRack, guestRack],
+      bag: originalBag,
+      scores: [0, 0],
+      turn: 0,
+      playerCount: 2,
+      passes: 0,
+      winner: null,
+    };
+    await pool.query(
+      `UPDATE ${quotedSchema}.arcade_rooms
+       SET state = $2::jsonb, updated_at = $3
+       WHERE code = $1`,
+      [
+        host.code,
+        JSON.stringify(initialState),
+        new Date(Date.now() - ARCADE_ROOM_RETENTION_MS - 10_000),
+      ],
+    );
+
+    const hostConnection = await connectArcadeSocket(
+      processOne.baseUrl,
+      String(host.code),
+      String(host.reconnectToken),
+    );
+    const guestConnection = await connectArcadeSocket(
+      processTwo.baseUrl,
+      String(host.code),
+      String(guest.reconnectToken),
+    );
+    const hostOnSecondInstance = await connectArcadeSocket(
+      processTwo.baseUrl,
+      String(host.code),
+      String(host.reconnectToken),
+    );
+    sockets.push(hostConnection.socket, guestConnection.socket, hostOnSecondInstance.socket);
+    assert.deepEqual(
+      ((hostConnection.firstMessage.room as JsonRecord).state as JsonRecord).racks,
+      [hostRack, []],
+    );
+    assert.deepEqual(
+      ((guestConnection.firstMessage.room as JsonRecord).state as JsonRecord).racks,
+      [[], guestRack],
+    );
+
+    const maintenanceResponse = await fetch(
+      `${processOne.baseUrl}/__test/maintain-rooms?pauseAfterRefreshMs=1000`,
+      { method: "POST" },
+    );
+    assert.equal(maintenanceResponse.status, 200);
+    assert.deepEqual(await maintenanceResponse.json(), { refreshed: true });
+
+    const projectedRacks = [hostRack.slice(3).concat(["", "", ""]), []];
+    const board = [...initialState.board];
+    board[111] = { letter: "C", points: 3 };
+    board[112] = { letter: "A", points: 1 };
+    board[113] = { letter: "T", points: 1 };
+    const proposedState = {
+      ...initialState,
+      board,
+      racks: projectedRacks,
+      bag: Array(originalBag.length - 3).fill(""),
+      scores: [10, 0],
+      turn: 1,
+    };
+    const hostUpdate = nextSocketMessage(hostConnection.socket);
+    const guestUpdate = nextSocketMessage(guestConnection.socket);
+    hostOnSecondInstance.socket.send(JSON.stringify({ type: "state", state: proposedState, turn: 1 }));
+    const [hostMessage, guestMessage] = await Promise.all([hostUpdate, guestUpdate]);
+
+    for (const [seat, message] of [[0, hostMessage], [1, guestMessage]] as const) {
+      assert.equal(message.type, "state");
+      const room = message.room as JsonRecord;
+      const state = room.state as JsonRecord;
+      assert.equal(state.turn, 1);
+      assert.equal(state.scores && (state.scores as number[])[0], 10);
+      assert.equal((state.board as unknown[])[112] && ((state.board as JsonRecord[])[112]).letter, "A");
+      assert.deepEqual(
+        state.racks,
+        seat === 0 ? [["R", "E", "S", "O", "L", "N", "D"], []] : [[], guestRack],
+      );
+      assert.ok((state.bag as string[]).every((tile) => tile === ""));
+    }
+
+    const saved = await pool.query(
+      `SELECT state FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
+      [host.code],
+    );
+    const savedState = saved.rows[0].state as typeof initialState;
+    assert.equal(savedState.turn, 1);
+    assert.equal((savedState.board[112] as JsonRecord).letter, "A");
+    assert.deepEqual(savedState.racks, [
+      ["R", "E", "S", "O", "L", "N", "D"],
+      guestRack,
+    ]);
+    assert.deepEqual(savedState.bag, ["B", "Q"]);
+  } finally {
+    sockets.forEach((socket) => socket.close());
+    if (processTwo) await stopArcadeProcess(processTwo.child);
+    if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
 test("maintenance rolls back activity refresh after a failure and can later expire stale rooms", {
   timeout: 30_000,
 }, async () => {
