@@ -161,6 +161,47 @@ async function receiveSocketMessage(socket: WebSocket, timeoutMs = 5_000): Promi
   });
 }
 
+async function receiveHumanTurnClock(
+  socket: WebSocket,
+  seat: number,
+  turnMs: number,
+): Promise<JsonRecord> {
+  return await new Promise((resolveMessage, rejectMessage) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+    };
+    const onMessage = (raw: unknown) => {
+      let message: JsonRecord;
+      try {
+        message = JSON.parse(String(raw)) as JsonRecord;
+      } catch (error) {
+        cleanup();
+        rejectMessage(error);
+        return;
+      }
+      const game = message.game as JsonRecord | undefined;
+      if (message.type !== "snapshot" ||
+          game?.turnSeat !== seat ||
+          message.turnMs !== turnMs ||
+          typeof message.turnDeadline !== "number") return;
+      cleanup();
+      resolveMessage(message);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      rejectMessage(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectMessage(new Error("Timed out waiting for the restored human turn clock."));
+    }, 10_000);
+    socket.on("message", onMessage);
+    socket.once("error", onError);
+  });
+}
+
 async function openRoomSocket(baseUrl: string, code: string, watchOnly = false): Promise<WebSocket> {
   const watchQuery = watchOnly ? "&watch=1" : "";
   const socket = new WebSocket(`${baseUrl.replace(/^http/, "ws")}/ws?code=${encodeURIComponent(code)}${watchQuery}`);
@@ -374,6 +415,7 @@ test("a restored bot turn resumes automatically while a restored human turn wait
   const schema = `rooms_restart_${randomUUID().replaceAll("-", "")}`;
   const quotedSchema = `"${schema}"`;
   let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  let humanSocket: WebSocket | undefined;
   await pool.query(`CREATE SCHEMA ${quotedSchema}`);
   try {
     await createRoomsTable(schema);
@@ -399,6 +441,20 @@ test("a restored bot turn resumes automatically while a restored human turn wait
     isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
     api = await startRoomsProcess(isolatedDatabaseUrl.toString());
 
+    humanSocket = new WebSocket(
+      `${api.baseUrl.replace(/^http/, "ws")}/ws?code=${encodeURIComponent(humanCode)}&watch=1`,
+    );
+    const humanClockPromise = receiveHumanTurnClock(humanSocket, activeSeat, 30_000);
+    await once(humanSocket, "open");
+    humanSocket.send(JSON.stringify({ type: "hello", displayName: "Clock observer" }));
+    const humanClock = await humanClockPromise;
+    const turnDeadline = humanClock.turnDeadline as number;
+    assert.equal(humanClock.turnMs, 30_000, "the restored human should receive the configured 30-second clock");
+    assert.ok(
+      turnDeadline - Date.now() >= 29_000,
+      "the full turn clock should start after the restored room's startup pacing",
+    );
+
     assert.equal(
       await waitForBotAdvance(api.baseUrl, botCode, afterOpening, 12_000),
       true,
@@ -408,14 +464,17 @@ test("a restored bot turn resumes automatically while a restored human turn wait
     const humanInitial = await getGame(api.baseUrl, humanCode);
     assert.equal(humanInitial.turnSeat, activeSeat, "the fixture should restore on the human seat");
     assert.equal(matchesMatch(humanInitial, afterOpening), true, "the human fixture should start at its persisted state");
-    await delay(3_500);
+    const waitUntilBeforeDeadline = turnDeadline - Date.now() - 500;
+    if (waitUntilBeforeDeadline > 0) await delay(waitUntilBeforeDeadline);
     const humanAfterWait = await getGame(api.baseUrl, humanCode);
+    assert.ok(Date.now() < turnDeadline, "the final state check should happen before the configured turn limit");
     assert.equal(
       matchesMatch(humanAfterWait, afterOpening),
       true,
-      "a restored human turn must wait for the player instead of playing automatically",
+      "a restored human turn must not time out or play automatically before its configured limit",
     );
   } finally {
+    if (humanSocket && humanSocket.readyState !== WebSocket.CLOSED) humanSocket.close();
     if (api) await stopRoomsProcess(api.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
