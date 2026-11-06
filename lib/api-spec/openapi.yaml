@@ -501,6 +501,13 @@ paths:
       operationId: getRecentMatches
       tags: [auth]
       summary: Get recently recorded matches for the signed-in user
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 6 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         "200":
           description: Recent matches
@@ -1234,9 +1241,11 @@ components:
         opponents: { type: array, items: { type: string } }
     RecentMatchesResponse:
       type: object
-      required: [matches]
+      required: [matches, hasMore, nextOffset]
       properties:
         matches: { type: array, items: { $ref: "#/components/schemas/RecentMatch" } }
+        hasMore: { type: boolean }
+        nextOffset: { type: integer, nullable: true }
     TicTacToeResult:
       type: object
       required: [id, roomCode, mode, outcome, mark, opponentName, completedAt]

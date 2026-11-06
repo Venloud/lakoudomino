@@ -1200,6 +1200,19 @@ export const GetAuthMeResponse = zod.object({
 /**
  * @summary Get recently recorded matches for the signed-in user
  */
+export const getRecentMatchesQueryLimitDefault = 6;
+export const getRecentMatchesQueryLimitMax = 50;
+
+export const getRecentMatchesQueryOffsetDefault = 0;
+export const getRecentMatchesQueryOffsetMin = 0;
+
+
+
+export const GetRecentMatchesQueryParams = zod.object({
+  "limit": zod.coerce.number().int().min(1).max(getRecentMatchesQueryLimitMax).default(getRecentMatchesQueryLimitDefault),
+  "offset": zod.coerce.number().int().min(getRecentMatchesQueryOffsetMin).default(getRecentMatchesQueryOffsetDefault)
+})
+
 export const GetRecentMatchesResponse = zod.object({
   "matches": zod.array(zod.object({
   "matchId": zod.string().uuid(),
@@ -1211,7 +1224,9 @@ export const GetRecentMatchesResponse = zod.object({
   "crownPoints": zod.number().int(),
   "won": zod.boolean(),
   "opponents": zod.array(zod.string())
-}))
+})),
+  "hasMore": zod.boolean(),
+  "nextOffset": zod.number().int().nullable()
 })
 
 

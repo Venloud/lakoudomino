@@ -642,10 +642,17 @@ test("signed-in arcade results remain in profile history after room deletion and
     assert.equal((await duplicateResult).type, "room");
 
     await pool.query(`DELETE FROM ${quotedSchema}.arcade_rooms WHERE code = $1`, [host.code]);
-    const readHistory = async (cookie: string) => {
-      const response = await fetch(`${processOne!.baseUrl}/api/auth/recent-matches`, { headers: { cookie } });
+    const readHistory = async (cookie: string, limit = 6, offset = 0) => {
+      const response = await fetch(
+        `${processOne!.baseUrl}/api/auth/recent-matches?limit=${limit}&offset=${offset}`,
+        { headers: { cookie } },
+      );
       assert.equal(response.status, 200);
-      return await response.json() as { matches: JsonRecord[] };
+      return await response.json() as {
+        matches: JsonRecord[];
+        hasMore: boolean;
+        nextOffset: number | null;
+      };
     };
     const [hostHistory, guestHistory] = await Promise.all([
       readHistory(hostCookie),
@@ -734,6 +741,30 @@ test("signed-in arcade results remain in profile history after room deletion and
     assert.deepEqual(resignedHistory?.opponents, ["History host", "History third", "History fourth"]);
     assert.deepEqual(thirdHistory?.opponents, ["History host", "Resigned rival", "History fourth"]);
     assert.deepEqual(fourthHistory?.opponents, ["History host", "Resigned rival", "History third"]);
+
+    const legacyDominoMatchId = randomUUID();
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.domino_matches (match_id, room_code, mode, recorded_at)
+       VALUES ($1, 'OLD1', 'regular', now() - interval '1 day')`,
+      [legacyDominoMatchId],
+    );
+    await pool.query(
+      `INSERT INTO ${quotedSchema}.domino_match_results
+       (match_id, user_id, rank, medal, crown_points, won)
+       VALUES ($1, $2, 1, 'win', 10, true)`,
+      [legacyDominoMatchId, hostUser],
+    );
+    const firstPage = await readHistory(hostCookie, 2, 0);
+    const secondPage = await readHistory(hostCookie, 2, 2);
+    assert.equal(firstPage.matches.length, 2);
+    assert.equal(firstPage.hasMore, true);
+    assert.equal(firstPage.nextOffset, 2);
+    assert.equal(secondPage.matches.length, 1);
+    assert.equal(secondPage.hasMore, false);
+    assert.equal(secondPage.nextOffset, null);
+    assert.deepEqual(new Set(firstPage.matches.map((match) => match.mode)), new Set(["arcade:mopyon", "arcade:scrabble"]));
+    assert.equal(secondPage.matches[0].mode, "regular");
+    assert.equal(secondPage.matches[0].matchId, legacyDominoMatchId);
   } finally {
     sockets.forEach((socket) => socket.close());
     if (processOne) await stopArcadeProcess(processOne.child);

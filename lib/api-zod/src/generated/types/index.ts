@@ -45,6 +45,7 @@ export * from './gameSnapshotEventsItem';
 export * from './gameSnapshotOpenEndsItem';
 export * from './gameSnapshotOpenEndsItemId';
 export * from './gameSnapshotView';
+export * from './getRecentMatchesParams';
 export * from './healthStatus';
 export * from './healthStatusArcadeRoomUpdates';
 export * from './healthStatusArcadeRoomUpdatesStatus';

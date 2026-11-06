@@ -131,6 +131,13 @@ router.get("/auth/me", async (req, res): Promise<void> => {
 router.get("/auth/recent-matches", async (req, res): Promise<void> => {
   const identity = await getIdentityFromRequest(req);
   if (!identity) { res.status(401).json({ error: "Authentication required" }); return; }
+  const limit = req.query.limit === undefined ? 6 : Number(req.query.limit);
+  const offset = req.query.offset === undefined ? 0 : Number(req.query.offset);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50 ||
+      !Number.isSafeInteger(offset) || offset < 0) {
+    res.status(400).json({ error: "Invalid match history page." });
+    return;
+  }
   const matches = await db.select({
     matchId: dominoMatches.matchId,
     roomCode: dominoMatches.roomCode,
@@ -144,9 +151,12 @@ router.get("/auth/recent-matches", async (req, res): Promise<void> => {
   }).from(dominoMatchResults)
     .innerJoin(dominoMatches, eq(dominoMatchResults.matchId, dominoMatches.matchId))
     .where(eq(dominoMatchResults.userId, identity.userId))
-    .orderBy(desc(dominoMatches.recordedAt))
-    .limit(8);
-  res.json({ matches });
+    .orderBy(desc(dominoMatches.recordedAt), desc(dominoMatches.matchId))
+    .limit(limit + 1)
+    .offset(offset);
+  const hasMore = matches.length > limit;
+  const page = matches.slice(0, limit);
+  res.json({ matches: page, hasMore, nextOffset: hasMore ? offset + page.length : null });
 });
 router.get("/auth/tic-tac-toe-results", async (req, res): Promise<void> => {
   const identity = await getIdentityFromRequest(req);
