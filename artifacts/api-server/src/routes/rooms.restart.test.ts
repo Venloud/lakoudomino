@@ -168,9 +168,76 @@ async function openRoomSocket(baseUrl: string, code: string): Promise<WebSocket>
 }
 
 async function expectSocketError(socket: WebSocket, payload: string, expected: string): Promise<void> {
-  const message = receiveSocketMessage(socket);
+  const message = new Promise<JsonRecord>((resolveMessage, rejectMessage) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+    };
+    const onMessage = (raw: unknown) => {
+      let value: JsonRecord;
+      try {
+        value = JSON.parse(String(raw)) as JsonRecord;
+      } catch (error) {
+        cleanup();
+        rejectMessage(error);
+        return;
+      }
+      if (value.type !== "error") return;
+      cleanup();
+      resolveMessage(value);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      rejectMessage(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectMessage(new Error("Timed out waiting for a room WebSocket error."));
+    }, 5_000);
+    socket.on("message", onMessage);
+    socket.once("error", onError);
+  });
   socket.send(payload);
   assert.deepEqual(await message, { type: "error", message: expected });
+}
+
+async function receiveRoomSettings(
+  socket: WebSocket,
+  expected: Record<string, unknown>,
+): Promise<JsonRecord> {
+  return await new Promise((resolveMessage, rejectMessage) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      socket.off("message", onMessage);
+      socket.off("error", onError);
+    };
+    const onMessage = (raw: unknown) => {
+      let message: JsonRecord;
+      try {
+        message = JSON.parse(String(raw)) as JsonRecord;
+      } catch (error) {
+        cleanup();
+        rejectMessage(error);
+        return;
+      }
+      if (message.type !== "snapshot") return;
+      const settings = message.roomSettings as JsonRecord | undefined;
+      if (!settings || !Object.entries(expected).every(([key, value]) => settings[key] === value)) return;
+      cleanup();
+      resolveMessage(message);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      rejectMessage(error);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectMessage(new Error("Timed out waiting for the expected room settings snapshot."));
+    }, 5_000);
+    socket.on("message", onMessage);
+    socket.once("error", onError);
+  });
 }
 
 function makeRoom(code: string, match: ReturnType<typeof createMatch>["match"], botOnTurn: boolean): PersistedRoomState {
@@ -420,6 +487,257 @@ test("live room WebSocket rejects invalid and unauthenticated messages without c
   } finally {
     spectator?.terminate();
     player?.terminate();
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("waiting room setting changes reach every connected player and rejected changes are not saved", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room WebSocket integration tests.");
+
+  const schema = `rooms_settings_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    const createResponse = await fetch(`${api.baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        displayName: "Settings host",
+        mode: "regular",
+        playerCount: 2,
+        rowLength: 10,
+        rowBoxes: 10,
+        twoPlayerVariant: "draw",
+        isPrivate: true,
+      }),
+    });
+    if (createResponse.status !== 201) assert.fail(`room create failed: ${await createResponse.text()}`);
+    const created = await createResponse.json() as { code: string; reconnectToken: string };
+    const joinResponse = await fetch(`${api.baseUrl}/api/rooms/${created.code}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "Settings guest" }),
+    });
+    if (joinResponse.status !== 200) assert.fail(`room join failed: ${await joinResponse.text()}`);
+    const joined = await joinResponse.json() as { reconnectToken: string };
+
+    const connectPlayer = async (reconnectToken: string) => {
+      const socket = await openRoomSocket(api!.baseUrl, created.code);
+      sockets.push(socket);
+      const welcomePromise = receiveSocketMessage(socket);
+      socket.send(JSON.stringify({ type: "hello", reconnectToken }));
+      assert.equal((await welcomePromise).type, "snapshot");
+      return socket;
+    };
+    const host = await connectPlayer(created.reconnectToken);
+    const guest = await connectPlayer(joined.reconnectToken);
+    const spectator = await openRoomSocket(api.baseUrl, created.code);
+    sockets.push(spectator);
+    const spectatorWelcome = receiveSocketMessage(spectator);
+    spectator.send(JSON.stringify({ type: "hello", displayName: "Settings spectator" }));
+    assert.equal((await spectatorWelcome).type, "snapshot");
+    const updatedSettings = {
+      mode: "regular",
+      rowBoxes: 14,
+      turnSeconds: 45,
+      isPrivate: false,
+      playerCount: 2,
+    };
+    const hostUpdate = receiveRoomSettings(host, updatedSettings);
+    const guestUpdate = receiveRoomSettings(guest, updatedSettings);
+    const spectatorUpdate = receiveRoomSettings(spectator, updatedSettings);
+    host.send(JSON.stringify({ type: "changeSettings", ...updatedSettings }));
+    const [hostSnapshot, guestSnapshot, spectatorSnapshot] = await Promise.all([
+      hostUpdate,
+      guestUpdate,
+      spectatorUpdate,
+    ]);
+    assert.deepEqual(hostSnapshot.roomSettings, updatedSettings);
+    assert.deepEqual(guestSnapshot.roomSettings, updatedSettings);
+    assert.deepEqual(spectatorSnapshot.roomSettings, updatedSettings);
+
+    const readPersistedSettings = async () => {
+      const result = await pool.query(
+        `SELECT mode, row_boxes, turn_seconds, is_private, player_count
+         FROM ${quotedSchema}.domino_rooms WHERE code = $1`,
+        [created.code],
+      );
+      assert.equal(result.rowCount, 1, "the room should remain persisted");
+      return result.rows[0];
+    };
+    const persistedSettingsBeforeRejections = await readPersistedSettings();
+    assert.ok(persistedSettingsBeforeRejections, "the updated room should remain persisted");
+
+    await expectSocketError(
+      guest,
+      JSON.stringify({ type: "changeSettings", ...updatedSettings, rowBoxes: 18 }),
+      "Only the host can change settings while waiting",
+    );
+    assert.deepEqual(
+      await readPersistedSettings(),
+      persistedSettingsBeforeRejections,
+      "an unauthorized change must not be saved",
+    );
+
+    await expectSocketError(
+      host,
+      JSON.stringify({ type: "changeSettings", ...updatedSettings, rowBoxes: 21 }),
+      "Choose a row length from 5 to 20 and a 15, 30, 45, or 60 second timer",
+    );
+    assert.deepEqual(
+      await readPersistedSettings(),
+      persistedSettingsBeforeRejections,
+      "an invalid change must not be saved",
+    );
+  } finally {
+    sockets.forEach((socket) => socket.terminate());
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("live room chat reaches members in order, rejects invalid text, stays room-local, and leaves game snapshots unchanged", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room WebSocket integration tests.");
+
+  const schema = `rooms_chat_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    const createStartedRoom = async (hostName: string, guestName: string) => {
+      const createResponse = await fetch(`${api!.baseUrl}/api/rooms`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          displayName: hostName,
+          mode: "regular",
+          playerCount: 2,
+          rowLength: 10,
+          rowBoxes: 10,
+          twoPlayerVariant: "draw",
+          isPrivate: true,
+        }),
+      });
+      if (createResponse.status !== 201) assert.fail(`room create failed: ${await createResponse.text()}`);
+      const created = await createResponse.json() as { code: string; reconnectToken: string };
+      const joinResponse = await fetch(`${api!.baseUrl}/api/rooms/${created.code}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ displayName: guestName }),
+      });
+      if (joinResponse.status !== 200) assert.fail(`room join failed: ${await joinResponse.text()}`);
+      const joined = await joinResponse.json() as { reconnectToken: string };
+      const startResponse = await fetch(`${api!.baseUrl}/api/rooms/${created.code}/start`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reconnectToken: created.reconnectToken }),
+      });
+      if (startResponse.status !== 200) assert.fail(`room start failed: ${await startResponse.text()}`);
+      return { code: created.code, hostToken: created.reconnectToken, guestToken: joined.reconnectToken };
+    };
+    const primaryRoom = await createStartedRoom("Chat host", "Chat guest");
+    const otherRoom = await createStartedRoom("Other host", "Other guest");
+
+    const connectMember = async (code: string, reconnectToken: string) => {
+      const socket = await openRoomSocket(api!.baseUrl, code);
+      sockets.push(socket);
+      const welcomePromise = receiveSocketMessage(socket);
+      socket.send(JSON.stringify({ type: "hello", reconnectToken }));
+      const welcome = await welcomePromise;
+      assert.equal(welcome.type, "snapshot");
+      return socket;
+    };
+    const host = await connectMember(primaryRoom.code, primaryRoom.hostToken);
+    const guest = await connectMember(primaryRoom.code, primaryRoom.guestToken);
+    const unrelatedHost = await connectMember(otherRoom.code, otherRoom.hostToken);
+    const baselinePrimary = await getGame(api.baseUrl, primaryRoom.code);
+    const baselineOther = await getGame(api.baseUrl, otherRoom.code);
+
+    await expectSocketError(host, JSON.stringify({ type: "chat", text: "  \t " }), SOCKET_PROTOCOL_ERROR);
+    await expectSocketError(host, JSON.stringify({ type: "chat", text: "x".repeat(161) }), SOCKET_PROTOCOL_ERROR);
+
+    const nextChat = (socket: WebSocket) => new Promise<JsonRecord>((resolveChat, rejectChat) => {
+      const onMessage = (raw: unknown) => {
+        let value: JsonRecord;
+        try {
+          value = JSON.parse(String(raw)) as JsonRecord;
+        } catch (error) {
+          cleanup();
+          rejectChat(error);
+          return;
+        }
+        if (value.type === "chat") {
+          cleanup();
+          resolveChat(value);
+        }
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        rejectChat(error);
+      };
+      const timeout = setTimeout(() => {
+        cleanup();
+        rejectChat(new Error("Timed out waiting for a room chat message."));
+      }, 5_000);
+      const cleanup = () => {
+        clearTimeout(timeout);
+        socket.off("message", onMessage);
+        socket.off("error", onError);
+      };
+      socket.on("message", onMessage);
+      socket.once("error", onError);
+    });
+    let unrelatedChatReceived = false;
+    const onUnrelatedMessage = (raw: unknown) => {
+      try {
+        if ((JSON.parse(String(raw)) as JsonRecord).type === "chat") unrelatedChatReceived = true;
+      } catch {
+        // The unrelated room's normal messages are not relevant to chat isolation.
+      }
+    };
+    unrelatedHost.on("message", onUnrelatedMessage);
+
+    const expectChatToBothMembers = async (text: string) => {
+      const hostMessage = nextChat(host);
+      const guestMessage = nextChat(guest);
+      host.send(JSON.stringify({ type: "chat", text }));
+      const [fromHost, fromGuest] = await Promise.all([hostMessage, guestMessage]);
+      assert.equal((fromHost.message as JsonRecord).text, text.trim());
+      assert.equal((fromGuest.message as JsonRecord).text, text.trim());
+      assert.equal((fromHost.message as JsonRecord).name, "Chat host");
+      assert.equal((fromGuest.message as JsonRecord).name, "Chat host");
+    };
+    await expectChatToBothMembers("  First message  ");
+    await delay(1_050);
+    await expectChatToBothMembers("Second message");
+    await delay(250);
+    unrelatedHost.off("message", onUnrelatedMessage);
+    assert.equal(unrelatedChatReceived, false, "a different room must not receive the chat message");
+
+    assert.deepEqual(await getGame(api.baseUrl, primaryRoom.code), baselinePrimary, "chat must not change the primary game's snapshot");
+    assert.deepEqual(await getGame(api.baseUrl, otherRoom.code), baselineOther, "chat must not change another game's snapshot");
+  } finally {
+    sockets.forEach((socket) => socket.terminate());
     if (api) await stopRoomsProcess(api.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }

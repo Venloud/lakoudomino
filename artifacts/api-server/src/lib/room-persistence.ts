@@ -1,6 +1,6 @@
 import { db, dominoRooms } from "@workspace/db";
 import { eq, isNull } from "drizzle-orm";
-import { logger } from "./logger.ts";
+import { logger, sendRoomRecoveryNotification } from "./logger.ts";
 import type { PersistedRoomState } from "./room-types.ts";
 import {
   PersistedRoomRecoveryError,
@@ -85,6 +85,7 @@ function alertOnSkippedRooms(): void {
   const payload = createRoomRecoveryAlertPayload(getRoomRecoveryDiagnostics());
   if (payload) {
     logger.error(payload, "Persisted rooms skipped during recovery");
+    void sendRoomRecoveryNotification(payload);
   }
 }
 
