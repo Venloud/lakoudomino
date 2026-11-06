@@ -448,6 +448,34 @@ function fillerMove(board: RecordValue, player: number, color: number): RecordVa
   };
 }
 
+function fillerFrontierScore(board: RecordValue, player: number): number {
+  const colors = board.colors as number[];
+  const owners = board.owners as (number | null)[];
+  const activeColors = new Set(owners.flatMap((owner, index) =>
+    owner !== null ? [colors[index]] : []));
+  const frontierColors = new Set<number>();
+  const frontierCells = new Set<number>();
+
+  for (let index = 0; index < owners.length; index += 1) {
+    if (owners[index] !== player) continue;
+    const row = Math.floor(index / 8), col = index % 8;
+    const neighbors = [
+      ...(row > 0 ? [index - 8] : []),
+      ...(row < 7 ? [index + 8] : []),
+      ...(col > 0 ? [index - 1] : []),
+      ...(col < 7 ? [index + 1] : []),
+    ];
+    for (const neighbor of neighbors) {
+      const color = colors[neighbor];
+      if (owners[neighbor] === null && !activeColors.has(color)) {
+        frontierCells.add(neighbor);
+        frontierColors.add(color);
+      }
+    }
+  }
+  return frontierCells.size * 2 + frontierColors.size;
+}
+
 function validateFiller(current: unknown, proposed: unknown, seat: number, capacity: number): ValidationResult {
   if (!isRecord(current) || !isRecord(proposed) || !isRecord(current.fillerBoard) ||
       !isRecord(proposed.fillerBoard) || !Array.isArray(current.fillerBoard.colors) ||
@@ -987,10 +1015,13 @@ export function getArcadeBotTransition(
   capacity: number,
 ): { state: unknown; turn: number } | null {
   if (game === "filler" && isRecord(current) && isRecord(current.fillerBoard)) {
+    if (!Array.isArray(current.fillerBoard.colors) || !Array.isArray(current.fillerBoard.owners)) return null;
+    const previousOwners = current.fillerBoard.owners as (number | null)[];
+    let best: { state: unknown; turn: number; score: number } | null = null;
     for (let color = 0; color < 6; color += 1) {
       const board = fillerMove(current.fillerBoard, seat, color);
       if (!board) continue;
-      return {
+      const candidate = {
         state: {
           turn: board.turn,
           winner: board.draw ? "draw" : board.winner,
@@ -999,8 +1030,18 @@ export function getArcadeBotTransition(
         },
         turn: Number(board.turn),
       };
+      const validated = validateArcadeTransition(
+        "filler", current, candidate.state, seat, capacity, seat, candidate.turn,
+      );
+      if (!validated.ok) continue;
+
+      const owners = board.owners as (number | null)[];
+      const territoryGain = owners.filter((owner, index) =>
+        owner === seat && previousOwners[index] !== seat).length;
+      const score = territoryGain * 1_000 + fillerFrontierScore(board, seat);
+      if (!best || score > best.score) best = { ...validated, score };
     }
-    return null;
+    return best ? { state: best.state, turn: best.turn } : null;
   }
   if (game !== "scrabble" || !isRecord(current) ||
       !Array.isArray(current.racks) || !Array.isArray(current.bag) ||
