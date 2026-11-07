@@ -7,9 +7,11 @@ import arcadeRouter, {
   getArcadeNotificationListenerHealth,
   initializeArcadeRooms,
   disconnectArcadeNotificationListenerForTest,
+  failNextArcadeNotificationConnectionForTest,
   interruptArcadeNotificationListenerForTest,
   maintainArcadeRoomsForTest,
   resumeArcadeNotificationListenerForTest,
+  setArcadeNotificationRetryDelayForTest,
 } from "./arcade.ts";
 
 const port = Number(process.env.PORT);
@@ -76,5 +78,12 @@ server.on("upgrade", (request, socket, head) => {
   });
 });
 
+if (process.env.ARCADE_TEST_FAIL_INITIAL_LISTENER_CONNECTION === "1") {
+  failNextArcadeNotificationConnectionForTest();
+}
+const testRetryDelay = Number(process.env.ARCADE_TEST_LISTENER_RETRY_DELAY_MS);
+if (Number.isFinite(testRetryDelay) && testRetryDelay > 0) {
+  setArcadeNotificationRetryDelayForTest(testRetryDelay);
+}
 await initializeArcadeRooms();
 server.listen(port, "127.0.0.1");

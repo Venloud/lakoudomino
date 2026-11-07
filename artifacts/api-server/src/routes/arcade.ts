@@ -60,6 +60,8 @@ let listenerStarted = false;
 let listenerRetry: NodeJS.Timeout | undefined;
 let listenerClient: ArcadeNotificationClient | undefined;
 let listenerRetryPausedForTest = false;
+let listenerConnectionFailuresForTest = 0;
+let listenerRetryDelayMs = 1_000;
 let listenerStatus: "not-started" | "connecting" | "connected" | "retrying" = "not-started";
 let listenerRetryCount = 0;
 let listenerNextRetryAt: number | null = null;
@@ -360,6 +362,10 @@ async function listenForRoomEvents(): Promise<void> {
   let client: ArcadeNotificationClient | undefined;
   listenerStatus = "connecting";
   try {
+    if (listenerConnectionFailuresForTest > 0) {
+      listenerConnectionFailuresForTest -= 1;
+      throw new Error("Injected arcade notification connection failure: health-check privacy sentinel.");
+    }
     client = await pool.connect() as unknown as ArcadeNotificationClient;
     listenerClient = client;
     client.on("notification", (notification: { channel?: string; payload?: string }) => {
@@ -401,13 +407,13 @@ function scheduleListenerRetry(): void {
   listenerStatus = "retrying";
   if (listenerRetry || listenerRetryPausedForTest) return;
   listenerRetryCount += 1;
-  listenerNextRetryAt = Date.now() + 1_000;
+  listenerNextRetryAt = Date.now() + listenerRetryDelayMs;
   listenerRetry = setTimeout(() => {
     listenerRetry = undefined;
     listenerNextRetryAt = null;
     listenerStatus = "connecting";
     void listenForRoomEvents();
-  }, 1_000);
+  }, listenerRetryDelayMs);
   listenerRetry.unref();
 }
 
@@ -424,6 +430,17 @@ export function disconnectArcadeNotificationListenerForTest(): boolean {
   if (!client) return false;
   handleListenerDisconnect(client);
   return listenerRetry !== undefined;
+}
+
+export function failNextArcadeNotificationConnectionForTest(): void {
+  listenerConnectionFailuresForTest += 1;
+}
+
+export function setArcadeNotificationRetryDelayForTest(delayMs: number): void {
+  if (!Number.isInteger(delayMs) || delayMs < 1_000 || delayMs > 10_000) {
+    throw new Error("Test retry delay must be between 1,000 and 10,000 milliseconds.");
+  }
+  listenerRetryDelayMs = delayMs;
 }
 
 export function resumeArcadeNotificationListenerForTest(): void {
