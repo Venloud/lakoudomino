@@ -1008,8 +1008,23 @@ test("live room chat reaches members in order, rejects invalid text, stays room-
       assert.equal((fromGuest.message as JsonRecord).name, "Chat host");
     };
     await expectChatToBothMembers("  First message  ");
+    await expectSocketError(
+      host,
+      JSON.stringify({ type: "chat", text: "This is too soon" }),
+      "Please wait a moment before sending another message.",
+    );
+    assert.deepEqual(
+      await getGame(api.baseUrl, primaryRoom.code),
+      baselinePrimary,
+      "a cooldown rejection must not change the primary game snapshot",
+    );
     await delay(1_050);
     await expectChatToBothMembers("Second message");
+    assert.deepEqual(
+      await getGame(api.baseUrl, primaryRoom.code),
+      baselinePrimary,
+      "a later accepted chat message must not change the primary game snapshot",
+    );
     const reconnectingHost = await openRoomSocket(api.baseUrl, primaryRoom.code);
     sockets.push(reconnectingHost);
     const reconnectedSnapshot = receiveSocketMessage(reconnectingHost);
