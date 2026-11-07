@@ -300,6 +300,50 @@ test("Scrabble room responses and live updates reveal only each player's own rac
       assert.ok(live.state.bag.every((tile) => tile === ""));
     }
 
+    const beforeRejectedMove = await pool.query("SELECT state FROM arcade_rooms WHERE code = $1", [created.code]);
+    const authoritativeBefore = beforeRejectedMove.rows[0]?.state as {
+      racks: string[][];
+      bag: string[];
+      [key: string]: unknown;
+    };
+    const seatOneSnapshot = sockets[1].messages.at(-1)?.room as {
+      state: { racks: string[][]; bagCount: number; [key: string]: unknown };
+    };
+    const seatZeroMessageCount = sockets[0].messages.length;
+    const seatOneMessageStart = sockets[1].messages.length;
+    sendState(sockets[1], {
+      ...seatOneSnapshot.state,
+      board: [],
+      racks: [[], ["OWN-RACK"], ["SECRET-OPPONENT-RACK"], []],
+      bag: ["SECRET-HIDDEN-BAG-TILE"],
+      bagCount: 0,
+    }, 2);
+
+    await Promise.all([
+      waitForMessage(sockets[1], seatOneMessageStart, "error"),
+      waitForMessage(sockets[1], seatOneMessageStart, "room"),
+    ]);
+    const rejectedMessages = sockets[1].messages.slice(seatOneMessageStart);
+    const rejection = rejectedMessages.find((message) => message.type === "error");
+    const recoveryMessage = rejectedMessages.find((message) => message.type === "room");
+    assert.equal(typeof rejection?.message, "string");
+    assert.ok(recoveryMessage, "the player who submitted the rejected move must receive a recovery snapshot");
+    const recoveryState = (recoveryMessage.room as Record<string, unknown>).state as {
+      racks: string[][];
+      bagCount?: number;
+      bag?: unknown[];
+    };
+    assert.deepEqual(recoveryState.racks, authoritativeBefore.racks.map((rack, index) => index === 1 ? rack : []));
+    assert.equal(recoveryState.bagCount ?? recoveryState.bag?.length, authoritativeBefore.bag.length);
+    assert.equal(recoveryState.bag?.some((tile) => tile !== ""), false,
+      "a recovery snapshot must never contain hidden tile identities");
+    assert.equal(JSON.stringify(recoveryState).includes("SECRET-"), false);
+    assert.equal(sockets[0].messages.length, seatZeroMessageCount, "the opponent should not receive the rejected player's recovery snapshot");
+
+    const afterRejectedMove = await pool.query("SELECT state FROM arcade_rooms WHERE code = $1", [created.code]);
+    assert.deepEqual(afterRejectedMove.rows[0]?.state, authoritativeBefore,
+      "a rejected move must not change either rack or the server's ordered bag");
+
     sockets[0].close();
     sockets[0] = await connect(created.code, created.reconnectToken);
     const reconnectRoom = sockets[0].messages[0].room as { state: { racks: string[][]; bag: string[] } };
