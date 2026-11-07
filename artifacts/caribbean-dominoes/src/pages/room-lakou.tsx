@@ -146,6 +146,13 @@ export default function RoomPage() {
             setSnapshot(message);
             if (message.view) setError('');
           }
+          if (message.type === 'chatHistory' && Array.isArray(message.messages)) {
+            const viewerSeat = Number.isInteger(message.viewerSeat) ? message.viewerSeat as number : null;
+            setChat(message.messages.map((entry: ChatMessage) => ({
+              ...entry,
+              mine: viewerSeat !== null && entry.seat === viewerSeat,
+            })));
+          }
           if (message.type === 'chat' && message.message) {
             const incoming = message.message as ChatMessage & { senderId?: string };
             setChat((current) => [...current.slice(-49), {

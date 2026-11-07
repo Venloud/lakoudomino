@@ -1,5 +1,5 @@
 import type { MatchState } from "lakou-engine";
-import type { PersistedRoomState, PersistedSeatState, RoomMode, Seat } from "./room-types";
+import { ROOM_CHAT_HISTORY_LIMIT, type PersistedRoomChatMessage, type PersistedRoomState, type PersistedSeatState, type RoomMode, type Seat } from "./room-types";
 
 export type StoredRoomRecord = {
   code: string; hostName: string; mode: string; rowLength: number;
@@ -15,6 +15,7 @@ export type StoredRoomRecord = {
   matchParticipants?: PersistedRoomState["matchParticipants"];
   crownsEligible?: boolean;
   hostDisconnectedAt?: number | null;
+  chatHistory?: PersistedRoomChatMessage[];
 };
 export type PersistedRoomIssue = { path: string; message: string };
 export class PersistedRoomRecoveryError extends Error {
@@ -48,7 +49,26 @@ export function serializeRoom(room: PersistedRoomState): StoredRoomRecord {
     matchParticipants: room.matchParticipants ?? [],
     crownsEligible: room.crownsEligible,
     hostDisconnectedAt: room.hostDisconnectedAt ?? null,
+    chatHistory: (room.chatHistory ?? []).slice(-ROOM_CHAT_HISTORY_LIMIT),
   };
+}
+function restoreChatHistory(value: unknown): PersistedRoomChatMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-ROOM_CHAT_HISTORY_LIMIT).flatMap((entry) => {
+    if (!record(entry) ||
+        typeof entry.id !== "string" ||
+        (entry.seat !== null && ![0, 1, 2, 3].includes(Number(entry.seat))) ||
+        typeof entry.name !== "string" ||
+        typeof entry.text !== "string" ||
+        typeof entry.sentAt !== "string") return [];
+    return [{
+      id: entry.id.slice(0, 120),
+      seat: entry.seat === null ? null : Number(entry.seat) as Seat,
+      name: entry.name.slice(0, 24),
+      text: entry.text.slice(0, 160),
+      sentAt: entry.sentAt,
+    }];
+  });
 }
 export function restoreRoom(value: unknown): PersistedRoomState {
   if (!record(value)) throw new PersistedRoomRecoveryError("<unknown>", [{ path: "", message: "must be an object" }]);
@@ -126,6 +146,7 @@ export function restoreRoom(value: unknown): PersistedRoomState {
       : [],
     crownsEligible: typeof value.crownsEligible === "boolean" ? value.crownsEligible : undefined,
     hostDisconnectedAt: typeof value.hostDisconnectedAt === "number" ? value.hostDisconnectedAt : null,
+    chatHistory: restoreChatHistory(value.chatHistory),
   };
 }
 export function restoreRooms(rows: readonly unknown[]): RestoreRoomsResult {

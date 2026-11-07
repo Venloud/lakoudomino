@@ -19,6 +19,14 @@ export type PersistedSeatOffer = {
   userId?: string | null;
 };
 export type PersistedMatchParticipant = { seat: Seat; userId: string | null };
+export type PersistedRoomChatMessage = {
+  id: string;
+  seat: Seat | null;
+  name: string;
+  text: string;
+  sentAt: string;
+};
+export const ROOM_CHAT_HISTORY_LIMIT = 50;
 
 export type PersistedRoomState = {
   code: string;
@@ -51,4 +59,6 @@ export type PersistedRoomState = {
   crownsEligible?: boolean;
   /** Epoch milliseconds when the room last had no connected real player. */
   hostDisconnectedAt?: number | null;
+  /** Bounded room conversation history, kept separate from the game engine state. */
+  chatHistory?: PersistedRoomChatMessage[];
 };

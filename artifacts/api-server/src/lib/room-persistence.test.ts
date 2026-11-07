@@ -61,6 +61,9 @@ test("room persistence adapter round-trips against the provisioned table shape",
     await pool.query(
       `CREATE TABLE ${quotedSchema}.domino_rooms (LIKE public.domino_rooms INCLUDING ALL)`,
     );
+    await pool.query(
+      `ALTER TABLE ${quotedSchema}.domino_rooms ADD COLUMN IF NOT EXISTS chat_history jsonb NOT NULL DEFAULT '[]'`,
+    );
 
     const engineState = createMatch({
       mode: "regular",
@@ -101,6 +104,9 @@ test("room persistence adapter round-trips against the provisioned table shape",
       lifecycleApplied: false,
       crownsEligible: true,
       hostDisconnectedAt: null,
+      chatHistory: [
+        { id: "chat-1", seat: 0, name: "Schema check host", text: "Good hand", sentAt: "2026-11-07T00:00:00.000Z" },
+      ],
     };
     const isolatedDatabaseUrl = new URL(databaseUrl);
     isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
@@ -119,6 +125,7 @@ test("room persistence adapter round-trips against the provisioned table shape",
     assert.equal(row.lastAction, null);
     assert.equal(row.activeMatchId, null);
     assert.equal(row.hostDisconnectedAt, null);
+    assert.deepEqual(row.chatHistory, room.chatHistory);
     assert.equal(row.quarantinedAt, null);
     assert.equal(row.quarantineIssues, null);
 
@@ -135,6 +142,7 @@ test("room persistence adapter round-trips against the provisioned table shape",
     assert.equal(restored.lastAction, null);
     assert.equal(restored.activeMatchId, null);
     assert.equal(restored.hostDisconnectedAt, null);
+    assert.deepEqual(restored.chatHistory, room.chatHistory);
   } finally {
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }

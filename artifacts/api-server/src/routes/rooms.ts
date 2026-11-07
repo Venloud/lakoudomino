@@ -21,7 +21,7 @@ import {
   StartRoomParams,
   StartRoomResponse,
 } from "@workspace/api-zod";
-import type { Seat } from "../lib/room-types";
+import { ROOM_CHAT_HISTORY_LIMIT, type Seat } from "../lib/room-types";
 import { handleTicTacToeSocket } from "./tic-tac-toe";
 import { handleWordYardSocket } from "./word-yard";
 import { handleArcadeSocket } from "./arcade";
@@ -157,6 +157,7 @@ export async function initializeRooms(): Promise<void> {
 function registerRoomRuntime(room: PersistedRoomState): RoomState {
   const runtime: RoomState = {
     ...room,
+    chatHistory: room.chatHistory ?? [],
     connections: new Map(),
     waitlistConnections: new Map(),
     spectatorConnections: new Set(),
@@ -814,16 +815,25 @@ async function handleLobbySocket(socket: WebSocket, request: IncomingMessage): P
   });
 }
 
-function broadcastChat(room: RoomState, seat: Seat | null, text: string, name: string, senderId: string): void {
+async function broadcastChat(room: RoomState, seat: Seat | null, text: string, name: string, senderId: string): Promise<void> {
+  const chatMessage = {
+    id: `${Date.now()}-${seat}-${Math.random().toString(36).slice(2, 8)}`,
+    seat,
+    name,
+    text,
+    sentAt: new Date().toISOString(),
+  };
+  room.chatHistory = [...(room.chatHistory ?? []), chatMessage].slice(-ROOM_CHAT_HISTORY_LIMIT);
+  try {
+    await persistRoom(room);
+  } catch (error) {
+    logger.error({ err: error, roomCode: room.code }, "Could not persist recent room chat");
+  }
   const message = {
     type: "chat",
     message: {
-      id: `${Date.now()}-${seat}-${Math.random().toString(36).slice(2, 8)}`,
-      seat,
-      name,
       senderId,
-      text,
-      sentAt: new Date().toISOString(),
+      ...chatMessage,
     },
   };
   room.connections.forEach((sockets) => {
@@ -839,6 +849,15 @@ function broadcastChat(room: RoomState, seat: Seat | null, text: string, name: s
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
     });
   });
+}
+
+function sendChatHistory(socket: WebSocket, room: RoomState, viewerSeat: Seat | null): void {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({
+    type: "chatHistory",
+    viewerSeat,
+    messages: room.chatHistory ?? [],
+  }));
 }
 
 async function broadcastRoom(room: RoomState): Promise<void> {
@@ -1165,6 +1184,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
           detail: "Watching a table",
         });
         sendSnapshot(socket, room, null);
+        sendChatHistory(socket, room, null);
         broadcastLobbyUpdate();
         return;
       }
@@ -1188,6 +1208,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
           detail: "Waiting for a seat",
         });
         sendSnapshot(socket, room, null, identityHash);
+        sendChatHistory(socket, room, null);
         const offer = room.offers.find((candidate) => candidate.playerId === identityHash);
         if (offer) socket.send(JSON.stringify({ type: "offer", seat: offer.seat, expiresAt: offer.expiresAt }));
         broadcastLobbyUpdate();
@@ -1218,6 +1239,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
       scheduleRoomCleanup(room);
       sendSnapshot(socket, room, seat);
       await broadcastRoom(room);
+      sendChatHistory(socket, room, seat);
       return;
     }
 
@@ -1233,7 +1255,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
       }
       room.chatTimestamps.set(identity, now);
       const speaker = seat === undefined ? displayName : (room.seats[seat]?.name || `Seat ${seat + 1}`);
-      broadcastChat(room, seat ?? null, event.text, speaker, viewerId);
+      await broadcastChat(room, seat ?? null, event.text, speaker, viewerId);
       return;
     }
     if (event.type === "changeSettings") {

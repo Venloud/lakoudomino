@@ -35,6 +35,7 @@ export const dominoRooms = pgTable("domino_rooms", {
   lifecycleApplied: boolean("lifecycle_applied").notNull().default(false),
   crownsEligible: boolean("crowns_eligible"),
   hostDisconnectedAt: bigint("host_disconnected_at", { mode: "number" }),
+  chatHistory: jsonb("chat_history").notNull().default([]),
   quarantinedAt: timestamp("quarantined_at", { withTimezone: true }),
   quarantineIssues: jsonb("quarantine_issues"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
