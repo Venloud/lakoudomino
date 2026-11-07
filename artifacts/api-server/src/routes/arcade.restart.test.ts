@@ -94,7 +94,10 @@ async function reservePort(): Promise<number> {
   return address.port;
 }
 
-async function startArcadeProcess(databaseUrl: string): Promise<{
+async function startArcadeProcess(
+  databaseUrl: string,
+  options: { failInitialListenerConnection?: boolean; listenerRetryDelayMs?: number } = {},
+): Promise<{
   child: ChildProcess;
   baseUrl: string;
   getOutput: () => string;
@@ -110,6 +113,10 @@ async function startArcadeProcess(databaseUrl: string): Promise<{
         DATABASE_URL: databaseUrl,
         NODE_ENV: "test",
         PORT: String(port),
+        ...(options.failInitialListenerConnection ? { ARCADE_TEST_FAIL_INITIAL_LISTENER_CONNECTION: "1" } : {}),
+        ...(options.listenerRetryDelayMs
+          ? { ARCADE_TEST_LISTENER_RETRY_DELAY_MS: String(options.listenerRetryDelayMs) }
+          : {}),
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -1438,6 +1445,82 @@ test("notification listener retries automatically and resyncs connected room sna
     sockets.forEach((socket) => socket.close());
     if (processTwo) await stopArcadeProcess(processTwo.child);
     if (processOne) await stopArcadeProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("health reports an initial notification connection failure without exposing its details", {
+  timeout: 20_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for arcade listener startup health tests.");
+
+  const schema = `arcade_listener_startup_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let server: Awaited<ReturnType<typeof startArcadeProcess>> | undefined;
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+
+  try {
+    await pool.query(`
+      CREATE TABLE ${quotedSchema}.arcade_rooms (
+        code text PRIMARY KEY,
+        game text NOT NULL,
+        capacity integer NOT NULL,
+        is_private boolean NOT NULL,
+        players jsonb NOT NULL,
+        state jsonb,
+        turn integer NOT NULL DEFAULT 0,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    server = await startArcadeProcess(isolatedDatabaseUrl.toString(), {
+      failInitialListenerConnection: true,
+      listenerRetryDelayMs: 3_000,
+    });
+
+    const readHealth = async () => {
+      const response = await fetch(`${server!.baseUrl}/healthz`);
+      assert.equal(response.status, 200);
+      return await response.json() as {
+        status: string;
+        arcadeRoomUpdates: {
+          status: string;
+          retryScheduled: boolean;
+          retryCount: number;
+          nextRetryAt: number | null;
+          lastConnectedAt: number | null;
+          lastDisconnectedAt: number | null;
+        };
+      };
+    };
+
+    const initialHealth = await readHealth();
+    assert.equal(initialHealth.status, "ok");
+    assert.equal(initialHealth.arcadeRoomUpdates.status, "retrying");
+    assert.equal(initialHealth.arcadeRoomUpdates.retryScheduled, true);
+    assert.equal(initialHealth.arcadeRoomUpdates.retryCount, 1);
+    assert.ok(initialHealth.arcadeRoomUpdates.nextRetryAt);
+    assert.ok(initialHealth.arcadeRoomUpdates.lastDisconnectedAt);
+    assert.equal(initialHealth.arcadeRoomUpdates.lastConnectedAt, null);
+    assert.doesNotMatch(JSON.stringify(initialHealth), /privacy sentinel|connection failure/i);
+
+    const connectedDeadline = Date.now() + 10_000;
+    let recoveredHealth = initialHealth;
+    while (recoveredHealth.arcadeRoomUpdates.status !== "connected" && Date.now() < connectedDeadline) {
+      await delay(50);
+      recoveredHealth = await readHealth();
+    }
+    assert.equal(recoveredHealth.arcadeRoomUpdates.status, "connected");
+    assert.equal(recoveredHealth.arcadeRoomUpdates.retryScheduled, false);
+    assert.equal(recoveredHealth.arcadeRoomUpdates.retryCount, 0);
+    assert.equal(recoveredHealth.arcadeRoomUpdates.nextRetryAt, null);
+    assert.ok(recoveredHealth.arcadeRoomUpdates.lastConnectedAt);
+    assert.ok(recoveredHealth.arcadeRoomUpdates.lastDisconnectedAt);
+    assert.doesNotMatch(JSON.stringify(recoveredHealth), /privacy sentinel|connection failure/i);
+  } finally {
+    if (server) await stopArcadeProcess(server.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }
 });
