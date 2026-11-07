@@ -228,7 +228,7 @@ test('phone player can tap a tile and place it on the live board', async ({ brow
   }
 });
 
-test('seated players see watcher counts update across disconnects and reconnects', async ({ browser }) => {
+test('seated players see distinct watcher counts across tabs and reconnects', async ({ browser }) => {
   let code = '';
   const players: Array<{ name: string; token: string }> = [];
   const contexts: Array<Awaited<ReturnType<typeof browser.newContext>>> = [];
@@ -281,7 +281,34 @@ test('seated players see watcher counts update across disconnects and reconnects
     await expect(watcher.locator('.lk-watcher-count')).toHaveCount(0);
     await expect(host.getByText('Watcher UI spectator', { exact: true })).toHaveCount(0);
 
+    const duplicateWatcher = await watcherContext.newPage();
+    await duplicateWatcher.goto(watchUrl);
+    await expect(duplicateWatcher.getByTestId('status-watch-waiting')).toBeVisible({ timeout: 20_000 });
+    await duplicateWatcher.waitForTimeout(250);
+    await expect(hostCount).toHaveText('1 watching');
+    await expect(guestCount).toHaveText('1 watching');
+
+    const otherWatcherContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    contexts.push(otherWatcherContext);
+    await otherWatcherContext.addInitScript(({ roomCode }) => {
+      sessionStorage.setItem(`dominoes-display-name-${roomCode}`, 'Separate browser watcher');
+    }, { roomCode: code });
+    const otherWatcher = await otherWatcherContext.newPage();
+    await otherWatcher.goto(watchUrl);
+    await expect(otherWatcher.getByTestId('status-watch-waiting')).toBeVisible({ timeout: 20_000 });
+    await expect(hostCount).toHaveText('2 watching', { timeout: 15_000 });
+    await expect(guestCount).toHaveText('2 watching', { timeout: 15_000 });
+    await expect(host.getByText('Separate browser watcher', { exact: true })).toHaveCount(0);
+
     await watcher.close();
+    await expect(hostCount).toHaveText('2 watching', { timeout: 15_000 });
+    await expect(guestCount).toHaveText('2 watching', { timeout: 15_000 });
+
+    await duplicateWatcher.close();
+    await expect(hostCount).toHaveText('1 watching', { timeout: 15_000 });
+    await expect(guestCount).toHaveText('1 watching', { timeout: 15_000 });
+
+    await otherWatcher.close();
     await expect(hostCount).toHaveText('0 watching', { timeout: 15_000 });
     await expect(guestCount).toHaveText('0 watching', { timeout: 15_000 });
 

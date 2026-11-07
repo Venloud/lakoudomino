@@ -13,7 +13,7 @@ import {
 import type { Action, PlayerView } from 'lakou-engine';
 import { LakouGame } from '../../../../lakou-engine/ui/GameScreen';
 import { WaitingRoom, type ChatMessage, type Friend as KitFriend, type WaitingSeat, type WaitlistEntryView } from '../../../../lakou-engine/ui';
-import { getClientId } from '@/lib/lakou-session';
+import { getClientId, getWatcherId } from '@/lib/lakou-session';
 
 type SocketSnapshot = {
   view: (PlayerView & { engine: 'lakou' }) | null;
@@ -129,7 +129,10 @@ export default function RoomPage() {
     let closed = false; let retry: number | undefined;
     const connect = () => {
       if (closed) return;
-       const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?code=${encodeURIComponent(code)}&clientId=${encodeURIComponent(getClientId())}${watchOnly ? '&watch=1' : ''}`);
+       const watcherParams = watchOnly
+         ? `&watch=1&watcherId=${encodeURIComponent(getWatcherId())}`
+         : '';
+       const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?code=${encodeURIComponent(code)}&clientId=${encodeURIComponent(getClientId())}${watcherParams}`);
       socket.current = ws;
        ws.onopen = () => {
          void queryClient.invalidateQueries({ queryKey: getListFriendsQueryKey() });

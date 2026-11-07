@@ -127,6 +127,7 @@ type RoomRetryNotificationClient = {
 
 const rooms = new Map<string, RoomState>();
 const socketViewerIds = new WeakMap<WebSocket, string>();
+const spectatorWatcherIds = new WeakMap<WebSocket, string>();
 type QueueMember = {
   name: string;
   userId: string | null;
@@ -623,8 +624,7 @@ function requireRoom(code: string, res: Response) {
 function sendSnapshot(socket: WebSocket, room: RoomState, seat: Seat | null, meId: string | null = null) {
   if (socket.readyState !== WebSocket.OPEN) return;
   const isSpectator = seat === null;
-  const watcherCount = [...room.spectatorConnections].filter((connection) =>
-    connection.readyState === WebSocket.OPEN).length;
+  const watcherCount = getWatcherCount(room);
   const privateView = room.engineState ? publicView(room.engineState, seat) : null;
   const view = privateView && isSpectator
     ? { ...privateView, myHand: [], legal: [], revealedHands: null }
@@ -675,6 +675,15 @@ function sendSocketError(socket: WebSocket, message: string) {
 function clientPresenceId(requestUrl: URL): string {
   const value = requestUrl.searchParams.get("clientId") ?? "";
   return /^[A-Za-z0-9_-]{8,96}$/.test(value) ? value : randomBytes(12).toString("hex");
+}
+
+function getWatcherCount(room: RoomState): number {
+  const viewers = new Set<string | WebSocket>();
+  for (const socket of room.spectatorConnections) {
+    if (socket.readyState !== WebSocket.OPEN) continue;
+    viewers.add(spectatorWatcherIds.get(socket) ?? socket);
+  }
+  return viewers.size;
 }
 
 function queuePlayerId(userId: string | null | undefined, clientId: string): string {
@@ -986,8 +995,7 @@ function sendChatHistory(socket: WebSocket, room: RoomState, viewerSeat: Seat | 
 function broadcastWatcherCount(room: RoomState): void {
   const message = JSON.stringify({
     type: "watcherCount",
-    watcherCount: [...room.spectatorConnections].filter((socket) =>
-      socket.readyState === WebSocket.OPEN).length,
+    watcherCount: getWatcherCount(room),
   });
   room.connections.forEach((sockets) => {
     sockets.forEach((socket) => {
@@ -1262,6 +1270,10 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
   const room = getRoom(requestUrl.searchParams.get("code") ?? "");
   const identity = await getIdentityFromCookieHeader(request.headers.cookie);
   const clientId = clientPresenceId(requestUrl);
+  const requestedWatcherId = requestUrl.searchParams.get("watcherId") ?? "";
+  const watcherId = /^[A-Za-z0-9_-]{8,96}$/.test(requestedWatcherId)
+    ? requestedWatcherId
+    : randomUUID();
   const viewerId = randomUUID();
   socketViewerIds.set(socket, viewerId);
   const watchOnly = requestUrl.searchParams.get("watch") === "1";
@@ -1311,6 +1323,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
       if (!event.reconnectToken) {
         spectator = true;
         room.spectatorConnections.add(socket);
+        spectatorWatcherIds.set(socket, watcherId);
         trackPresence(socket, {
           identityKey: identity ? `user:${identity.userId}` : `guest:${clientId}`,
           userId: identity?.userId ?? null,
