@@ -126,6 +126,7 @@ async function createRoomsTable(schema: string): Promise<void> {
       lifecycle_applied boolean NOT NULL DEFAULT false,
       crowns_eligible boolean,
       host_disconnected_at bigint,
+      chat_history jsonb NOT NULL DEFAULT '[]',
       quarantined_at timestamptz,
       quarantine_issues jsonb,
       updated_at timestamptz NOT NULL DEFAULT now()
@@ -1009,6 +1010,19 @@ test("live room chat reaches members in order, rejects invalid text, stays room-
     await expectChatToBothMembers("  First message  ");
     await delay(1_050);
     await expectChatToBothMembers("Second message");
+    const reconnectingHost = await openRoomSocket(api.baseUrl, primaryRoom.code);
+    sockets.push(reconnectingHost);
+    const reconnectedSnapshot = receiveSocketMessage(reconnectingHost);
+    reconnectingHost.send(JSON.stringify({ type: "hello", reconnectToken: primaryRoom.hostToken }));
+    assert.equal((await reconnectedSnapshot).type, "snapshot");
+    let history = await receiveSocketMessage(reconnectingHost);
+    while (history.type !== "chatHistory") history = await receiveSocketMessage(reconnectingHost);
+    assert.equal(history.type, "chatHistory");
+    assert.equal(history.viewerSeat, 0);
+    assert.deepEqual(
+      (history.messages as JsonRecord[]).map((message) => message.text),
+      ["First message", "Second message"],
+    );
     await delay(250);
     unrelatedHost.off("message", onUnrelatedMessage);
     assert.equal(unrelatedChatReceived, false, "a different room must not receive the chat message");
