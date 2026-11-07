@@ -25,6 +25,13 @@ export type RoomRecoveryNotification = {
   issueCounts: Array<{ fieldPath: string; occurrenceCount: number }>;
 };
 
+export type RoomRecoveryAlertHealth = {
+  configured: boolean;
+  deliveryState: "not-configured" | "idle" | "sending" | "delivered" | "failed";
+  lastAttemptAt: string | null;
+  attempts: number;
+};
+
 type RoomRecoveryNotificationOptions = {
   webhookUrl?: string;
   fetchImpl?: typeof fetch;
@@ -32,6 +39,33 @@ type RoomRecoveryNotificationOptions = {
 };
 
 const RECOVERY_ALERT_RETRY_DELAYS_MS = [150, 450] as const;
+let lastRecoveryAlertState: RoomRecoveryAlertHealth = {
+  configured: false,
+  deliveryState: "not-configured",
+  lastAttemptAt: null,
+  attempts: 0,
+};
+
+export function getRoomRecoveryAlertHealth(): RoomRecoveryAlertHealth {
+  const configured = Boolean(process.env.ROOM_RECOVERY_ALERT_WEBHOOK_URL?.trim());
+  const deliveryState = lastRecoveryAlertState.deliveryState === "not-configured" && configured
+    ? "idle"
+    : lastRecoveryAlertState.deliveryState;
+  return {
+    ...lastRecoveryAlertState,
+    configured,
+    deliveryState,
+  };
+}
+
+function updateRecoveryAlertHealth(
+  state: RoomRecoveryAlertHealth["deliveryState"],
+  attempts: number,
+  configured: boolean,
+  lastAttemptAt = lastRecoveryAlertState.lastAttemptAt,
+): void {
+  lastRecoveryAlertState = { configured, deliveryState: state, attempts, lastAttemptAt };
+}
 
 function isRetryableResponse(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
@@ -47,7 +81,12 @@ export async function sendRoomRecoveryNotification(
   options: RoomRecoveryNotificationOptions = {},
 ): Promise<boolean> {
   const webhookUrl = options.webhookUrl ?? process.env.ROOM_RECOVERY_ALERT_WEBHOOK_URL;
-  if (!webhookUrl) return false;
+  if (!webhookUrl?.trim()) {
+    updateRecoveryAlertHealth("not-configured", 0, false, null);
+    return false;
+  }
+  const lastAttemptAt = new Date().toISOString();
+  updateRecoveryAlertHealth("sending", 0, true, lastAttemptAt);
 
   const logFailure = (fields: Record<string, unknown>) => logger.error(
     { event: "persisted_room_recovery_alert_delivery_failed", ...fields },
@@ -58,10 +97,12 @@ export async function sendRoomRecoveryNotification(
   try {
     destination = new URL(webhookUrl);
     if (destination.protocol !== "https:" || destination.username || destination.password) {
+      updateRecoveryAlertHealth("failed", 0, true, lastAttemptAt);
       logFailure({ attempts: 0, failureType: "invalid_destination" });
       return false;
     }
   } catch {
+    updateRecoveryAlertHealth("failed", 0, true, lastAttemptAt);
     logFailure({ attempts: 0, failureType: "invalid_destination" });
     return false;
   }
@@ -78,6 +119,7 @@ export async function sendRoomRecoveryNotification(
   const totalAttempts = RECOVERY_ALERT_RETRY_DELAYS_MS.length + 1;
 
   for (let attempt = 0; attempt < totalAttempts; attempt += 1) {
+    updateRecoveryAlertHealth("sending", attempt + 1, true, lastAttemptAt);
     let retry = false;
     try {
       const response = await (options.fetchImpl ?? fetch)(destination, {
@@ -87,10 +129,14 @@ export async function sendRoomRecoveryNotification(
         signal: AbortSignal.timeout(5_000),
         redirect: "error",
       });
-      if (response.ok) return true;
+      if (response.ok) {
+        updateRecoveryAlertHealth("delivered", attempt + 1, true, lastAttemptAt);
+        return true;
+      }
       if (isRetryableResponse(response.status) && attempt < RECOVERY_ALERT_RETRY_DELAYS_MS.length) {
         retry = true;
       } else {
+        updateRecoveryAlertHealth("failed", attempt + 1, true, lastAttemptAt);
         logFailure({
           attempts: attempt + 1,
           failureType: "http",
@@ -102,6 +148,7 @@ export async function sendRoomRecoveryNotification(
       if (isRetryableRequestError(error) && attempt < RECOVERY_ALERT_RETRY_DELAYS_MS.length) {
         retry = true;
       } else {
+        updateRecoveryAlertHealth("failed", attempt + 1, true, lastAttemptAt);
         logFailure({
           attempts: attempt + 1,
           failureType: isRetryableRequestError(error) ? "transport_exhausted" : "request",

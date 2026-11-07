@@ -7,11 +7,14 @@
  */
 import type { HealthStatusArcadeRoomUpdates } from './healthStatusArcadeRoomUpdates';
 import type { HealthStatusRoomRecovery } from './healthStatusRoomRecovery';
+import type { HealthStatusRoomRecoveryAlert } from './healthStatusRoomRecoveryAlert';
 
 export interface HealthStatus {
   status: string;
   /** Safe summary of the most recent persisted Domino room recovery attempt. */
   roomRecovery: HealthStatusRoomRecovery;
+  /** Safe configuration and recent delivery status for persisted-room recovery alerts. */
+  roomRecoveryAlert: HealthStatusRoomRecoveryAlert;
   /** Aggregate state of the arcade room notification listener. */
   arcadeRoomUpdates: HealthStatusArcadeRoomUpdates;
 }

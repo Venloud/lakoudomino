@@ -733,6 +733,23 @@ components:
                     minimum: 1
                 required: [fieldPath, occurrenceCount]
           required: [checkedAt, skippedRoomCount, issueCounts]
+        roomRecoveryAlert:
+          type: object
+          description: Safe configuration and recent delivery status for persisted-room recovery alerts.
+          properties:
+            configured:
+              type: boolean
+            deliveryState:
+              type: string
+              enum: [not-configured, idle, sending, delivered, failed]
+            lastAttemptAt:
+              type: string
+              format: date-time
+              nullable: true
+            attempts:
+              type: integer
+              minimum: 0
+          required: [configured, deliveryState, lastAttemptAt, attempts]
         arcadeRoomUpdates:
           type: object
           description: Aggregate state of the arcade room notification listener.
@@ -760,6 +777,7 @@ components:
       required:
         - status
         - roomRecovery
+        - roomRecoveryAlert
         - arcadeRoomUpdates
     RoomMode:
       type: string

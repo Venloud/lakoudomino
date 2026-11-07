@@ -50,6 +50,8 @@ export * from './healthStatus';
 export * from './healthStatusArcadeRoomUpdates';
 export * from './healthStatusArcadeRoomUpdatesStatus';
 export * from './healthStatusRoomRecovery';
+export * from './healthStatusRoomRecoveryAlert';
+export * from './healthStatusRoomRecoveryAlertDeliveryState';
 export * from './healthStatusRoomRecoveryIssueCountsItem';
 export * from './hostActionInput';
 export * from './leaderboardRow';

@@ -11,6 +11,7 @@ import {
   type PersistedRoomStore,
   type QuarantinedRoomRetryResult,
 } from "../lib/room-persistence.ts";
+import { sendRoomRecoveryNotification } from "../lib/logger.ts";
 import healthRouter, { createRoomRetryHandler } from "./health.ts";
 
 test("health exposes skipped-room counts and field paths without identifiers or credentials", async () => {
@@ -132,6 +133,101 @@ test("recovery alert is absent for zero skips and only contains aggregate safe p
     ],
   });
   assert.equal(JSON.stringify(alert).includes("RECONNECT-HASH-SENTINEL"), false);
+});
+
+test("health reports configured and failed recovery-alert delivery without private details", async () => {
+  const previousWebhookUrl = process.env.ROOM_RECOVERY_ALERT_WEBHOOK_URL;
+  delete process.env.ROOM_RECOVERY_ALERT_WEBHOOK_URL;
+  const app = express();
+  app.use(healthRouter);
+  const server = createServer(app);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  let requests = 0;
+
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    assert.equal(await sendRoomRecoveryNotification({
+      event: "persisted_room_recovery_skipped",
+      skippedRoomCount: 0,
+      issueCounts: [],
+    }), false);
+    const unconfiguredResponse = await fetch(`${baseUrl}/healthz`);
+    const unconfiguredBody = await unconfiguredResponse.json() as {
+      roomRecoveryAlert: { configured: boolean; deliveryState: string };
+    };
+    assert.deepEqual(unconfiguredBody.roomRecoveryAlert, {
+      configured: false,
+      deliveryState: "not-configured",
+      lastAttemptAt: null,
+      attempts: 0,
+    });
+
+    process.env.ROOM_RECOVERY_ALERT_WEBHOOK_URL = "https://alerts.example.test/hooks/PRIVATE-ROOM-CODE-RECONNECT-CREDENTIAL";
+    const configuredResponse = await fetch(`${baseUrl}/healthz`);
+    const configuredBody = await configuredResponse.json() as {
+      roomRecoveryAlert: {
+        configured: boolean;
+        deliveryState: string;
+        lastAttemptAt: string | null;
+        attempts: number;
+      };
+    };
+    assert.deepEqual(configuredBody.roomRecoveryAlert, {
+      configured: true,
+      deliveryState: "idle",
+      lastAttemptAt: null,
+      attempts: 0,
+    });
+
+    assert.equal(await sendRoomRecoveryNotification({
+      event: "persisted_room_recovery_skipped",
+      skippedRoomCount: 1,
+      issueCounts: [{ fieldPath: "seats", occurrenceCount: 1 }],
+    }, {
+      fetchImpl: async () => {
+        requests += 1;
+        return new Response(null, { status: 503 });
+      },
+      sleepImpl: async () => {},
+    }), false);
+    assert.equal(requests, 3);
+
+    const failedResponse = await fetch(`${baseUrl}/healthz`);
+    const failedBody = await failedResponse.json() as {
+      roomRecoveryAlert: {
+        configured: boolean;
+        deliveryState: string;
+        lastAttemptAt: string | null;
+        attempts: number;
+      };
+    };
+    assert.deepEqual(failedBody.roomRecoveryAlert, {
+      configured: true,
+      deliveryState: "failed",
+      lastAttemptAt: failedBody.roomRecoveryAlert.lastAttemptAt,
+      attempts: 3,
+    });
+    assert.ok(failedBody.roomRecoveryAlert.lastAttemptAt);
+    const serialized = JSON.stringify(failedBody.roomRecoveryAlert);
+    assert.equal(serialized.includes("RECONNECT-CREDENTIAL"), false);
+    assert.equal(serialized.includes("PRIVATE-ROOM-CODE"), false);
+    assert.equal(serialized.includes("Persisted rooms skipped"), false);
+    assert.deepEqual(Object.keys(failedBody.roomRecoveryAlert).sort(), [
+      "attempts",
+      "configured",
+      "deliveryState",
+      "lastAttemptAt",
+    ]);
+  } finally {
+    await new Promise<void>((resolveClose, reject) => {
+      server.close((error) => error ? reject(error) : resolveClose());
+    });
+    if (previousWebhookUrl === undefined) delete process.env.ROOM_RECOVERY_ALERT_WEBHOOK_URL;
+    else process.env.ROOM_RECOVERY_ALERT_WEBHOOK_URL = previousWebhookUrl;
+  }
 });
 
 test("room retry requires the configured operator token and does not expose stored room data", async () => {
