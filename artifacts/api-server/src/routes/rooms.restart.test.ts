@@ -772,7 +772,7 @@ test("a connected watch-only socket receives Points hand results and the automat
   }
 });
 
-test("waiting room setting changes reach every connected player and rejected changes are not saved", {
+test("waiting room setting changes reach seated, watching, and waitlisted players", {
   timeout: 90_000,
 }, async () => {
   const databaseUrl = process.env.DATABASE_URL;
@@ -827,6 +827,22 @@ test("waiting room setting changes reach every connected player and rejected cha
     const spectatorWelcome = receiveSocketMessage(spectator);
     spectator.send(JSON.stringify({ type: "hello", displayName: "Settings spectator" }));
     assert.equal((await spectatorWelcome).type, "snapshot");
+    const waitlistToken = randomUUID().replaceAll("-", "") + randomUUID().replaceAll("-", "");
+    const waitlistResponse = await fetch(`${api.baseUrl}/api/rooms/${created.code}/waitlist`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reconnectToken: waitlistToken, name: "Waiting player" }),
+    });
+    assert.equal(waitlistResponse.status, 200, `waitlist join failed: ${await waitlistResponse.text()}`);
+    const waitlistPlayer = await openRoomSocket(api.baseUrl, created.code);
+    sockets.push(waitlistPlayer);
+    const waitlistWelcome = receiveSocketMessage(waitlistPlayer);
+    waitlistPlayer.send(JSON.stringify({
+      type: "hello",
+      reconnectToken: waitlistToken,
+      displayName: "Waiting player",
+    }));
+    assert.equal((await waitlistWelcome).type, "snapshot");
     const updatedSettings = {
       mode: "points",
       rowBoxes: 14,
@@ -837,15 +853,18 @@ test("waiting room setting changes reach every connected player and rejected cha
     const hostUpdate = receiveRoomSettings(host, updatedSettings);
     const guestUpdate = receiveRoomSettings(guest, updatedSettings);
     const spectatorUpdate = receiveRoomSettings(spectator, updatedSettings);
+    const waitlistUpdate = receiveRoomSettings(waitlistPlayer, updatedSettings);
     host.send(JSON.stringify({ type: "changeSettings", ...updatedSettings }));
-    const [hostSnapshot, guestSnapshot, spectatorSnapshot] = await Promise.all([
+    const [hostSnapshot, guestSnapshot, spectatorSnapshot, waitlistSnapshot] = await Promise.all([
       hostUpdate,
       guestUpdate,
       spectatorUpdate,
+      waitlistUpdate,
     ]);
     assert.deepEqual(hostSnapshot.roomSettings, updatedSettings);
     assert.deepEqual(guestSnapshot.roomSettings, updatedSettings);
     assert.deepEqual(spectatorSnapshot.roomSettings, updatedSettings);
+    assert.deepEqual(waitlistSnapshot.roomSettings, updatedSettings);
 
     const readPersistedSettings = async () => {
       const result = await pool.query(
