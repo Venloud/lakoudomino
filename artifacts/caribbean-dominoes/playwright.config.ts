@@ -12,4 +12,10 @@ export default defineConfig({
     browserName: 'chromium',
     headless: true,
   },
+  webServer: process.env.DOMINO_E2E_BASE_URL ? undefined : {
+    command: 'PORT=5173 BASE_PATH=/ pnpm run dev',
+    url: 'http://127.0.0.1:5173',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 });
