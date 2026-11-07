@@ -227,3 +227,79 @@ test('phone player can tap a tile and place it on the live board', async ({ brow
     }
   }
 });
+
+test('seated players see watcher counts update across disconnects and reconnects', async ({ browser }) => {
+  let code = '';
+  const players: Array<{ name: string; token: string }> = [];
+  const contexts: Array<Awaited<ReturnType<typeof browser.newContext>>> = [];
+
+  try {
+    const created = await postJson('/api/rooms', {
+      displayName: 'Watcher UI host',
+      mode: 'regular',
+      playerCount: 2,
+      rowLength: 10,
+      rowBoxes: 8,
+      twoPlayerVariant: 'draw',
+      isPrivate: true,
+    });
+    code = String(created.code);
+    expect(code).toBeTruthy();
+    players.push({ name: 'Watcher UI host', token: String(created.reconnectToken) });
+
+    const joined = await postJson(`/api/rooms/${code}`, { displayName: 'Watcher UI guest' });
+    players.push({ name: 'Watcher UI guest', token: String(joined.reconnectToken) });
+
+    const hostContext = await browser.newContext({ viewport: { width: 1440, height: 960 } });
+    const guestContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const watcherContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    contexts.push(hostContext, guestContext, watcherContext);
+    for (const [context, player] of [[hostContext, players[0]!], [guestContext, players[1]!]] as const) {
+      await context.addInitScript(({ roomCode, reconnectToken, displayName }) => {
+        sessionStorage.setItem(`dominoes-reconnect-${roomCode}`, reconnectToken);
+        sessionStorage.setItem(`dominoes-display-name-${roomCode}`, displayName);
+      }, { roomCode: code, reconnectToken: player.token, displayName: player.name });
+    }
+
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+    await watcherContext.addInitScript(({ roomCode }) => {
+      sessionStorage.setItem(`dominoes-display-name-${roomCode}`, 'Watcher UI spectator');
+    }, { roomCode: code });
+    await Promise.all([host.goto(`/room/${code}`), guest.goto(`/room/${code}`)]);
+    const hostCount = host.locator('.lk-watcher-count');
+    const guestCount = guest.locator('.lk-watcher-count');
+    await expect(hostCount).toHaveText('0 watching', { timeout: 20_000 });
+    await expect(guestCount).toHaveText('0 watching', { timeout: 20_000 });
+
+    const watchUrl = `/room/${code}?watch=1`;
+    let watcher = await watcherContext.newPage();
+    await watcher.goto(watchUrl);
+    await expect(watcher.getByTestId('status-watch-waiting')).toBeVisible({ timeout: 20_000 });
+    await expect(hostCount).toHaveText('1 watching', { timeout: 15_000 });
+    await expect(guestCount).toHaveText('1 watching', { timeout: 15_000 });
+    await expect(watcher.locator('.lk-watcher-count')).toHaveCount(0);
+    await expect(host.getByText('Watcher UI spectator', { exact: true })).toHaveCount(0);
+
+    await watcher.close();
+    await expect(hostCount).toHaveText('0 watching', { timeout: 15_000 });
+    await expect(guestCount).toHaveText('0 watching', { timeout: 15_000 });
+
+    watcher = await watcherContext.newPage();
+    await watcher.goto(watchUrl);
+    await expect(watcher.getByTestId('status-watch-waiting')).toBeVisible({ timeout: 20_000 });
+    await expect(hostCount).toHaveText('1 watching', { timeout: 15_000 });
+    await expect(guestCount).toHaveText('1 watching', { timeout: 15_000 });
+  } finally {
+    await Promise.allSettled(contexts.map((context) => context.close()));
+    if (code) {
+      for (const player of [...players].reverse()) {
+        await postJson(`/api/rooms/${code}/leave`, { reconnectToken: player.token }).catch(() => {});
+      }
+      await expect.poll(async () => {
+        const response = await fetch(new URL(`/api/rooms/${code}`, baseURL));
+        return response.status;
+      }, { timeout: 8_000 }).toBe(404);
+    }
+  }
+});

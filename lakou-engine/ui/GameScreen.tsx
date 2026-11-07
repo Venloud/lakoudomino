@@ -28,6 +28,8 @@ export interface LakouGameProps {
   /** When the current player's 30 seconds run out (epoch ms). null while the 5-second pause runs or for bots. */
   turnDeadline?: number | null;
   turnMs?: number;
+  /** Active watch-link connections for seated players. */
+  watcherCount?: number;
   chat: ChatMessage[];
   onAction: (action: Action) => void;
   onSendChat: (text: string) => void;
@@ -301,12 +303,22 @@ export function LakouGame(props: LakouGameProps) {
         {desktop ? (
           <span className="lk-topbar-right">
             <span className="lk-meta">{points ? `Points  ·  ${view.rowBoxes}-box row` : `Regular`}{props.tableCode ? `  ·  Table ${props.tableCode}` : ''}</span>
+            {!readOnly && props.watcherCount !== undefined && (
+              <span className="lk-watcher-count" aria-live="polite" aria-label={`${props.watcherCount} ${props.watcherCount === 1 ? 'person' : 'people'} watching`}>
+                {props.watcherCount} watching
+              </span>
+            )}
             {!readOnly && <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>}
             {!readOnly && props.onLeave && <button className="lk-leave" onClick={props.onLeave}>Leave table</button>}
           </span>
         ) : (
           <span className="lk-topbar-right">
             {props.tableCode && <span className="lk-code-pill">{props.tableCode}</span>}
+            {!readOnly && props.watcherCount !== undefined && (
+              <span className="lk-watcher-count" aria-live="polite" aria-label={`${props.watcherCount} ${props.watcherCount === 1 ? 'person' : 'people'} watching`}>
+                {props.watcherCount} watching
+              </span>
+            )}
             {!readOnly && <button className="lk-settings-trigger" onClick={() => setSettingsOpen(true)} aria-label="Game settings">Settings</button>}
           </span>
         )}

@@ -200,6 +200,10 @@ async function receiveSocketMessageMatching(
   });
 }
 
+async function receiveWatcherCount(socket: WebSocket): Promise<JsonRecord> {
+  return await receiveSocketMessageMatching(socket, (message) => message.type === "watcherCount");
+}
+
 async function receiveHumanTurnClock(
   socket: WebSocket,
   seat: number,
@@ -514,6 +518,123 @@ test("a restored bot turn resumes automatically while a restored human turn wait
     );
   } finally {
     if (humanSocket && humanSocket.readyState !== WebSocket.CLOSED) humanSocket.close();
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
+test("seated players receive a live watcher count without watcher identities", {
+  timeout: 90_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room WebSocket integration tests.");
+
+  const schema = `rooms_watcher_count_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    const createResponse = await fetch(`${api.baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        displayName: "Watcher count host",
+        mode: "regular",
+        playerCount: 2,
+        rowLength: 10,
+        rowBoxes: 10,
+        twoPlayerVariant: "draw",
+        isPrivate: true,
+      }),
+    });
+    if (createResponse.status !== 201) assert.fail(`room create failed: ${await createResponse.text()}`);
+    const created = await createResponse.json() as { code: string; reconnectToken: string };
+    const joinResponse = await fetch(`${api.baseUrl}/api/rooms/${created.code}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "Watcher count guest" }),
+    });
+    if (joinResponse.status !== 200) assert.fail(`room join failed: ${await joinResponse.text()}`);
+    const joined = await joinResponse.json() as { reconnectToken: string };
+
+    const connectPlayer = async (reconnectToken: string) => {
+      const socket = await openRoomSocket(api!.baseUrl, created.code);
+      sockets.push(socket);
+      const welcomePromise = receiveSocketMessageMatching(socket, (message) => message.type === "snapshot");
+      socket.send(JSON.stringify({ type: "hello", reconnectToken }));
+      return { socket, welcome: await welcomePromise };
+    };
+    const host = await connectPlayer(created.reconnectToken);
+    const guest = await connectPlayer(joined.reconnectToken);
+    assert.equal(host.welcome.watcherCount, 0);
+    assert.equal(guest.welcome.watcherCount, 0);
+
+    const connectWatcher = async (displayName: string) => {
+      const socket = await openRoomSocket(api!.baseUrl, created.code, true);
+      sockets.push(socket);
+      const welcomePromise = receiveSocketMessageMatching(socket, (message) => message.type === "snapshot");
+      socket.send(JSON.stringify({ type: "hello", displayName }));
+      const welcome = await welcomePromise;
+      assert.equal(welcome.viewerRole, "spectator");
+      assert.equal(welcome.watcherCount, undefined, "spectators do not receive the seated-player count");
+      assert.equal(JSON.stringify(welcome).includes(created.reconnectToken), false);
+      assert.equal(JSON.stringify(welcome).includes(joined.reconnectToken), false);
+      return socket;
+    };
+    const expectCountAfter = async (change: () => Promise<void>, expected: number) => {
+      const hostUpdatePromise = receiveWatcherCount(host.socket);
+      const guestUpdatePromise = receiveWatcherCount(guest.socket);
+      await change();
+      const [hostUpdate, guestUpdate] = await Promise.all([hostUpdatePromise, guestUpdatePromise]);
+      for (const update of [hostUpdate, guestUpdate]) {
+        assert.deepEqual(update, { type: "watcherCount", watcherCount: expected });
+      }
+    };
+
+    const watcherOnePromise = connectWatcher("Private watcher one");
+    const watcherOneCounts = [
+      receiveWatcherCount(host.socket),
+      receiveWatcherCount(guest.socket),
+    ];
+    const watcherOne = await watcherOnePromise;
+    for (const update of await Promise.all(watcherOneCounts)) {
+      assert.deepEqual(update, { type: "watcherCount", watcherCount: 1 });
+    }
+
+    let watcherTwo: WebSocket | undefined;
+    await expectCountAfter(async () => {
+      watcherTwo = await connectWatcher("Private watcher two");
+    }, 2);
+
+    await expectCountAfter(async () => {
+      const closed = once(watcherOne, "close");
+      watcherOne.close();
+      await closed;
+    }, 1);
+
+    let reconnectedWatcher: WebSocket | undefined;
+    await expectCountAfter(async () => {
+      reconnectedWatcher = await connectWatcher("Private watcher one");
+    }, 2);
+
+    await expectCountAfter(async () => {
+      const closed = once(watcherTwo!, "close");
+      watcherTwo!.close();
+      await closed;
+    }, 1);
+    await expectCountAfter(async () => {
+      const closed = once(reconnectedWatcher!, "close");
+      reconnectedWatcher!.close();
+      await closed;
+    }, 0);
+  } finally {
+    sockets.forEach((socket) => socket.terminate());
     if (api) await stopRoomsProcess(api.child);
     await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   }

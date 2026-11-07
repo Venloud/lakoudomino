@@ -29,6 +29,7 @@
 .lk-meta { font-size: 13px; font-weight: 500; color: var(--lk-sub); white-space: pre; }
 .lk-leave { font-size: 13px; font-weight: 600; color: var(--lk-gold) !important; }
 .lk-code-pill { border: 1px solid var(--lk-line); border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: var(--lk-gold); }
+.lk-watcher-count { border: 1px solid var(--lk-line); border-radius: 999px; padding: 5px 9px; color: var(--lk-sub); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .lk-more { font-size: 20px; font-weight: 700; color: var(--lk-sub) !important; }
 .lk-stripe { position: relative; display: flex; width: 100%; }
 .lk-stripe i { flex: 1; transition: flex .45s ease, opacity .45s ease; }
