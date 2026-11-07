@@ -66,6 +66,20 @@ test('restores unfinished local matches for every supported game', () => {
   }
 });
 
+test('reports unavailable storage and resumes saving when storage becomes writable', () => {
+  for (const { game, state } of cases) {
+    const localStorage = memoryStorage();
+    const sessionStorage = memoryStorage();
+    localStorage.setItem = () => { throw new Error('Storage is unavailable'); };
+
+    assert.equal(saveLocalArcadeMatch(localStorage, sessionStorage, game, state, true), false, game);
+
+    localStorage.setItem = (key, value) => { localStorage.values.set(key, value); };
+    assert.equal(saveLocalArcadeMatch(localStorage, sessionStorage, game, state, true), true, game);
+    assert.deepEqual(loadSavedLocalArcadeMatch(localStorage, sessionStorage, game)?.state, state, game);
+  }
+});
+
 test('starting a new match replaces the saved state and clearing it resets restoration', () => {
   for (const { game, state } of cases) {
     const localStorage = memoryStorage();

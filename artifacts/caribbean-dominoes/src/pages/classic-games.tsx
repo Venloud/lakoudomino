@@ -194,6 +194,7 @@ export default function ClassicGamesPage() {
     try { return loadSavedChessMatch(window.localStorage); } catch { return null; }
   });
   const [restoredLocalMatch] = useState(() => initialLocalArcadeMatch(id));
+  const [localArcadeSaveFailed, setLocalArcadeSaveFailed] = useState(false);
   const [turn, setTurn] = useState<0 | 1>(() => restoredChessMatch?.game.turn() === 'b'
     ? 1
     : restoredLocalMatch && restoredLocalMatch.game !== 'filler' ? restoredLocalMatch.state.turn as 0 | 1 : 0);
@@ -359,8 +360,16 @@ export default function ClassicGamesPage() {
             : id === 'four-in-a-row'
               ? { game: id, turn, winner, four }
               : { game: id, turn: fillerTurn, winner: fillerWinner, fillerBoard, fillerPlayerCount };
-      saveLocalArcadeMatch(window.localStorage, window.sessionStorage, id, snapshot, playVsBot);
-    } catch { /* Storage may be unavailable. */ }
+      setLocalArcadeSaveFailed(!saveLocalArcadeMatch(
+        window.localStorage,
+        window.sessionStorage,
+        id,
+        snapshot,
+        playVsBot,
+      ));
+    } catch {
+      setLocalArcadeSaveFailed(true);
+    }
   }, [id, onlineSession, playVsBot, turn, winner, dots, edgeOwners, claimed, pits, pieces, dameForcedFrom, four, fillerTurn, fillerWinner, fillerBoard, fillerPlayerCount]);
   useEffect(() => () => { if (kayTimerRef.current !== null) window.clearTimeout(kayTimerRef.current); }, []);
 
@@ -1137,6 +1146,13 @@ export default function ClassicGamesPage() {
     <main className="yard-main" style={{ maxWidth: 980 }}>
       <Link href="/games" className="yard-panel-link"><ArrowLeft size={14} /> All games</Link>
       <header className="yard-heading" style={{ marginTop: 16 }}><div><p className="yard-kicker">509 YARD / LOCAL FOUNDATION</p><h1>{title}</h1><p className="yard-subtitle">{info.intro}</p></div></header>
+      {localArcadeSaveFailed && isLocalArcadeGame(id) && onlineSession === null &&
+        !localArcadeUsedOnlineRef.current && <p
+        className="yard-notice"
+        role="status"
+        aria-live="polite"
+        data-testid="status-local-arcade-save"
+      >This match isn’t being saved on this device. You can keep playing, but it may not survive a refresh.</p>}
       {id !== 'words' && <ArcadeOnlinePanel game={id} playerCount={id === 'filler' ? fillerPlayerCount : 2} turn={activeTurn} state={arcadeSnapshot} onRemoteState={applyArcadeSnapshot} onRoomChange={handleArcadeRoomChange} />}
       <section className="yard-panel" style={{ padding: 20, marginTop: 18 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 16 }}><strong role="status" data-testid="status-current-turn" style={id === 'box' && winner === null ? { color: BOX_PLAYER_COLORS[turn] } : id === 'four-in-a-row' && winner === null ? { color: CONNECT_PLAYER_COLORS[turn] } : undefined}>{id === 'words' ? `${turnLabel} · ${wordGame.scores[0]}–${wordGame.scores[1]}` : turnLabel}</strong><button className="yard-button" type="button" onClick={reset} disabled={id === 'words' && wordSaveConflict}><RotateCcw size={14} /> New game</button></div>
