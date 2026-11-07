@@ -1013,7 +1013,23 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
       assert.equal(activeRoom.status, 200, `the active match should survive refresh/cleanup race ${attempt + 1}`);
     }
 
-    const expiredTimestamp = new Date(Date.now() - ARCADE_ROOM_RETENTION_MS - 10_000);
+    const beforeCutoffTimestamp = new Date(Date.now() - ARCADE_ROOM_RETENTION_MS + 5_000);
+    await pool.query(
+      `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
+      [disconnectedRoom.code, beforeCutoffTimestamp],
+    );
+    const retainedByCleanup = await fetch(`${processTwo.baseUrl}/__test/maintain-rooms`, { method: "POST" });
+    assert.equal(retainedByCleanup.status, 200);
+
+    const roomBeforeCutoff = await fetch(`${processTwo.baseUrl}/api/arcade/rooms/${String(disconnectedRoom.code)}`);
+    assert.equal(roomBeforeCutoff.status, 200, "a disconnected room must remain available just before its shared retention deadline");
+    const roomBeforeCutoffBody = await roomBeforeCutoff.json() as JsonRecord;
+    assert.ok(
+      Number(roomBeforeCutoffBody.reconnectDeadline) > Date.now(),
+      "the public reconnect deadline must still be in the future just before cleanup eligibility",
+    );
+
+    const expiredTimestamp = new Date(Date.now() - ARCADE_ROOM_RETENTION_MS - 5_000);
     await pool.query(
       `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
       [disconnectedRoom.code, expiredTimestamp],
