@@ -18,6 +18,21 @@ function botPosition(marks: { row: number; column: number; mark: MopyonMark }[])
   return { ...state, board, currentPlayer: 'O' };
 }
 
+function winningReplies(state: MopyonState, mark: MopyonMark): number[] {
+  if (state.winner || state.isDraw) return [];
+  const replies: number[] = [];
+  for (let index = 0; index < state.board.length; index += 1) {
+    if (state.board[index] !== null) continue;
+    const next = playMopyonMove(
+      { ...state, currentPlayer: mark },
+      Math.floor(index / MOPYON_BOARD_SIZE),
+      index % MOPYON_BOARD_SIZE,
+    );
+    if (next.winner === mark) replies.push(index);
+  }
+  return replies;
+}
+
 const axisCases = [
   { name: 'horizontal', row: 7, column: (step: number) => 4 + step },
   { name: 'vertical', row: (step: number) => 4 + step, column: 7 },
@@ -72,6 +87,19 @@ test('Mòpyon practice bot takes a winning move immediately', () => {
   assert.equal(chooseMopyonBotMove(state), 7 * MOPYON_BOARD_SIZE + 3);
 });
 
+test('Mòpyon challenging bot completes a diagonal win from the corner', () => {
+  const state = botPosition([
+    ...[1, 2, 3, 4].map((step) => ({ row: step, column: step, mark: 'O' as const })),
+    { row: 0, column: MOPYON_BOARD_SIZE - 1, mark: 'X' },
+  ]);
+
+  const move = chooseMopyonBotMove(state);
+  assert.equal(move, 0);
+  const won = playMopyonMove(state, 0, 0);
+  assert.equal(won.winner, 'O');
+  assert.ok(won.winningLine?.includes(0));
+});
+
 test('Mòpyon practice bot blocks the opponent’s only immediate win', () => {
   const state = botPosition([
     { row: 7, column: 1, mark: 'O' },
@@ -90,6 +118,39 @@ test('Mòpyon practice bot builds a line and opens in the center', () => {
   const move = chooseMopyonBotMove(openLine);
   assert.ok(move === 7 * MOPYON_BOARD_SIZE + 5 || move === 7 * MOPYON_BOARD_SIZE + 9);
   assert.equal(chooseMopyonBotMove(createMopyonState()), 7 * MOPYON_BOARD_SIZE + 7);
+});
+
+test('Mòpyon challenging bot creates a fork from the corner', () => {
+  const state = botPosition([
+    ...[1, 2, 3].map((step) => ({ row: 0, column: step, mark: 'O' as const })),
+    ...[1, 2, 3].map((step) => ({ row: step, column: 0, mark: 'O' as const })),
+    { row: MOPYON_BOARD_SIZE - 1, column: MOPYON_BOARD_SIZE - 1, mark: 'X' },
+  ]);
+
+  const move = chooseMopyonBotMove(state);
+  assert.notEqual(move, null);
+  const row = Math.floor(move! / MOPYON_BOARD_SIZE);
+  const column = move! % MOPYON_BOARD_SIZE;
+  assert.ok(row === 0 || column === 0, 'the fork should be created on the top or left edge');
+  const afterMove = playMopyonMove(state, row, column);
+  assert.equal(afterMove.winner, null);
+  assert.ok(winningReplies(afterMove, 'O').length >= 2);
+});
+
+test('Mòpyon challenging bot blocks an opponent win along the board edge', () => {
+  const state = botPosition([
+    ...[0, 1, 2, 3].map((column) => ({ row: 0, column, mark: 'X' as const })),
+    { row: MOPYON_BOARD_SIZE - 1, column: MOPYON_BOARD_SIZE - 1, mark: 'O' },
+  ]);
+  const threatsBeforeMove = winningReplies(state, 'X');
+
+  assert.deepEqual(threatsBeforeMove, [4]);
+  const move = chooseMopyonBotMove(state);
+  assert.equal(move, threatsBeforeMove[0]);
+
+  const afterMove = playMopyonMove(state, Math.floor(move! / MOPYON_BOARD_SIZE), move! % MOPYON_BOARD_SIZE);
+  assert.equal(afterMove.winner, null);
+  assert.deepEqual(winningReplies(afterMove, 'X'), []);
 });
 
 test('Mòpyon practice bot returns no move after the game ends', () => {
