@@ -795,7 +795,7 @@ test("waiting room setting changes reach every connected player and rejected cha
       body: JSON.stringify({
         displayName: "Settings host",
         mode: "regular",
-        playerCount: 2,
+        playerCount: 4,
         rowLength: 10,
         rowBoxes: 10,
         twoPlayerVariant: "draw",
@@ -828,11 +828,11 @@ test("waiting room setting changes reach every connected player and rejected cha
     spectator.send(JSON.stringify({ type: "hello", displayName: "Settings spectator" }));
     assert.equal((await spectatorWelcome).type, "snapshot");
     const updatedSettings = {
-      mode: "regular",
+      mode: "points",
       rowBoxes: 14,
       turnSeconds: 45,
       isPrivate: false,
-      playerCount: 2,
+      playerCount: 4,
     };
     const hostUpdate = receiveRoomSettings(host, updatedSettings);
     const guestUpdate = receiveRoomSettings(guest, updatedSettings);
