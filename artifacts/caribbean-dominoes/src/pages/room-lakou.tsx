@@ -22,6 +22,7 @@ type SocketSnapshot = {
   turnDeadline?: number | null;
   turnMs?: number | null;
   nextHandAt?: number | null;
+  watcherCount?: number;
   roomSettings?: {
     mode: 'regular' | 'points';
     rowBoxes: number;
@@ -146,6 +147,13 @@ export default function RoomPage() {
             setSnapshot(message);
             if (message.view) setError('');
           }
+           if (message.type === 'watcherCount' &&
+               Number.isInteger(message.watcherCount) &&
+               message.watcherCount >= 0) {
+             setSnapshot((current) => current
+               ? { ...current, watcherCount: message.watcherCount }
+               : current);
+           }
           if (message.type === 'chatHistory' && Array.isArray(message.messages)) {
             const viewerSeat = Number.isInteger(message.viewerSeat) ? message.viewerSeat as number : null;
             setChat(message.messages.map((entry: ChatMessage) => ({
@@ -402,6 +410,7 @@ export default function RoomPage() {
           rowBoxes={settings?.rowBoxes ?? (room as typeof room & { rowBoxes?: number }).rowBoxes ?? room.rowLength}
           turnSeconds={settings?.turnSeconds ?? room.turnSeconds ?? 30}
           isPrivate={settings?.isPrivate ?? room.isPrivate ?? false}
+          watcherCount={seatToken ? snapshot?.watcherCount ?? 0 : undefined}
           seats={waitingSeats}
           isHost={host}
           onStart={startRoom}
@@ -441,7 +450,7 @@ export default function RoomPage() {
         <button data-testid="button-copy-watch-link" type="button" onClick={() => void copyWatchLink()}>{watchLinkCopied ? 'Link copied' : 'Copy watch link'}</button>
       </div>
     )}
-    <LakouGame view={snapshot.view} names={names} tableCode={code} events={snapshot.events} eventsKey={snapshot.eventsKey} turnDeadline={snapshot.turnDeadline} turnMs={snapshot.turnMs ?? undefined}
+    <LakouGame view={snapshot.view} names={names} tableCode={code} watcherCount={snapshot.view.seat !== null ? snapshot.watcherCount ?? 0 : undefined} events={snapshot.events} eventsKey={snapshot.eventsKey} turnDeadline={snapshot.turnDeadline} turnMs={snapshot.turnMs ?? undefined}
     chat={watchOnly ? [] : chat} onAction={(action) => { if (!watchOnly) send(socketEventForAction(action)); }} onSendChat={(text) => { if (!watchOnly) send({ type: 'chat', text }); }}
     readOnly={watchOnly}
     canStartNextHand={!watchOnly && canStartNextHand}

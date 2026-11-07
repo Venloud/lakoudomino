@@ -503,6 +503,8 @@ function requireRoom(code: string, res: Response) {
 function sendSnapshot(socket: WebSocket, room: RoomState, seat: Seat | null, meId: string | null = null) {
   if (socket.readyState !== WebSocket.OPEN) return;
   const isSpectator = seat === null;
+  const watcherCount = [...room.spectatorConnections].filter((connection) =>
+    connection.readyState === WebSocket.OPEN).length;
   const privateView = room.engineState ? publicView(room.engineState, seat) : null;
   const view = privateView && isSpectator
     ? { ...privateView, myHand: [], legal: [], revealedHands: null }
@@ -524,6 +526,7 @@ function sendSnapshot(socket: WebSocket, room: RoomState, seat: Seat | null, meI
     type: "snapshot",
     viewerId: socketViewerIds.get(socket) ?? null,
     viewerRole: isSpectator ? "spectator" : "player",
+    ...(seat !== null ? { watcherCount } : {}),
     playNow: room.playNow ?? false,
     game,
     view,
@@ -860,6 +863,19 @@ function sendChatHistory(socket: WebSocket, room: RoomState, viewerSeat: Seat | 
   }));
 }
 
+function broadcastWatcherCount(room: RoomState): void {
+  const message = JSON.stringify({
+    type: "watcherCount",
+    watcherCount: [...room.spectatorConnections].filter((socket) =>
+      socket.readyState === WebSocket.OPEN).length,
+  });
+  room.connections.forEach((sockets) => {
+    sockets.forEach((socket) => {
+      if (socket.readyState === WebSocket.OPEN) socket.send(message);
+    });
+  });
+}
+
 async function broadcastRoom(room: RoomState, options: { persist?: boolean } = {}): Promise<void> {
   scheduleNextHand(room);
   if (options.persist !== false) await persistRoom(room);
@@ -1185,6 +1201,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
         });
         sendSnapshot(socket, room, null);
         sendChatHistory(socket, room, null);
+        broadcastWatcherCount(room);
         broadcastLobbyUpdate();
         return;
       }
@@ -1389,7 +1406,7 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
 
   socket.on("close", () => {
     if (seat !== undefined) room.connections.get(seat)?.delete(socket);
-    if (spectator) room.spectatorConnections.delete(socket);
+    if (spectator && room.spectatorConnections.delete(socket)) broadcastWatcherCount(room);
     if (waitlistIdentity) {
       const waitingSockets = room.waitlistConnections.get(waitlistIdentity);
       waitingSockets?.delete(socket);

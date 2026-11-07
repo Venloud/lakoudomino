@@ -18,6 +18,7 @@ export interface WaitingRoomProps {
   rowBoxes: number;
   turnSeconds: number;
   isPrivate: boolean;
+  watcherCount?: number;
   /** Always 4 entries (2 or 3 for Regular 1v1 / 3-player): a player or null for an open seat. */
   seats: (WaitingSeat | null)[];
   isHost: boolean;
@@ -78,6 +79,11 @@ export function WaitingRoom(p: WaitingRoomProps) {
               <i className={`lk-dot ${full ? 'lk-dot-green' : 'lk-dot-gold'}`} />
               {filled} of {total} seats filled  ·  {full ? (p.isHost ? 'ready to start' : 'waiting for the host') : 'waiting for players'}
             </span>
+            {p.watcherCount !== undefined && (
+              <span className="lk-watcher-count" aria-live="polite" aria-label={`${p.watcherCount} ${p.watcherCount === 1 ? 'person' : 'people'} watching`}>
+                {p.watcherCount} watching
+              </span>
+            )}
           </header>
 
           <div className="lk-codebox">
