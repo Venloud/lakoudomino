@@ -801,6 +801,112 @@ test("seated players receive a live watcher count without watcher identities", {
   }
 });
 
+test("watcher counts reset after an API restart and return when a spectator reconnects", {
+  timeout: 60_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room watcher restart tests.");
+
+  const schema = `rooms_watcher_restart_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let api: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  const sockets: WebSocket[] = [];
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+
+  try {
+    await createRoomsTable(schema);
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    const createResponse = await fetch(`${api.baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        displayName: "Restart watcher host",
+        mode: "regular",
+        playerCount: 2,
+        rowLength: 10,
+        rowBoxes: 10,
+        twoPlayerVariant: "draw",
+        isPrivate: true,
+      }),
+    });
+    if (createResponse.status !== 201) assert.fail(`room create failed: ${await createResponse.text()}`);
+    const created = await createResponse.json() as { code: string; reconnectToken: string };
+    const joinResponse = await fetch(`${api.baseUrl}/api/rooms/${created.code}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ displayName: "Restart watcher guest" }),
+    });
+    if (joinResponse.status !== 200) assert.fail(`room join failed: ${await joinResponse.text()}`);
+    const joined = await joinResponse.json() as { reconnectToken: string };
+
+    const connectPlayer = async (baseUrl: string, reconnectToken: string) => {
+      const socket = await openRoomSocket(baseUrl, created.code);
+      sockets.push(socket);
+      const welcomePromise = receiveSocketMessageMatching(socket, (message) => message.type === "snapshot");
+      socket.send(JSON.stringify({ type: "hello", reconnectToken }));
+      return { socket, welcome: await welcomePromise };
+    };
+    const connectWatcher = async (baseUrl: string, displayName: string) => {
+      const socket = await openRoomSocket(baseUrl, created.code, true);
+      sockets.push(socket);
+      const welcomePromise = receiveSocketMessageMatching(socket, (message) => message.type === "snapshot");
+      socket.send(JSON.stringify({ type: "hello", displayName }));
+      const welcome = await welcomePromise;
+      assert.equal(welcome.viewerRole, "spectator");
+      assert.equal(welcome.watcherCount, undefined);
+      assert.equal(JSON.stringify(welcome).includes(created.reconnectToken), false);
+      assert.equal(JSON.stringify(welcome).includes(joined.reconnectToken), false);
+      return socket;
+    };
+
+    const host = await connectPlayer(api.baseUrl, created.reconnectToken);
+    const guest = await connectPlayer(api.baseUrl, joined.reconnectToken);
+    assert.equal(host.welcome.watcherCount, 0);
+    assert.equal(guest.welcome.watcherCount, 0);
+
+    const oldHostCountPromise = receiveWatcherCount(host.socket);
+    const oldGuestCountPromise = receiveWatcherCount(guest.socket);
+    const watcher = await connectWatcher(api.baseUrl, "Old watcher identity");
+    const [hostWatcherCount, guestWatcherCount] = await Promise.all([
+      oldHostCountPromise,
+      oldGuestCountPromise,
+    ]);
+    assert.deepEqual(hostWatcherCount, { type: "watcherCount", watcherCount: 1 });
+    assert.deepEqual(guestWatcherCount, { type: "watcherCount", watcherCount: 1 });
+
+    const watcherClosed = once(watcher, "close");
+    await stopRoomsProcess(api.child);
+    api = undefined;
+    await watcherClosed;
+    assert.equal(watcher.readyState, WebSocket.CLOSED);
+
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+    const reconnectedHost = await connectPlayer(api.baseUrl, created.reconnectToken);
+    const reconnectedGuest = await connectPlayer(api.baseUrl, joined.reconnectToken);
+    assert.equal(reconnectedHost.welcome.watcherCount, 0, "the restarted process must not retain the old watcher");
+    assert.equal(reconnectedGuest.welcome.watcherCount, 0, "both seated players should see the cleared count");
+
+    const hostNextCount = receiveWatcherCount(reconnectedHost.socket);
+    const guestNextCount = receiveWatcherCount(reconnectedGuest.socket);
+    await connectWatcher(api.baseUrl, "Reconnected watcher identity");
+    const [hostReconnectCount, guestReconnectCount] = await Promise.all([hostNextCount, guestNextCount]);
+    assert.deepEqual(hostReconnectCount, { type: "watcherCount", watcherCount: 1 });
+    assert.deepEqual(guestReconnectCount, { type: "watcherCount", watcherCount: 1 });
+    for (const update of [hostReconnectCount, guestReconnectCount]) {
+      assert.equal(JSON.stringify(update).includes("Reconnected watcher identity"), false);
+      assert.equal(JSON.stringify(update).includes(created.reconnectToken), false);
+      assert.equal(JSON.stringify(update).includes(joined.reconnectToken), false);
+    }
+  } finally {
+    sockets.forEach((socket) => socket.terminate());
+    if (api) await stopRoomsProcess(api.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
+
 test("live room WebSocket rejects invalid and unauthenticated messages without changing the room snapshot", {
   timeout: 90_000,
 }, async () => {
