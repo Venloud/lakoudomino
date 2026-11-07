@@ -17,6 +17,34 @@ export type ScrabbleGame = {
 };
 export type ScrabbleMove = { row: number; col: number; direction: ScrabbleDirection; word: string };
 export type ScrabbleResult = { game: ScrabbleGame; error?: never } | { game?: never; error: string };
+export type ScrabbleDraft = {
+  word: string;
+  start: number;
+  direction: ScrabbleDirection;
+  selectedRackTiles: number[];
+  player: ScrabblePlayer;
+  rack: string[];
+};
+
+export function hasScrabbleDraft(draft: Pick<ScrabbleDraft, 'word' | 'selectedRackTiles'>): boolean {
+  return draft.word.trim().length > 0 || draft.selectedRackTiles.length > 0;
+}
+
+export function canRestoreScrabbleDraft(draft: ScrabbleDraft, game: ScrabbleGame): boolean {
+  return JSON.stringify(game.racks[draft.player]) === JSON.stringify(draft.rack);
+}
+
+export function shouldRecoverScrabbleDraft(
+  current: ScrabbleGame,
+  incoming: ScrabbleGame,
+  draft: Pick<ScrabbleDraft, 'word' | 'selectedRackTiles'>,
+): boolean {
+  const stateChanged = incoming.turn !== current.turn ||
+    JSON.stringify(incoming.board) !== JSON.stringify(current.board) ||
+    JSON.stringify(incoming.racks) !== JSON.stringify(current.racks) ||
+    JSON.stringify(incoming.scores) !== JSON.stringify(current.scores);
+  return stateChanged && hasScrabbleDraft(draft);
+}
 
 const TILE_COUNTS: Record<string, number> = {
   A: 9, B: 2, C: 2, D: 4, E: 12, F: 2, G: 3, H: 2, I: 9, J: 1, K: 1, L: 4, M: 2,

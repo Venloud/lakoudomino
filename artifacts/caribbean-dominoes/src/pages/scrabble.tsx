@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Link } from 'wouter';
 import { YardHeader } from './social';
 import { GameEndSequence } from '@/components/game-end-sequence';
-import { createScrabbleGame, exchangeScrabbleTiles, passScrabbleTurn, playScrabbleWord, premiumAt, SCRABBLE_SIZE, type ScrabbleDirection, type ScrabbleGame } from '@/lib/scrabble';
+import { canRestoreScrabbleDraft, createScrabbleGame, exchangeScrabbleTiles, hasScrabbleDraft, passScrabbleTurn, playScrabbleWord, premiumAt, SCRABBLE_SIZE, shouldRecoverScrabbleDraft, type ScrabbleDirection, type ScrabbleDraft, type ScrabbleGame, type ScrabblePlayer } from '@/lib/scrabble';
 import { WORDS } from '@/lib/word-game-data';
 import { ArcadeOnlinePanel } from '@/components/arcade-online-panel';
 
@@ -17,11 +17,24 @@ export default function ScrabblePage() {
   const [direction, setDirection] = useState<ScrabbleDirection>('horizontal');
   const [message, setMessage] = useState('Start at the center star. Words must connect to the tiles already played.');
   const [selectedRackTiles, setSelectedRackTiles] = useState<number[]>([]);
+  const [recoveredDraft, setRecoveredDraft] = useState<ScrabbleDraft | null>(null);
   const [practiceBot, setPracticeBot] = useState(false);
   const [onlineSession, setOnlineSession] = useState<{ seat: number; connected: boolean; turn: number | null } | null>(null);
+  const onlineSessionRef = useRef(onlineSession);
+  onlineSessionRef.current = onlineSession;
+  const gameRef = useRef(game);
+  gameRef.current = game;
+  const draftPlayer = (onlineSession?.seat ?? game.turn) as ScrabblePlayer;
+  const draftRef = useRef<ScrabbleDraft>({
+    word, start, direction, selectedRackTiles, player: draftPlayer, rack: [...(game.racks[draftPlayer] ?? [])],
+  });
+  draftRef.current = {
+    word, start, direction, selectedRackTiles, player: draftPlayer, rack: [...(game.racks[draftPlayer] ?? [])],
+  };
   const botTurn = practiceBot && !onlineSession && game.turn === 1 && game.winner === null;
   const canAct = onlineSession === null || (onlineSession.connected && onlineSession.seat === game.turn);
   const handleRoomChange = useCallback((session: { seat: number; connected: boolean; turn: number | null } | null) => {
+    onlineSessionRef.current = session;
     setOnlineSession(session);
     if (session) setPracticeBot(false);
   }, []);
@@ -29,6 +42,9 @@ export default function ScrabblePage() {
     if (state && typeof state === 'object' && Array.isArray((state as ScrabbleGame).board) &&
       Array.isArray((state as ScrabbleGame).racks) && typeof (state as ScrabbleGame).turn === 'number') {
       const remote = state as ScrabbleGame;
+      if (onlineSessionRef.current !== null && shouldRecoverScrabbleDraft(gameRef.current, remote, draftRef.current)) {
+        setRecoveredDraft(draftRef.current);
+      }
       setGame({
         ...remote,
         bag: [],
@@ -71,6 +87,8 @@ export default function ScrabblePage() {
   const preview = word.trim().toUpperCase();
   const turnLabel = game.winner === null ? botTurn ? 'Yard bot to move' : `Player ${game.turn + 1} to move` : game.winner === 'draw' ? 'Draw game' : `Player ${game.winner + 1} wins`;
   const newGame = (count = playerCount) => {
+    setRecoveredDraft(null);
+    draftRef.current = { ...draftRef.current, word: '', selectedRackTiles: [] };
     setPlayerCount(count as 2 | 3 | 4);
     setGame(createScrabbleGame(Math.random, count as 2 | 3 | 4));
     setWord('');
@@ -89,6 +107,8 @@ export default function ScrabblePage() {
       direction,
     });
     if (!result.game) { setMessage(result.error); return; }
+    setRecoveredDraft(null);
+    draftRef.current = { ...draftRef.current, word: '', selectedRackTiles: [] };
     const gained = result.game.scores[game.turn] - game.scores[game.turn];
     setGame(result.game);
     setWord('');
@@ -98,6 +118,8 @@ export default function ScrabblePage() {
 
   const handlePass = () => {
     if (botTurn || !canAct) return;
+    setRecoveredDraft(null);
+    draftRef.current = { ...draftRef.current, word: '', selectedRackTiles: [] };
     setGame((current) => passScrabbleTurn(current));
     setSelectedRackTiles([]);
     setMessage('Turn passed.');
@@ -107,10 +129,25 @@ export default function ScrabblePage() {
     const tiles = selectedRackTiles.map((index) => game.racks[game.turn][index]).filter(Boolean);
     const result = exchangeScrabbleTiles(game, tiles);
     if (!result.game) { setMessage(result.error); return; }
+    setRecoveredDraft(null);
+    draftRef.current = { ...draftRef.current, word: '', selectedRackTiles: [] };
     setGame(result.game);
     setSelectedRackTiles([]);
     setMessage(`${tiles.length} tile${tiles.length === 1 ? '' : 's'} exchanged. Turn passed.`);
   };
+  const restoreDraft = () => {
+    if (!recoveredDraft) return;
+    setWord(recoveredDraft.word);
+    setStart(recoveredDraft.start);
+    setDirection(recoveredDraft.direction);
+    const rackStillMatches = canRestoreScrabbleDraft(recoveredDraft, game);
+    setSelectedRackTiles(rackStillMatches ? recoveredDraft.selectedRackTiles : []);
+    setMessage(rackStillMatches
+      ? 'Recovered your unplayed word and rack selection.'
+      : 'Recovered your word and board position. The rack changed, so reselect tiles before playing.');
+    setRecoveredDraft(null);
+  };
+  const rackPlayer = onlineSession ? onlineSession.seat : game.turn;
 
   return <div className="yard-app">
     <YardHeader active="games" notifications={0} onLogout={() => {}} />
@@ -166,7 +203,17 @@ export default function ScrabblePage() {
           })}
         </div>
         <div style={{ maxWidth: 660, margin: '14px auto 0', display: 'grid', gap: 12 }}>
-          <div style={{ margin: 0, textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>{practiceBot && game.turn === 1 ? 'Yard bot rack: ' : `Player ${game.turn + 1} rack: `}{game.racks[game.turn].map((letter, i) => <button type="button" key={`${letter}-${i}`} disabled={botTurn || !canAct} aria-pressed={selectedRackTiles.includes(i)} onClick={() => setSelectedRackTiles((current) => current.includes(i) ? current.filter((index) => index !== i) : [...current, i])} style={{ display: 'inline-grid', placeItems: 'center', width: 32, height: 36, margin: '0 2px', borderRadius: 4, border: selectedRackTiles.includes(i) ? '2px solid #75d64b' : '1px solid #9e947f', background: '#e5dfd1', color: '#202124' }}>{letter === '?' ? '☆' : letter}<small style={{ fontSize: 8 }}>{letter === '?' ? 0 : undefined}</small></button>)}</div>
+          {recoveredDraft && <section className="wy-challenge-panel" role="status" aria-label="Recovered Scrabble draft" data-testid="scrabble-draft-recovery">
+            <div>
+              <strong>Your unplayed draft was saved</strong>
+              <p style={{ margin: '4px 0 0', color: '#c8c8ce', fontSize: 12 }}>
+                {recoveredDraft.word ? `“${recoveredDraft.word}”` : 'Rack tile selection'} · row {Math.floor(recoveredDraft.start / SCRABBLE_SIZE) + 1}, column {recoveredDraft.start % SCRABBLE_SIZE + 1} · {recoveredDraft.direction === 'horizontal' ? 'Across' : 'Down'}
+              </p>
+            </div>
+            <button className="yard-button primary" type="button" onClick={restoreDraft}>Restore draft</button>
+            <button className="yard-button" type="button" onClick={() => setRecoveredDraft(null)}>Dismiss</button>
+          </section>}
+          <div style={{ margin: 0, textAlign: 'center', color: '#a6a6aa', fontSize: 12 }}>{practiceBot && game.turn === 1 ? 'Yard bot rack: ' : `Player ${rackPlayer + 1} rack: `}{game.racks[rackPlayer].map((letter, i) => <button type="button" key={`${letter}-${i}`} disabled={botTurn || !canAct} aria-pressed={selectedRackTiles.includes(i)} onClick={() => setSelectedRackTiles((current) => current.includes(i) ? current.filter((index) => index !== i) : [...current, i])} style={{ display: 'inline-grid', placeItems: 'center', width: 32, height: 36, margin: '0 2px', borderRadius: 4, border: selectedRackTiles.includes(i) ? '2px solid #75d64b' : '1px solid #9e947f', background: '#e5dfd1', color: '#202124' }}>{letter === '?' ? '☆' : letter}<small style={{ fontSize: 8 }}>{letter === '?' ? 0 : undefined}</small></button>)}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>Word <input className="yard-input" value={word} onChange={(event) => setWord(event.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} maxLength={15} placeholder="e.g. WORD" style={{ width: 150 }} disabled={game.winner !== null || botTurn} /></label>
             <button type="button" className="yard-button" aria-pressed={direction === 'horizontal'} disabled={botTurn} onClick={() => setDirection('horizontal')}>Across</button>

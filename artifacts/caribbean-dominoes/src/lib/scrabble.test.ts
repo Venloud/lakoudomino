@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createScrabbleGame, exchangeScrabbleTiles, passScrabbleTurn, playScrabbleWord, SCRABBLE_SIZE, type ScrabbleGame } from './scrabble';
+import { canRestoreScrabbleDraft, createScrabbleGame, exchangeScrabbleTiles, hasScrabbleDraft, passScrabbleTurn, playScrabbleWord, SCRABBLE_SIZE, shouldRecoverScrabbleDraft, type ScrabbleGame } from './scrabble';
 
 const fixture = (overrides: Partial<ScrabbleGame> = {}): ScrabbleGame => ({
   board: Array(SCRABBLE_SIZE * SCRABBLE_SIZE).fill(null),
@@ -16,6 +16,29 @@ const fixture = (overrides: Partial<ScrabbleGame> = {}): ScrabbleGame => ({
 });
 
 describe('Scrabble foundation', () => {
+  it('preserves a draft for remote updates and restores rack selections only when the rack matches', () => {
+    const game = createScrabbleGame(() => 0.5);
+    const draft = {
+      word: 'WORD',
+      start: 112,
+      direction: 'vertical' as const,
+      selectedRackTiles: [0, 2],
+      player: 0 as const,
+      rack: [...game.racks[0]],
+    };
+    assert.equal(hasScrabbleDraft(draft), true);
+    assert.equal(canRestoreScrabbleDraft(draft, game), true);
+    assert.equal(canRestoreScrabbleDraft(draft, { ...game, turn: 1 }), true);
+    assert.equal(canRestoreScrabbleDraft(draft, {
+      ...game,
+      racks: game.racks.map((rack, index) => index === 0 ? [...rack.slice(1), 'A'] : rack),
+    }), false);
+    assert.equal(hasScrabbleDraft({ word: ' ', selectedRackTiles: [] }), false);
+    assert.equal(shouldRecoverScrabbleDraft(game, game, draft), false);
+    assert.equal(shouldRecoverScrabbleDraft(game, { ...game, turn: 1 }, draft), true);
+    assert.equal(shouldRecoverScrabbleDraft(game, { ...game, turn: 1 }, { word: ' ', selectedRackTiles: [] }), false);
+  });
+
   it('deals seven tiles to each player from a 100-tile bag', () => {
     const game = createScrabbleGame(() => 0.5);
     assert.equal(game.racks[0].length, 7);
