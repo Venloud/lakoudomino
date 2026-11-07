@@ -860,9 +860,9 @@ function sendChatHistory(socket: WebSocket, room: RoomState, viewerSeat: Seat | 
   }));
 }
 
-async function broadcastRoom(room: RoomState): Promise<void> {
+async function broadcastRoom(room: RoomState, options: { persist?: boolean } = {}): Promise<void> {
   scheduleNextHand(room);
-  await persistRoom(room);
+  if (options.persist !== false) await persistRoom(room);
   room.connections.forEach((sockets, seat) => {
     sockets.forEach((socket) => {
       updatePresence(socket, {
@@ -1276,7 +1276,8 @@ async function handleSocket(socket: WebSocket, request: IncomingMessage): Promis
       room.rowLength = event.rowBoxes;
       room.turnSeconds = event.turnSeconds;
       room.isPrivate = event.isPrivate;
-      await broadcastRoom(room);
+      await persistRoom(room);
+      await broadcastRoom(room, { persist: false });
       return;
     }
     if (event.type === "nextHand") {

@@ -795,7 +795,7 @@ test("waiting room setting changes reach every connected player and rejected cha
       body: JSON.stringify({
         displayName: "Settings host",
         mode: "regular",
-        playerCount: 2,
+        playerCount: 4,
         rowLength: 10,
         rowBoxes: 10,
         twoPlayerVariant: "draw",
@@ -828,11 +828,11 @@ test("waiting room setting changes reach every connected player and rejected cha
     spectator.send(JSON.stringify({ type: "hello", displayName: "Settings spectator" }));
     assert.equal((await spectatorWelcome).type, "snapshot");
     const updatedSettings = {
-      mode: "regular",
+      mode: "points",
       rowBoxes: 14,
       turnSeconds: 45,
       isPrivate: false,
-      playerCount: 2,
+      playerCount: 4,
     };
     const hostUpdate = receiveRoomSettings(host, updatedSettings);
     const guestUpdate = receiveRoomSettings(guest, updatedSettings);
@@ -858,6 +858,13 @@ test("waiting room setting changes reach every connected player and rejected cha
     };
     const persistedSettingsBeforeRejections = await readPersistedSettings();
     assert.ok(persistedSettingsBeforeRejections, "the updated room should remain persisted");
+    assert.deepEqual(persistedSettingsBeforeRejections, {
+      mode: updatedSettings.mode,
+      row_boxes: updatedSettings.rowBoxes,
+      turn_seconds: updatedSettings.turnSeconds,
+      is_private: updatedSettings.isPrivate,
+      player_count: updatedSettings.playerCount,
+    }, "the accepted settings should be saved before the server restarts");
 
     await expectSocketError(
       guest,
@@ -879,6 +886,36 @@ test("waiting room setting changes reach every connected player and rejected cha
       await readPersistedSettings(),
       persistedSettingsBeforeRejections,
       "an invalid change must not be saved",
+    );
+
+    sockets.forEach((socket) => socket.terminate());
+    sockets.length = 0;
+    await stopRoomsProcess(api.child);
+    api = undefined;
+    api = await startRoomsProcess(isolatedDatabaseUrl.toString());
+
+    const reconnectAndReadSettings = async (reconnectToken: string) => {
+      const socket = await openRoomSocket(api!.baseUrl, created.code);
+      sockets.push(socket);
+      const welcomePromise = receiveSocketMessage(socket);
+      socket.send(JSON.stringify({ type: "hello", reconnectToken }));
+      const welcome = await welcomePromise;
+      assert.equal(welcome.type, "snapshot");
+      return { socket, welcome };
+    };
+    const [restoredHost, restoredGuest] = await Promise.all([
+      reconnectAndReadSettings(created.reconnectToken),
+      reconnectAndReadSettings(joined.reconnectToken),
+    ]);
+    assert.deepEqual(
+      restoredHost.welcome.roomSettings,
+      updatedSettings,
+      "the host should receive the saved settings after restart",
+    );
+    assert.deepEqual(
+      restoredGuest.welcome.roomSettings,
+      updatedSettings,
+      "the guest should receive the saved settings after restart",
     );
   } finally {
     sockets.forEach((socket) => socket.terminate());
