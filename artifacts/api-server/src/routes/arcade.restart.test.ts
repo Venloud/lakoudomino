@@ -1013,6 +1013,41 @@ test("overlapping cross-instance room refresh and cleanup preserves live matches
       assert.equal(activeRoom.status, 200, `the active match should survive refresh/cleanup race ${attempt + 1}`);
     }
 
+    await pool.query(
+      `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
+      [room.code, new Date(Date.now() - ARCADE_ROOM_RETENTION_MS - 10_000)],
+    );
+    const pausedMaintenance = await fetch(
+      `${processOne.baseUrl}/__test/maintain-rooms?pauseAfterRefreshMs=1000`,
+      { method: "POST" },
+    );
+    assert.equal(pausedMaintenance.status, 200);
+
+    const resignationForHost = nextSocketMessage(connection.socket);
+    const resignationForOpponent = nextSocketMessage(opponentConnection.socket);
+    connection.socket.send(JSON.stringify({ type: "resign" }));
+    const [hostResignation, opponentResignation] = await Promise.all([
+      resignationForHost,
+      resignationForOpponent,
+    ]);
+    assert.equal(hostResignation.type, "room");
+    assert.equal(opponentResignation.type, "room");
+    const resignedRoom = hostResignation.room as JsonRecord;
+    const resignationResult = resignedRoom.result as JsonRecord;
+    assert.equal(resignedRoom.status, "finished");
+    assert.equal(resignationResult.winnerSeat, 1);
+    assert.equal(resignationResult.resignedSeat, 0);
+    assert.deepEqual((opponentResignation.room as JsonRecord).result, resignationResult);
+
+    const persistedResignation = await pool.query(
+      `SELECT players FROM ${quotedSchema}.arcade_rooms WHERE code = $1`,
+      [room.code],
+    );
+    const savedPlayers = persistedResignation.rows[0].players as JsonRecord[];
+    const savedResults = savedPlayers.filter((player) => "__509YardArcadeResult" in player);
+    assert.equal(savedResults.length, 1, "the winner/loss result must be persisted once");
+    assert.deepEqual(savedResults[0].__509YardArcadeResult, resignationResult);
+
     const beforeCutoffTimestamp = new Date(Date.now() - ARCADE_ROOM_RETENTION_MS + 5_000);
     await pool.query(
       `UPDATE ${quotedSchema}.arcade_rooms SET updated_at = $2 WHERE code = $1`,
