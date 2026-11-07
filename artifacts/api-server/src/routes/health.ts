@@ -7,7 +7,7 @@ import {
   retryQuarantinedRoom,
   type QuarantinedRoomRetryResult,
 } from "../lib/room-persistence.ts";
-import { logger } from "../lib/logger.ts";
+import { getRoomRecoveryAlertHealth, logger } from "../lib/logger.ts";
 import { activateRecoveredRoom } from "./rooms.ts";
 
 const router: IRouter = Router();
@@ -16,6 +16,7 @@ router.get("/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({
     status: "ok",
     roomRecovery: getRoomRecoveryDiagnostics(),
+    roomRecoveryAlert: getRoomRecoveryAlertHealth(),
     arcadeRoomUpdates: getArcadeNotificationListenerHealth(),
   });
   res.json(data);

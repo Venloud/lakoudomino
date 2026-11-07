@@ -117,6 +117,28 @@ export type HealthStatusRoomRecovery = {
   issueCounts: HealthStatusRoomRecoveryIssueCountsItem[];
 };
 
+export type HealthStatusRoomRecoveryAlertDeliveryState = typeof HealthStatusRoomRecoveryAlertDeliveryState[keyof typeof HealthStatusRoomRecoveryAlertDeliveryState];
+
+
+export const HealthStatusRoomRecoveryAlertDeliveryState = {
+  'not-configured': 'not-configured',
+  idle: 'idle',
+  sending: 'sending',
+  delivered: 'delivered',
+  failed: 'failed',
+} as const;
+
+/**
+ * Safe configuration and recent delivery status for persisted-room recovery alerts.
+ */
+export type HealthStatusRoomRecoveryAlert = {
+  configured: boolean;
+  deliveryState: HealthStatusRoomRecoveryAlertDeliveryState;
+  lastAttemptAt: string | null;
+  /** @minimum 0 */
+  attempts: number;
+};
+
 export type HealthStatusArcadeRoomUpdatesStatus = typeof HealthStatusArcadeRoomUpdatesStatus[keyof typeof HealthStatusArcadeRoomUpdatesStatus];
 
 
@@ -145,6 +167,8 @@ export interface HealthStatus {
   status: string;
   /** Safe summary of the most recent persisted Domino room recovery attempt. */
   roomRecovery: HealthStatusRoomRecovery;
+  /** Safe configuration and recent delivery status for persisted-room recovery alerts. */
+  roomRecoveryAlert: HealthStatusRoomRecoveryAlert;
   /** Aggregate state of the arcade room notification listener. */
   arcadeRoomUpdates: HealthStatusArcadeRoomUpdates;
 }
