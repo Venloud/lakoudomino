@@ -445,6 +445,15 @@ test("a retried room synchronizes to another process without replacing its activ
       waitForRoomRetryListener(processTwo.baseUrl),
     ]);
 
+    const interruptResponse = await fetch(`${processTwo.baseUrl}/__test/interrupt-room-retry-listener`, {
+      method: "POST",
+    });
+    assert.equal(interruptResponse.status, 200);
+    assert.deepEqual(await interruptResponse.json(), { interrupted: true });
+    assert.deepEqual(await (await fetch(`${processTwo.baseUrl}/__test/room-retry-listener`)).json(), {
+      connected: false,
+    });
+
     existingRoomSocket = await openRoomSocket(processTwo.baseUrl, existingCode);
     const existingWelcomePromise = receiveSocketMessage(existingRoomSocket);
     existingRoomSocket.send(JSON.stringify({ type: "hello", reconnectToken: existingToken }));
@@ -460,6 +469,18 @@ test("a retried room synchronizes to another process without replacing its activ
     const retryBody = await retryResponse.json();
     assert.equal(retryResponse.status, 200, JSON.stringify(retryBody));
     assert.deepEqual(retryBody, { status: "restored" });
+    assert.equal(
+      (await fetch(`${processTwo.baseUrl}/api/rooms/${retriedCode}`)).status,
+      404,
+      "the disconnected listener should not expose the retried room before reconciliation",
+    );
+
+    const resumeResponse = await fetch(`${processTwo.baseUrl}/__test/resume-room-retry-listener`, {
+      method: "POST",
+    });
+    assert.equal(resumeResponse.status, 200);
+    assert.deepEqual(await resumeResponse.json(), { resumed: true });
+    await waitForRoomRetryListener(processTwo.baseUrl);
 
     let retryRoomResponse: Response | undefined;
     const roomDeadline = Date.now() + 10_000;
