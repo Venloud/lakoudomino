@@ -42,10 +42,14 @@ import {
   createRoomMatch,
   publicView,
 } from "../lib/lakou-engine-adapter.ts";
+import { pool } from "@workspace/db";
 import {
   loadPersistedRooms,
+  loadActivePersistedRooms,
+  loadActivePersistedRoom,
   persistRoom,
   deletePersistedRoom,
+  ROOM_RETRY_NOTIFICATION_CHANNEL,
   type PersistedRoomState,
 } from "../lib/room-persistence";
 import {
@@ -108,6 +112,19 @@ type RoomState = PersistedRoomState & {
   chatTimestamps: Map<string | WebSocket, number>;
 };
 
+const ROOM_RETRY_LISTENER_RETRY_MS = 1_000;
+
+type RoomRetryNotificationClient = {
+  query: (text: string) => Promise<unknown>;
+  on: (
+    event: "notification",
+    listener: (notification: { channel?: string; payload?: string }) => void,
+  ) => unknown;
+  once(event: "error", listener: (error: Error) => void): unknown;
+  once(event: "end", listener: () => void): unknown;
+  release: (destroy?: boolean) => void;
+};
+
 const rooms = new Map<string, RoomState>();
 const socketViewerIds = new WeakMap<WebSocket, string>();
 type QueueMember = {
@@ -120,6 +137,12 @@ let playQueue = createQueue();
 const queueMembers = new Map<string, QueueMember>();
 let queueTimer: ReturnType<typeof setInterval> | undefined;
 let queueTickBusy = false;
+let roomRetryListenerClient: RoomRetryNotificationClient | undefined;
+let roomRetryListenerReady = false;
+let roomRetryListenerRetry: ReturnType<typeof setTimeout> | undefined;
+let roomRetryListenerStarted = false;
+let roomRetryListenerPausedForTest = false;
+let pendingRoomRetrySync: Promise<void> = Promise.resolve();
 
 function issueReconnectToken(): string {
   return randomBytes(32).toString("base64url");
@@ -152,6 +175,7 @@ export async function initializeRooms(): Promise<void> {
     scheduleNextGameStep(room);
     scheduleNextHand(room);
   }
+  await startRoomRetryListener();
 }
 
 function registerRoomRuntime(room: PersistedRoomState): RoomState {
@@ -192,7 +216,103 @@ export async function activateRecoveredRoom(room: PersistedRoomState): Promise<b
   scheduleRoomCleanup(runtime);
   scheduleNextGameStep(runtime);
   scheduleNextHand(runtime);
+  broadcastLobbyUpdate();
   return true;
+}
+
+export function isRoomRetryListenerConnected(): boolean {
+  return roomRetryListenerClient !== undefined && roomRetryListenerReady;
+}
+
+export function interruptRoomRetryListenerForTest(): boolean {
+  const client = roomRetryListenerClient;
+  if (!client) return false;
+  roomRetryListenerPausedForTest = true;
+  handleRoomRetryListenerDisconnect(client);
+  return true;
+}
+
+export function resumeRoomRetryListenerForTest(): void {
+  roomRetryListenerPausedForTest = false;
+  if (roomRetryListenerRetry) {
+    clearTimeout(roomRetryListenerRetry);
+    roomRetryListenerRetry = undefined;
+  }
+  if (!roomRetryListenerClient) void connectRoomRetryListener();
+}
+
+async function synchronizePersistedRooms(): Promise<void> {
+  const persistedRooms = await loadActivePersistedRooms();
+  for (const room of persistedRooms) {
+    await activateRecoveredRoom(room);
+  }
+}
+
+function queueRoomRetrySync(roomCode?: string): void {
+  pendingRoomRetrySync = pendingRoomRetrySync
+    .then(async () => {
+      if (roomCode) {
+        const room = await loadActivePersistedRoom(roomCode);
+        if (room) await activateRecoveredRoom(room);
+        return;
+      }
+      await synchronizePersistedRooms();
+    })
+    .catch(() => {
+      logger.error("Could not synchronize retried rooms from persistent storage");
+    });
+}
+
+function scheduleRoomRetryListenerRetry(): void {
+  if (roomRetryListenerRetry || roomRetryListenerPausedForTest) return;
+  roomRetryListenerRetry = setTimeout(() => {
+    roomRetryListenerRetry = undefined;
+    void connectRoomRetryListener();
+  }, ROOM_RETRY_LISTENER_RETRY_MS);
+}
+
+function handleRoomRetryListenerDisconnect(client: RoomRetryNotificationClient): void {
+  if (roomRetryListenerClient !== client) return;
+  roomRetryListenerClient = undefined;
+  roomRetryListenerReady = false;
+  client.release(true);
+  scheduleRoomRetryListenerRetry();
+}
+
+async function connectRoomRetryListener(): Promise<void> {
+  let client: RoomRetryNotificationClient | undefined;
+  try {
+    client = await pool.connect() as unknown as RoomRetryNotificationClient;
+    roomRetryListenerClient = client;
+    roomRetryListenerReady = false;
+    client.on("notification", (notification) => {
+      if (notification.channel !== ROOM_RETRY_NOTIFICATION_CHANNEL ||
+          typeof notification.payload !== "string" ||
+          !/^[A-Z0-9]{4,32}$/.test(notification.payload)) return;
+      queueRoomRetrySync(notification.payload);
+    });
+    client.once("error", () => handleRoomRetryListenerDisconnect(client!));
+    client.once("end", () => handleRoomRetryListenerDisconnect(client!));
+    await client.query(`LISTEN ${ROOM_RETRY_NOTIFICATION_CHANNEL}`);
+    if (roomRetryListenerClient === client) {
+      roomRetryListenerReady = true;
+      queueRoomRetrySync();
+    }
+  } catch {
+    if (client && roomRetryListenerClient === client) {
+      roomRetryListenerClient = undefined;
+      roomRetryListenerReady = false;
+      client.release(true);
+    }
+    logger.error("Could not listen for retried room updates");
+    scheduleRoomRetryListenerRetry();
+  }
+}
+
+async function startRoomRetryListener(): Promise<void> {
+  if (roomRetryListenerStarted) return;
+  roomRetryListenerStarted = true;
+  await connectRoomRetryListener();
 }
 
 function startOfferTimer(room: RoomState): void {

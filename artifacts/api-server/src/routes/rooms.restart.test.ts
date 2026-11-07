@@ -52,6 +52,7 @@ async function startRoomsProcess(databaseUrl: string): Promise<{
         DATABASE_URL: databaseUrl,
         NODE_ENV: "test",
         PORT: String(port),
+        ROOM_RECOVERY_OPERATOR_TOKEN: "test-room-recovery-token",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -78,6 +79,16 @@ async function startRoomsProcess(databaseUrl: string): Promise<{
 
   child.kill("SIGKILL");
   throw new Error(`Rooms API process did not become ready:\n${output}`);
+}
+
+async function waitForRoomRetryListener(baseUrl: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const response = await fetch(`${baseUrl}/__test/room-retry-listener`);
+    if (response.ok && (await response.json() as { connected: boolean }).connected) return;
+    await delay(50);
+  }
+  throw new Error("Room retry listener did not connect.");
 }
 
 async function stopRoomsProcess(child: ChildProcess): Promise<void> {
@@ -360,6 +371,156 @@ function makeRoom(code: string, match: ReturnType<typeof createMatch>["match"], 
     offers: [],
   };
 }
+
+function makeWaitingRoom(
+  code: string,
+  displayName: string,
+  reconnectToken: string,
+): PersistedRoomState {
+  return {
+    code,
+    hostName: displayName,
+    mode: "regular",
+    rowLength: 10,
+    playerCount: 2,
+    rowBoxes: 10,
+    twoPlayerVariant: "draw",
+    turnSeconds: 30,
+    isPrivate: true,
+    speed: 1,
+    playNow: false,
+    status: "waiting",
+    seats: Array.from({ length: 4 }, (_, seat) => ({
+      seat: seat as 0 | 1 | 2 | 3,
+      status: seat === 0 ? "waiting" as const : "open" as const,
+      name: seat === 0 ? displayName : null,
+      reconnectTokenHash: seat === 0 ? hashReconnectToken(reconnectToken) : null,
+      userId: null,
+    })),
+    lastAction: null,
+    engineState: null,
+    waitlist: [],
+    offers: [],
+  };
+}
+
+test("a retried room synchronizes to another process without replacing its active rooms", {
+  timeout: 60_000,
+}, async () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  assert.ok(databaseUrl, "DATABASE_URL is required for room retry synchronization tests.");
+
+  const schema = `rooms_retry_sync_${randomUUID().replaceAll("-", "")}`;
+  const quotedSchema = `"${schema}"`;
+  let processOne: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  let processTwo: Awaited<ReturnType<typeof startRoomsProcess>> | undefined;
+  let existingRoomSocket: WebSocket | undefined;
+  let retriedRoomSocket: WebSocket | undefined;
+  await pool.query(`CREATE SCHEMA ${quotedSchema}`);
+  try {
+    await createRoomsTable(schema);
+    const existingCode = `A${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const retriedCode = `R${randomUUID().replaceAll("-", "").slice(0, 7).toUpperCase()}`;
+    const existingToken = randomUUID();
+    const retriedToken = randomUUID();
+    const existingRoom = makeWaitingRoom(existingCode, "Existing room host", existingToken);
+    const retriedRoom = makeWaitingRoom(retriedCode, "Recovered room host", retriedToken);
+    await insertRoom(schema, existingRoom);
+    await insertRoom(schema, retriedRoom);
+    await pool.query(
+      `UPDATE ${quotedSchema}.domino_rooms
+       SET quarantined_at = now(), quarantine_issues = '[]'::jsonb
+       WHERE code = $1`,
+      [retriedCode],
+    );
+
+    const isolatedDatabaseUrl = new URL(databaseUrl);
+    isolatedDatabaseUrl.searchParams.set("options", `-c search_path=${schema}`);
+    [processOne, processTwo] = await Promise.all([
+      startRoomsProcess(isolatedDatabaseUrl.toString()),
+      startRoomsProcess(isolatedDatabaseUrl.toString()),
+    ]);
+    await Promise.all([
+      waitForRoomRetryListener(processOne.baseUrl),
+      waitForRoomRetryListener(processTwo.baseUrl),
+    ]);
+
+    const interruptResponse = await fetch(`${processTwo.baseUrl}/__test/interrupt-room-retry-listener`, {
+      method: "POST",
+    });
+    assert.equal(interruptResponse.status, 200);
+    assert.deepEqual(await interruptResponse.json(), { interrupted: true });
+    assert.deepEqual(await (await fetch(`${processTwo.baseUrl}/__test/room-retry-listener`)).json(), {
+      connected: false,
+    });
+
+    existingRoomSocket = await openRoomSocket(processTwo.baseUrl, existingCode);
+    const existingWelcomePromise = receiveSocketMessage(existingRoomSocket);
+    existingRoomSocket.send(JSON.stringify({ type: "hello", reconnectToken: existingToken }));
+    assert.equal((await existingWelcomePromise).type, "snapshot");
+
+    const retryResponse = await fetch(
+      `${processOne.baseUrl}/ops/rooms/${retriedCode}/retry`,
+      {
+        method: "POST",
+        headers: { authorization: "Bearer test-room-recovery-token" },
+      },
+    );
+    const retryBody = await retryResponse.json();
+    assert.equal(retryResponse.status, 200, JSON.stringify(retryBody));
+    assert.deepEqual(retryBody, { status: "restored" });
+    assert.equal(
+      (await fetch(`${processTwo.baseUrl}/api/rooms/${retriedCode}`)).status,
+      404,
+      "the disconnected listener should not expose the retried room before reconciliation",
+    );
+
+    const resumeResponse = await fetch(`${processTwo.baseUrl}/__test/resume-room-retry-listener`, {
+      method: "POST",
+    });
+    assert.equal(resumeResponse.status, 200);
+    assert.deepEqual(await resumeResponse.json(), { resumed: true });
+    await waitForRoomRetryListener(processTwo.baseUrl);
+
+    let retryRoomResponse: Response | undefined;
+    const roomDeadline = Date.now() + 10_000;
+    while (Date.now() < roomDeadline) {
+      retryRoomResponse = await fetch(`${processTwo.baseUrl}/api/rooms/${retriedCode}`);
+      if (retryRoomResponse.status === 200) break;
+      await delay(50);
+    }
+    assert.equal(retryRoomResponse?.status, 200, "the second process should expose the retried room");
+
+    retriedRoomSocket = await openRoomSocket(processTwo.baseUrl, retriedCode);
+    const recoveredWelcomePromise = receiveSocketMessage(retriedRoomSocket);
+    retriedRoomSocket.send(JSON.stringify({ type: "hello", reconnectToken: retriedToken }));
+    const recoveredWelcome = await recoveredWelcomePromise;
+    assert.equal(recoveredWelcome.type, "snapshot");
+    assert.equal(recoveredWelcome.viewerRole, "player");
+
+    const changedSettingsPromise = receiveRoomSettings(existingRoomSocket, {
+      rowBoxes: 12,
+      turnSeconds: 45,
+      isPrivate: true,
+      mode: "regular",
+    });
+    existingRoomSocket.send(JSON.stringify({
+      type: "changeSettings",
+      rowBoxes: 12,
+      turnSeconds: 45,
+      isPrivate: true,
+      mode: "regular",
+    }));
+    await changedSettingsPromise;
+    assert.equal(existingRoomSocket.readyState, WebSocket.OPEN);
+  } finally {
+    existingRoomSocket?.terminate();
+    retriedRoomSocket?.terminate();
+    if (processTwo) await stopRoomsProcess(processTwo.child);
+    if (processOne) await stopRoomsProcess(processOne.child);
+    await pool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
+  }
+});
 
 function pointsHandEndingMove(seed: number): {
   match: ReturnType<typeof createMatch>["match"];
